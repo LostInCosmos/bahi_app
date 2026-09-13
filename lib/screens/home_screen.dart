@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
+import 'account_screen.dart';
 import 'capture_screen.dart';
 import 'inventory_screen.dart';
 import 'login_screen.dart';
@@ -28,6 +29,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await ApiClient.instance.logout();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+  }
+
+  void _openAccount() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen()));
   }
 
   void _goToPurchases() {
@@ -66,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_titles[_tab]),
         actions: [
+          IconButton(onPressed: _openAccount, icon: const Icon(Icons.storefront_outlined), tooltip: 'Account'),
           IconButton(onPressed: _logout, icon: const Icon(Icons.logout), tooltip: 'Log out'),
         ],
       ),

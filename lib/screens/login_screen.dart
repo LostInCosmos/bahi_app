@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _signupMode = false;
   bool _busy = false;
   String? _error;
+  String _businessType = 'medical';
 
   @override
   void dispose() {
@@ -46,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
           geminiApiKey: _geminiKeyController.text.trim().isEmpty ? null : _geminiKeyController.text.trim(),
+          businessType: _businessType,
         );
       } else {
         await ApiClient.instance.login(
@@ -139,6 +141,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                       labelText: 'Shop / tenant name',
                                       prefixIcon: Icon(Icons.storefront_outlined),
                                     ),
+                                  ),
+                                  const SizedBox(height: Spacing.m),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _businessType,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Business type',
+                                      prefixIcon: Icon(Icons.category_outlined),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(value: 'medical', child: Text('Medical / Pharmacy')),
+                                      DropdownMenuItem(value: 'kirana', child: Text('Kirana / General store')),
+                                      DropdownMenuItem(value: 'other', child: Text('Other')),
+                                    ],
+                                    onChanged: (v) {
+                                      if (v != null) setState(() => _businessType = v);
+                                    },
                                   ),
                                   const SizedBox(height: Spacing.m),
                                 ],

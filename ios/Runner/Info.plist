@@ -27,9 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Bahi uses the microphone to let you speak out a sale (e.g. "pan forty ka do strip") instead of typing it in.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Bahi converts your spoken sale into text on-device so it can be turned into a priced bill for you to review.</string>
+	<string>Bahi uses the microphone to record you speaking out a sale (e.g. "pan forty ka do strip") instead of typing it in — the recording is sent to the server to be turned into a priced bill for you to review.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

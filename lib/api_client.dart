@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
@@ -86,6 +88,7 @@ class ApiClient {
     required String email,
     required String password,
     String? geminiApiKey,
+    String? businessType,
   }) async {
     final res = await http.post(
       _uri('/auth/signup'),
@@ -95,6 +98,7 @@ class ApiClient {
         'email': email,
         'password': password,
         'gemini_api_key': geminiApiKey,
+        'business_type': businessType,
       }),
     );
     _checkOk(res);
@@ -109,6 +113,37 @@ class ApiClient {
     );
     _checkOk(res);
     await _saveToken(jsonDecode(res.body)['access_token'] as String);
+  }
+
+  Future<AccountInfo> getAccount() async {
+    final res = await http.get(_uri('/account'), headers: _authHeader);
+    _checkOk(res);
+    return AccountInfo.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Omit any field left unchanged. [geminiApiKey] as an empty string clears
+  /// it (falls back to the pooled server key); omit it entirely to leave
+  /// whatever's already set untouched — same convention as the web app.
+  Future<AccountInfo> updateAccount({
+    String? tenantName,
+    String? gstin,
+    String? address,
+    String? businessType,
+    String? geminiApiKey,
+  }) async {
+    final body = <String, dynamic>{};
+    if (tenantName != null) body['tenant_name'] = tenantName;
+    if (gstin != null) body['gstin'] = gstin;
+    if (address != null) body['address'] = address;
+    if (businessType != null) body['business_type'] = businessType;
+    if (geminiApiKey != null) body['gemini_api_key'] = geminiApiKey;
+    final res = await http.patch(
+      _uri('/account'),
+      headers: {..._authHeader, 'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _checkOk(res);
+    return AccountInfo.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// Uploads the raw photo plus the four corners the user dragged onto the
@@ -298,6 +333,22 @@ class ApiClient {
       headers: {..._authHeader, 'Content-Type': 'application/json'},
       body: jsonEncode({'transcript': transcript}),
     );
+    _checkOk(res);
+    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Uploads a raw recording for the backend to transcribe (Gemini, not
+  /// on-device) and parse in one step — see voice_sale_screen.dart for why
+  /// this replaced on-device speech-to-text. [audioFile] is whatever the
+  /// `record` package wrote (a .wav file); the filename's extension is what
+  /// the backend uses to infer the audio MIME type.
+  Future<VoiceOrder> parseVoiceOrderAudio(File audioFile, {int? voiceOrderId}) async {
+    final query = voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null;
+    final request = http.MultipartRequest('POST', _uri('/voice-orders/parse-audio', query))
+      ..headers.addAll(_authHeader)
+      ..files.add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav')));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
     _checkOk(res);
     return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
