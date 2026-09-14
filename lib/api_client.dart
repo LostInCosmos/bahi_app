@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,10 +36,22 @@ class ApiClient {
   String baseUrl = "http://10.0.2.2:8000";
   String? token;
 
+  /// Drives the app's color scheme (teal for medical, red for kirana — see
+  /// theme.dart) — a [ValueNotifier] so the theme updates live the moment
+  /// the account loads or changes, without needing a restart.
+  final businessTypeNotifier = ValueNotifier<String>('medical');
+
   Future<void> loadFromDisk() async {
     final prefs = await SharedPreferences.getInstance();
     baseUrl = prefs.getString('base_url') ?? baseUrl;
     token = prefs.getString('token');
+    businessTypeNotifier.value = prefs.getString('business_type') ?? 'medical';
+  }
+
+  Future<void> _saveBusinessType(String type) async {
+    businessTypeNotifier.value = type;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('business_type', type);
   }
 
   Future<void> setBaseUrl(String url) async {
@@ -56,8 +68,10 @@ class ApiClient {
 
   Future<void> logout() async {
     token = null;
+    businessTypeNotifier.value = 'medical';
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
+    await prefs.remove('business_type');
   }
 
   bool get isLoggedIn => token != null;
@@ -103,6 +117,7 @@ class ApiClient {
     );
     _checkOk(res);
     await _saveToken(jsonDecode(res.body)['access_token'] as String);
+    await _saveBusinessType(businessType ?? 'medical');
   }
 
   Future<void> login({required String email, required String password}) async {
@@ -118,7 +133,9 @@ class ApiClient {
   Future<AccountInfo> getAccount() async {
     final res = await http.get(_uri('/account'), headers: _authHeader);
     _checkOk(res);
-    return AccountInfo.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final account = AccountInfo.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    await _saveBusinessType(account.businessType);
+    return account;
   }
 
   /// Omit any field left unchanged. [geminiApiKey] as an empty string clears
@@ -143,7 +160,9 @@ class ApiClient {
       body: jsonEncode(body),
     );
     _checkOk(res);
-    return AccountInfo.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final account = AccountInfo.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    await _saveBusinessType(account.businessType);
+    return account;
   }
 
   /// Uploads the raw photo plus the four corners the user dragged onto the

@@ -9,8 +9,14 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
+  // Medical/pharmacy — teal, as before.
   static const seedLight = Color(0xFF0F766E); // teal-700
   static const seedDark = Color(0xFF2DD4BF); // teal-400
+
+  // Kirana/general store — same tonal position as the teal pair above, in red.
+  static const seedLightKirana = Color(0xFFB91C1C); // red-700
+  static const seedDarkKirana = Color(0xFFF87171); // red-400
+
   static const accent = Color(0xFFD97706); // amber-600 — CTA highlight, used sparingly
 
   // Status semantics, shared by every batch/review/list screen so a badge
@@ -66,11 +72,12 @@ TextStyle amountTextStyle(BuildContext context, {bool emphasized = false}) {
   );
 }
 
-ThemeData buildAppTheme({required Brightness brightness}) {
-  final colorScheme = ColorScheme.fromSeed(
-    seedColor: brightness == Brightness.light ? AppColors.seedLight : AppColors.seedDark,
-    brightness: brightness,
-  );
+ThemeData buildAppTheme({required Brightness brightness, String businessType = 'medical'}) {
+  final isKirana = businessType == 'kirana';
+  final seedColor = brightness == Brightness.light
+      ? (isKirana ? AppColors.seedLightKirana : AppColors.seedLight)
+      : (isKirana ? AppColors.seedDarkKirana : AppColors.seedDark);
+  final colorScheme = ColorScheme.fromSeed(seedColor: seedColor, brightness: brightness);
   final base = ThemeData(colorScheme: colorScheme, useMaterial3: true, brightness: brightness);
 
   return base.copyWith(

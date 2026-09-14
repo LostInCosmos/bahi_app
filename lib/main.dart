@@ -14,13 +14,19 @@ class GstBillApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'GST Bill Reconciliation',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
-      theme: buildAppTheme(brightness: Brightness.light),
-      darkTheme: buildAppTheme(brightness: Brightness.dark),
-      home: const _StartupGate(),
+    return ValueListenableBuilder<String>(
+      valueListenable: ApiClient.instance.businessTypeNotifier,
+      builder: (context, businessType, child) {
+        final theme = buildAppTheme(brightness: Brightness.dark, businessType: businessType);
+        return MaterialApp(
+          title: 'GST Bill Reconciliation',
+          debugShowCheckedModeBanner: false,
+          themeMode: ThemeMode.dark,
+          theme: theme,
+          darkTheme: theme,
+          home: const _StartupGate(),
+        );
+      },
     );
   }
 }
@@ -42,7 +48,18 @@ class _StartupGateState extends State<_StartupGate> {
     super.initState();
     ApiClient.instance.loadFromDisk().then((_) {
       if (mounted) setState(() => _ready = true);
+      // Refreshes the persisted business type (used for theming immediately
+      // on launch) against the server in case it changed on another device.
+      if (ApiClient.instance.isLoggedIn) _refreshBusinessTypeSilently();
     });
+  }
+
+  Future<void> _refreshBusinessTypeSilently() async {
+    try {
+      await ApiClient.instance.getAccount();
+    } catch (_) {
+      // Best-effort — the persisted value from the last session is fine.
+    }
   }
 
   @override
