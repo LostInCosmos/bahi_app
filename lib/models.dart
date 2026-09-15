@@ -842,3 +842,34 @@ class AccountInfo {
         businessType: json['business_type'] as String? ?? 'medical',
       );
 }
+
+/// Result of a general voice command (check inventory, delete a sale, add
+/// stock, ...) — distinct from [VoiceOrder], which is only ever the
+/// multi-item "speak a whole sale" flow. See ApiClient.sendVoiceCommand /
+/// confirmVoiceCommand.
+class VoiceCommandResult {
+  final bool success;
+  final String intent;
+  final bool requiresConfirmation;
+  final String? confirmationToken;
+  final String message;
+  final Map<String, dynamic>? data;
+
+  VoiceCommandResult({
+    required this.success,
+    required this.intent,
+    required this.requiresConfirmation,
+    this.confirmationToken,
+    required this.message,
+    this.data,
+  });
+
+  factory VoiceCommandResult.fromJson(Map<String, dynamic> json) => VoiceCommandResult(
+        success: json['success'] as bool? ?? false,
+        intent: json['intent'] as String? ?? 'UNKNOWN',
+        requiresConfirmation: json['requires_confirmation'] as bool? ?? false,
+        confirmationToken: json['confirmation_token'] as String?,
+        message: json['message'] as String? ?? '',
+        data: json['data'] as Map<String, dynamic>?,
+      );
+}

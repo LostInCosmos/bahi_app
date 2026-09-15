@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'purchases_screen.dart';
 import 'sales_history_screen.dart';
 import 'sales_screen.dart';
+import 'voice_command_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,6 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openAccount() {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen()));
+  }
+
+  void _openVoiceCommand() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const VoiceCommandScreen()));
   }
 
   void _goToPurchases() {
@@ -71,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_titles[_tab]),
         actions: [
+          IconButton(onPressed: _openVoiceCommand, icon: const Icon(Icons.record_voice_over_outlined), tooltip: 'Voice command'),
           IconButton(onPressed: _openAccount, icon: const Icon(Icons.storefront_outlined), tooltip: 'Account'),
           IconButton(onPressed: _logout, icon: const Icon(Icons.logout), tooltip: 'Log out'),
         ],

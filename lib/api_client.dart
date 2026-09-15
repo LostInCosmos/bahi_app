@@ -128,6 +128,7 @@ class ApiClient {
     );
     _checkOk(res);
     await _saveToken(jsonDecode(res.body)['access_token'] as String);
+    await getAccount(); // picks up business_type for theming
   }
 
   Future<AccountInfo> getAccount() async {
@@ -431,6 +432,32 @@ class ApiClient {
   Future<void> undoVoiceOrder(int orderId) async {
     final res = await http.post(_uri('/voice-orders/$orderId/undo'), headers: _authHeader);
     _checkOk(res);
+  }
+
+  /// General voice command (check inventory, delete a sale, add stock,
+  /// ...) — distinct from the voice-sale flow above. The backend never
+  /// executes a destructive action from this call alone: a
+  /// [VoiceCommandResult.requiresConfirmation] response must be followed by
+  /// [confirmVoiceCommand] with its [VoiceCommandResult.confirmationToken]
+  /// before anything is actually deleted/removed.
+  Future<VoiceCommandResult> sendVoiceCommand(File audioFile) async {
+    final request = http.MultipartRequest('POST', _uri('/voice-commands/audio'))
+      ..headers.addAll(_authHeader)
+      ..files.add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav')));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    _checkOk(res);
+    return VoiceCommandResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<VoiceCommandResult> confirmVoiceCommand(String confirmationToken) async {
+    final res = await http.post(
+      _uri('/voice-commands/confirm'),
+      headers: {..._authHeader, 'Content-Type': 'application/json'},
+      body: jsonEncode({'confirmation_token': confirmationToken}),
+    );
+    _checkOk(res);
+    return VoiceCommandResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 }
 
