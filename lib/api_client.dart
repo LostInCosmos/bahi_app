@@ -342,21 +342,6 @@ class ApiClient {
     return res.bodyBytes;
   }
 
-  /// Sends a spoken sale (already transcribed on-device) to be parsed into a
-  /// priced draft. Pass [voiceOrderId] to append the newly parsed lines to an
-  /// existing draft instead of starting a new one — used by "Add more" on
-  /// the review screen.
-  Future<VoiceOrder> parseVoiceOrder(String transcript, {int? voiceOrderId}) async {
-    final query = voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null;
-    final res = await http.post(
-      _uri('/voice-orders/parse', query),
-      headers: {..._authHeader, 'Content-Type': 'application/json'},
-      body: jsonEncode({'transcript': transcript}),
-    );
-    _checkOk(res);
-    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
-  }
-
   /// Uploads a raw recording for the backend to transcribe (Gemini, not
   /// on-device) and parse in one step — see voice_sale_screen.dart for why
   /// this replaced on-device speech-to-text. [audioFile] is whatever the
