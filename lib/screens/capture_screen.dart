@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -14,8 +15,10 @@ import 'review_screen.dart';
 
 /// Adobe-Scanner-style batch flow: add several bill photos (each gets its
 /// corners set right after it's taken, same rhythm as "capture a page, adjust
-/// its edges, capture the next"), then a single "Process" pass runs
-/// extraction for the whole batch.
+/// its edges, capture the next"). Extraction for each bill starts on its own,
+/// the moment that bill finishes cropping — there's no separate "Process"
+/// step to wait on or tap, so a user can go straight into capturing the next
+/// bill while the previous one is still being read in the background.
 ///
 /// Nothing saves itself, ever. validation.py only catches internal
 /// arithmetic inconsistency — it has no way to know whether Gemini actually
@@ -58,6 +61,11 @@ class _BatchItem {
   // every call site has one shape to deal with instead of two.
   List<String> sourceImages = [];
   _ItemStatus status = _ItemStatus.preparing;
+  // Set the moment extraction is submitted (see _processOne) and cleared
+  // once it reaches a terminal state — persisted across an app kill so
+  // _restoreBatch can resume polling the SAME job instead of resubmitting
+  // one that's still (or already) running server-side.
+  int? jobId;
   ExtractionResult? result;
   String? errorMessage;
   int? savedInvoiceId;
@@ -75,11 +83,7 @@ class CaptureScreen extends StatefulWidget {
 
 class _CaptureScreenState extends State<CaptureScreen> {
   final List<_BatchItem> _items = [];
-  bool _processing = false;
-  int _processingDone = 0;
-  int _processingTotal = 0;
 
-  bool get _hasPending => _items.any((i) => i.status == _ItemStatus.ready);
   bool get _hasUnresolved => _items.any((i) =>
       i.status == _ItemStatus.needsReview ||
       i.status == _ItemStatus.failed ||
@@ -122,10 +126,14 @@ class _CaptureScreenState extends State<CaptureScreen> {
         .map((i) => {
               'label': i.label,
               'sourceImages': i.sourceImages,
-              // A kill mid-extraction leaves no live request to finish it --
-              // restoring rewinds this back to "ready" so the item is simply
-              // reprocessed instead of showing a spinner forever.
-              'status': (i.status == _ItemStatus.processing ? _ItemStatus.ready : i.status).name,
+              // Extraction now runs server-side in a worker, independent of
+              // this app's own lifetime — a kill mid-extraction no longer
+              // means the work was lost, so "processing" only rewinds to
+              // "ready" (forcing a fresh resubmit) in the narrow window
+              // where a job was about to be submitted but jobId isn't set
+              // yet. Otherwise _restoreBatch resumes polling the same job.
+              'status': (i.status == _ItemStatus.processing && i.jobId == null ? _ItemStatus.ready : i.status).name,
+              'jobId': i.jobId,
               'result': i.result?.toJson(),
               'errorMessage': i.errorMessage,
               'savedInvoiceId': i.savedInvoiceId,
@@ -164,6 +172,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
         (v) => v.name == map['status'],
         orElse: () => _ItemStatus.ready,
       );
+      item.jobId = map['jobId'] as int?;
       item.errorMessage = map['errorMessage'] as String?;
       item.savedInvoiceId = map['savedInvoiceId'] as int?;
       final resultJson = map['result'] as Map<String, dynamic>?;
@@ -182,6 +191,17 @@ class _CaptureScreenState extends State<CaptureScreen> {
         setState(() => item.correctedBytes = bytes);
       } catch (_) {
         // thumbnail just won't load for this one -- the rest of the item is still usable
+      }
+      // A "ready" item here means a job was never actually submitted last
+      // session (see the status-rewind comment in _persistBatch) -- start
+      // fresh, automatically, the same way a freshly-cropped bill does. A
+      // "processing" item with a jobId means a job WAS submitted and may
+      // already be done server-side -- resume polling that same job rather
+      // than submitting a second one and wasting a real Gemini call.
+      if (item.status == _ItemStatus.ready) {
+        unawaited(_processOne(item));
+      } else if (item.status == _ItemStatus.processing && item.jobId != null) {
+        unawaited(_processOne(item, resumeJobId: item.jobId));
       }
     }
   }
@@ -222,6 +242,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
     final item = _BatchItem(label: 'Photo ${_items.length + 1}', pages: pages);
     setState(() => _items.add(item));
     await _preprocessItem(item);
+    // Starts extraction the moment this bill is ready, without waiting for
+    // the caller (this function) to return — so the "Add another"/gallery
+    // buttons are free again immediately and the user can go straight into
+    // capturing the next bill while this one is read in the background.
+    if (item.status == _ItemStatus.ready) {
+      unawaited(_processOne(item));
+    }
   }
 
   Future<void> _preprocessItem(_BatchItem item) async {
@@ -260,27 +287,61 @@ class _CaptureScreenState extends State<CaptureScreen> {
     _persistBatch();
   }
 
-  Future<void> _processOne(_BatchItem item) async {
+  // How long a single job is allowed to sit in pending/processing before
+  // this poll loop gives up client-side — independent of (and shorter than)
+  // the worker's own stale-job reclaim (EXTRACTION_JOB_STALE_AFTER_MINUTES,
+  // 10 min server-side): this just keeps one bill's spinner from running
+  // forever in the UI if something is genuinely stuck; the job itself is
+  // still safe and will get reclaimed/retried server-side regardless.
+  static const _pollTimeout = Duration(seconds: 120);
+  static const _pollInterval = Duration(seconds: 2);
+
+  /// Submits (or, if [resumeJobId] is given, resumes polling an
+  /// already-submitted) extraction job and waits for it to finish. Extraction
+  /// itself now runs in a background worker, not inline in one HTTP call —
+  /// see ApiClient.submitExtraction/getExtractionJob — so this is a
+  /// submit-then-poll loop instead of a single awaited request.
+  Future<void> _processOne(_BatchItem item, {int? resumeJobId}) async {
     setState(() => item.status = _ItemStatus.processing);
     try {
-      ExtractionResult result;
-      try {
-        result = await ApiClient.instance.extract(
+      int jobId;
+      if (resumeJobId != null) {
+        jobId = resumeJobId;
+      } else {
+        jobId = await ApiClient.instance.submitExtraction(
           item.sourceImages.first,
           extraSourceImages: item.sourceImages.skip(1).toList(),
         );
-      } on ApiException catch (e) {
-        if (e.detail is Map && e.detail['error'] == 'structural_validation_failed') {
-          result = ExtractionResult.blank(
-            (e.detail['source_image'] as String?) ?? item.sourceImages.first,
-            (e.detail['message'] as String?) ??
-                "Automatic extraction couldn't read this bill — please enter its details by hand.",
-          );
-        } else {
-          rethrow;
-        }
+        item.jobId = jobId;
+        await _persistBatch();
       }
 
+      late final ExtractionResult result;
+      final deadline = DateTime.now().add(_pollTimeout);
+      while (true) {
+        final job = await ApiClient.instance.getExtractionJob(jobId);
+        if (job.status == 'done') {
+          result = job.result!;
+          break;
+        }
+        if (job.status == 'failed') {
+          if (job.errorKind == 'structural_validation_failed') {
+            result = ExtractionResult.blank(
+              job.sourceImage ?? item.sourceImages.first,
+              job.errorMessage ?? "Automatic extraction couldn't read this bill — please enter its details by hand.",
+            );
+            break;
+          }
+          throw ApiException(502, job.errorMessage ?? 'extraction failed');
+        }
+        // still pending/processing
+        if (DateTime.now().isAfter(deadline)) {
+          throw ApiException(504, "This bill is taking longer than expected — please try again.");
+        }
+        await Future.delayed(_pollInterval);
+      }
+
+      item.jobId = null;
       if (!mounted) return;
       setState(() {
         // Zero validation issues means the numbers are internally
@@ -292,6 +353,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
         item.result = result;
       });
     } catch (e) {
+      item.jobId = null;
       if (!mounted) return;
       setState(() {
         item.status = _ItemStatus.failed;
@@ -304,24 +366,9 @@ class _CaptureScreenState extends State<CaptureScreen> {
   /// Re-runs extraction on an already-uploaded image — available any time
   /// there's a source image to re-extract and nothing already in flight for
   /// it, including on an already-saved bill (the fresh result just isn't
-  /// auto-saved over the existing one).
+  /// auto-saved over the existing one). Always submits a fresh job, never
+  /// resumes — this is an explicit "try again", not a restore.
   Future<void> _reprocessItem(_BatchItem item) => _processOne(item);
-
-  Future<void> _processAll() async {
-    final pending = _items.where((i) => i.status == _ItemStatus.ready).toList();
-    if (pending.isEmpty || _processing) return;
-    setState(() {
-      _processing = true;
-      _processingDone = 0;
-      _processingTotal = pending.length;
-    });
-    for (final item in pending) {
-      await _processOne(item);
-      if (!mounted) return;
-      setState(() => _processingDone++);
-    }
-    if (mounted) setState(() => _processing = false);
-  }
 
   Future<void> _openItem(_BatchItem item) async {
     if (item.status == _ItemStatus.saved) {
@@ -520,7 +567,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
             Text('No bills yet', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: Spacing.xs),
             Text(
-              'Add one or more bill photos, adjust each one\'s corners, then process them together.',
+              'Add a bill photo and adjust its corners — it starts processing right away, so you can add the next one straight after.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
@@ -586,35 +633,19 @@ class _CaptureScreenState extends State<CaptureScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_processing) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.chip),
-                child: LinearProgressIndicator(
-                  value: _processingTotal == 0 ? null : _processingDone / _processingTotal,
-                  minHeight: 6,
-                ),
-              ),
-              const SizedBox(height: Spacing.s),
-              Text(
-                'Processing $_processingDone of $_processingTotal…',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: Spacing.s),
-            ],
             if (_items.isNotEmpty) ...[
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _processing ? null : () => _addPhoto(ImageSource.camera),
+                      onPressed: () => _addPhoto(ImageSource.camera),
                       icon: const Icon(Icons.add_a_photo_outlined),
                       label: const Text('Add another'),
                     ),
                   ),
                   const SizedBox(width: Spacing.s),
                   IconButton.filledTonal(
-                    onPressed: _processing ? null : () => _addPhoto(ImageSource.gallery),
+                    onPressed: () => _addPhoto(ImageSource.gallery),
                     icon: const Icon(Icons.photo_library_outlined),
                     tooltip: 'Add from gallery',
                   ),
@@ -622,40 +653,33 @@ class _CaptureScreenState extends State<CaptureScreen> {
               ),
               const SizedBox(height: Spacing.s),
             ],
+            // Every bill starts processing on its own as soon as it's
+            // cropped (see _addPhoto/_restoreBatch) — nothing here waits on
+            // a manual "Process" step, so this only ever needs to show
+            // either "you're all done" or "something still needs a look".
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
-              child: _hasPending
-                  ? FilledButton(
-                      key: const ValueKey('process'),
-                      onPressed: _processing
-                          ? null
-                          : () {
-                              HapticFeedback.lightImpact();
-                              _processAll();
-                            },
-                      child: Text('Process ${_items.where((i) => i.status == _ItemStatus.ready).length} bill(s)'),
+              child: _allResolved
+                  ? FilledButton.icon(
+                      key: const ValueKey('done'),
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        _finish();
+                      },
+                      icon: const Icon(Icons.check),
+                      label: const Text('Done — view purchases'),
                     )
-                  : _allResolved
-                      ? FilledButton.icon(
-                          key: const ValueKey('done'),
-                          onPressed: () {
-                            HapticFeedback.mediumImpact();
-                            _finish();
-                          },
-                          icon: const Icon(Icons.check),
-                          label: const Text('Done — view purchases'),
+                  : _hasUnresolved
+                      ? Padding(
+                          key: const ValueKey('attention'),
+                          padding: const EdgeInsets.symmetric(vertical: Spacing.s),
+                          child: Text(
+                            'Some bills need your attention above before you can finish.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: colors.error),
+                          ),
                         )
-                      : (_hasUnresolved && !_processing)
-                          ? Padding(
-                              key: const ValueKey('attention'),
-                              padding: const EdgeInsets.symmetric(vertical: Spacing.s),
-                              child: Text(
-                                'Some bills need your attention above before you can finish.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: colors.error),
-                              ),
-                            )
-                          : const SizedBox.shrink(key: ValueKey('none')),
+                      : const SizedBox.shrink(key: ValueKey('none')),
             ),
           ],
         ),

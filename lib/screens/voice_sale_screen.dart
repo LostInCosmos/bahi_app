@@ -43,7 +43,11 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
 
   bool _initializing = true;
   bool _hasPermission = false;
+  // _recording covers the whole session from start() to stop() — including
+  // while paused — so dispose()'s "was a session left open" check and the
+  // idle/ready-to-send UI branches don't need to know about _paused too.
   bool _recording = false;
+  bool _paused = false;
   bool _uploading = false;
   Duration _elapsed = Duration.zero;
   String? _recordedPath;
@@ -82,11 +86,18 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
     });
   }
 
-  Future<void> _toggleRecording() async {
-    if (_recording) {
-      await _stopRecording();
-      return;
-    }
+  void _startElapsedTimer() {
+    _elapsedTimer?.cancel();
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
+    });
+  }
+
+  // Tapping the mic while idle, or while a finished recording is sitting
+  // ready to send, both start a brand new session — the latter discards the
+  // old recording, same "tap to re-record" behavior as before pause/resume
+  // existed. Mid-session, the mic instead pauses/resumes (see build()).
+  Future<void> _startRecording() async {
     if (!_hasPermission) {
       await _bootstrap();
       if (!_hasPermission) return;
@@ -96,6 +107,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
       _recordedPath = null;
       _errorMessage = null;
       _elapsed = Duration.zero;
+      _paused = false;
     });
 
     try {
@@ -109,22 +121,46 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
         const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
         path: path,
       );
-      _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
-      });
+      _startElapsedTimer();
       if (mounted) setState(() => _recording = true);
     } catch (e) {
       if (mounted) setState(() => _errorMessage = 'Could not start recording: $e');
     }
   }
 
-  Future<void> _stopRecording() async {
+  // The `record` package pauses/resumes within the SAME underlying file —
+  // stop() at the end still returns one continuous recording with the
+  // paused stretch simply absent, so there's no clip-stitching to do here.
+  Future<void> _pauseRecording() async {
+    try {
+      await _recorder.pause();
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Could not pause: $e');
+      return;
+    }
+    _elapsedTimer?.cancel();
+    if (mounted) setState(() => _paused = true);
+  }
+
+  Future<void> _resumeRecording() async {
+    try {
+      await _recorder.resume();
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Could not resume: $e');
+      return;
+    }
+    _startElapsedTimer();
+    if (mounted) setState(() => _paused = false);
+  }
+
+  Future<void> _finishRecording() async {
     _elapsedTimer?.cancel();
     try {
       final path = await _recorder.stop();
       if (mounted) {
         setState(() {
           _recording = false;
+          _paused = false;
           _recordedPath = path;
           if (path == null) _errorMessage = "Didn't catch anything — tap the mic and try again.";
         });
@@ -133,6 +169,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
       if (mounted) {
         setState(() {
           _recording = false;
+          _paused = false;
           _errorMessage = 'Could not stop recording: $e';
         });
       }
@@ -200,16 +237,39 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _MicButton(
-                              recording: _recording,
-                              enabled: _hasPermission && !_uploading,
-                              onTap: _toggleRecording,
-                            ),
+                            _recording
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _MicButton(
+                                        recording: !_paused,
+                                        paused: _paused,
+                                        enabled: !_uploading,
+                                        onTap: _paused ? _resumeRecording : _pauseRecording,
+                                      ),
+                                      const SizedBox(height: Spacing.m),
+                                      TextButton.icon(
+                                        onPressed: _uploading ? null : _finishRecording,
+                                        icon: const Icon(Icons.stop_circle_outlined),
+                                        label: const Text('Stop & review'),
+                                      ),
+                                    ],
+                                  )
+                                : _MicButton(
+                                    recording: false,
+                                    paused: false,
+                                    enabled: _hasPermission && !_uploading,
+                                    onTap: _startRecording,
+                                  ),
                             const SizedBox(height: Spacing.l),
                             Text(
                               _recording
-                                  ? 'Recording ${_formatElapsed(_elapsed)} — tap to stop'
-                                  : (hasRecording ? 'Recording ready — tap to re-record' : 'Tap the mic to speak a sale'),
+                                  ? (_paused
+                                      ? 'Paused at ${_formatElapsed(_elapsed)} — tap the mic to continue speaking'
+                                      : 'Recording ${_formatElapsed(_elapsed)} — tap to pause')
+                                  : (hasRecording
+                                      ? 'Recording ready — tap the mic to discard and re-record'
+                                      : 'Tap the mic to speak a sale'),
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: Spacing.l),
@@ -278,14 +338,21 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
 }
 
 class _MicButton extends StatelessWidget {
+  // recording: actively capturing audio right now (tapping pauses it).
+  // paused: session is open but not capturing (tapping resumes it).
+  // Neither set: idle / ready-to-send (tapping starts a fresh recording).
   final bool recording;
+  final bool paused;
   final bool enabled;
   final VoidCallback onTap;
-  const _MicButton({required this.recording, required this.enabled, required this.onTap});
+  const _MicButton({required this.recording, required this.paused, required this.enabled, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = recording ? AppColors.statusFailed : Theme.of(context).colorScheme.primary;
+    final color = recording
+        ? AppColors.statusFailed
+        : (paused ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.primary);
+    final icon = recording ? Icons.pause : Icons.mic;
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
@@ -299,7 +366,7 @@ class _MicButton extends StatelessWidget {
               ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 24, spreadRadius: 4)]
               : null,
         ),
-        child: Icon(recording ? Icons.stop : Icons.mic, color: Colors.white, size: 40),
+        child: Icon(icon, color: Colors.white, size: 40),
       ),
     );
   }

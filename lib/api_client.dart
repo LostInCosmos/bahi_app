@@ -197,7 +197,11 @@ class ApiClient {
   /// CaptureScreen's multi-page capture) — sent as repeated form fields
   /// (not a Map, which can't hold duplicate keys) so the backend receives
   /// them as a real list and stitches every page into one Gemini call.
-  Future<ExtractionResult> extract(String sourceImage, {List<String> extraSourceImages = const []}) async {
+  ///
+  /// Returns immediately with a job id — extraction now runs in a
+  /// background worker, not inline in this request — so the caller polls
+  /// getExtractionJob() until it reaches a terminal status.
+  Future<int> submitExtraction(String sourceImage, {List<String> extraSourceImages = const []}) async {
     final request = http.MultipartRequest('POST', _uri('/invoices/extract'))
       ..headers.addAll(_authHeader)
       ..fields['source_image'] = sourceImage;
@@ -207,7 +211,13 @@ class ApiClient {
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);
     _checkOk(res);
-    return ExtractionResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
+  }
+
+  Future<ExtractionJob> getExtractionJob(int jobId) async {
+    final res = await http.get(_uri('/invoices/extract/$jobId'), headers: _authHeader);
+    _checkOk(res);
+    return ExtractionJob.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   Future<RevalidateResult> revalidateInvoice(InvoiceData invoice) async {

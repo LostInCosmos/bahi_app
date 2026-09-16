@@ -1,7 +1,7 @@
 name: gst_bill_app
 description: Mobile client for the GST bill reconciliation pipeline.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.0+2002
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

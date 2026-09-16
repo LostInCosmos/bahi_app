@@ -59,9 +59,19 @@ class _CropScreenState extends State<CropScreen> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: CropCanvas(
-                  imageBytes: widget.imageBytes,
-                  onCornersChanged: (corners, _) => _corners = corners,
+                // RotatedBox (not Transform.rotate) so this is a real layout
+                // rotation: it reflows the box for 90/270 (swaps the width/
+                // height CropCanvas fits into) and transforms touch
+                // hit-testing along with it, so corner-dragging still works
+                // correctly. Without this the preview always showed the
+                // original orientation, so 90/270 looked like they did
+                // nothing even though the server was rotating correctly.
+                child: RotatedBox(
+                  quarterTurns: _rotationDegrees ~/ 90,
+                  child: CropCanvas(
+                    imageBytes: widget.imageBytes,
+                    onCornersChanged: (corners, _) => _corners = corners,
+                  ),
                 ),
               ),
             ),

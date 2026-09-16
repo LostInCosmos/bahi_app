@@ -328,6 +328,45 @@ class ExtractionResult {
       );
 }
 
+/// GET /invoices/extract/{jobId} — extraction now runs in a background
+/// worker instead of inline during POST /invoices/extract, so the client
+/// submits a job (see ApiClient.submitExtraction) and polls this until
+/// status is no longer 'pending'/'processing'.
+class ExtractionJob {
+  final int jobId;
+  final String status; // 'pending' | 'processing' | 'done' | 'failed'
+  final ExtractionResult? result; // set iff status == 'done'
+  final String? errorKind; // 'structural_validation_failed' | 'generic' — set iff status == 'failed'
+  final String? errorMessage;
+  final String? sourceImage;
+  final List<String>? extraSourceImages;
+
+  ExtractionJob({
+    required this.jobId,
+    required this.status,
+    this.result,
+    this.errorKind,
+    this.errorMessage,
+    this.sourceImage,
+    this.extraSourceImages,
+  });
+
+  bool get isTerminal => status == 'done' || status == 'failed';
+
+  factory ExtractionJob.fromJson(Map<String, dynamic> json) {
+    final error = json['error'] as Map<String, dynamic>?;
+    return ExtractionJob(
+      jobId: json['job_id'] as int,
+      status: json['status'] as String,
+      result: json['result'] != null ? ExtractionResult.fromJson(json['result'] as Map<String, dynamic>) : null,
+      errorKind: error?['kind'] as String?,
+      errorMessage: error?['message'] as String?,
+      sourceImage: error?['source_image'] as String?,
+      extraSourceImages: (error?['extra_source_images'] as List?)?.cast<String>(),
+    );
+  }
+}
+
 class InvoiceSummary {
   final int id;
   final String vendorGstin;
