@@ -765,6 +765,34 @@ class VoiceOrder {
       );
 }
 
+/// GET /voice-orders/jobs/{jobId} — voice-order parsing now runs in a
+/// background worker instead of inline during POST /voice-orders/parse-audio
+/// (same shape as ExtractionJob for bills), so the client submits a job
+/// (see ApiClient.submitVoiceOrderAudio) and polls this until status is no
+/// longer 'pending'/'transcribing'/'parsing'.
+class VoiceOrderJob {
+  final int jobId;
+  final String status; // 'pending' | 'transcribing' | 'parsing' | 'done' | 'failed'
+  final VoiceOrder? order; // set iff status == 'done'
+  final String? errorKind; // 'structural_parse_failed' | 'no_speech' | 'generic' — set iff status == 'failed'
+  final String? errorMessage;
+
+  VoiceOrderJob({required this.jobId, required this.status, this.order, this.errorKind, this.errorMessage});
+
+  bool get isTerminal => status == 'done' || status == 'failed';
+
+  factory VoiceOrderJob.fromJson(Map<String, dynamic> json) {
+    final error = json['error'] as Map<String, dynamic>?;
+    return VoiceOrderJob(
+      jobId: json['job_id'] as int,
+      status: json['status'] as String,
+      order: json['order'] != null ? VoiceOrder.fromJson(json['order'] as Map<String, dynamic>) : null,
+      errorKind: error?['kind'] as String?,
+      errorMessage: error?['message'] as String?,
+    );
+  }
+}
+
 /// Full detail for one saved invoice — GET /invoices/{id}.
 class InvoiceDetail {
   final int id;

@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../api_client.dart';
-import '../models.dart';
 import '../theme.dart';
 
 /// Mic capture for the "Voice sale" flow: tap to start, tap to stop (an
@@ -25,10 +24,15 @@ import '../theme.dart';
 /// here with a simple recording timer, and the transcript now only appears
 /// once the server responds.
 ///
-/// Pops with the parsed [VoiceOrder] on success, or null if the user backs
-/// out without sending anything. When [appendToOrderId] is set (the "Add
-/// more" flow from the review screen re-opening the mic) the newly parsed
-/// lines are appended to that existing draft instead of starting a new one.
+/// Pops with a job id (an int) the moment the recording is submitted, or
+/// null if the user backs out without sending anything — transcription and
+/// parsing happen later, in a background worker, not before this screen
+/// returns. The caller polls ApiClient.getVoiceOrderJob(jobId) for the
+/// result: SalesScreen tracks a fresh sale's job in its own in-flight list
+/// (so the owner can immediately record a second note without waiting —
+/// see SalesScreen's _voiceJobs), while VoiceOrderReviewScreen's "Add more"
+/// flow (passing [appendToOrderId]) polls locally instead, since that's
+/// scoped to the one order already on screen.
 class VoiceSaleScreen extends StatefulWidget {
   final int? appendToOrderId;
   const VoiceSaleScreen({super.key, this.appendToOrderId});
@@ -184,23 +188,27 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
       _errorMessage = null;
     });
     try {
-      final order = await ApiClient.instance.parseVoiceOrderAudio(
+      final jobId = await ApiClient.instance.submitVoiceOrderAudio(
         File(path),
         voiceOrderId: widget.appendToOrderId,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(order);
+      Navigator.of(context).pop(jobId);
     } on ApiException catch (e) {
-      final detail = e.detail;
+      // Transcription/parsing failures (structural_parse_failed, no-speech,
+      // a Gemini-side error) can no longer happen here — they're worker-side
+      // outcomes now, surfaced later via ApiClient.getVoiceOrderJob. What
+      // can still fail at submit time is the synchronous part: the upload
+      // itself, or (for "add more") the append target no longer existing.
       String msg;
-      if (detail is Map && detail['error'] == 'structural_parse_failed') {
-        msg = (detail['message'] as String?) ?? "Couldn't understand that as a sale — try rephrasing.";
-      } else if (e.statusCode == 422) {
-        msg = "Didn't catch any speech in that recording — tap the mic and try again.";
+      if (e.statusCode == 404) {
+        msg = 'This order is no longer available to add more to.';
+      } else if (e.statusCode == 409) {
+        msg = (e.message.isNotEmpty ? e.message : "This order can't be added to anymore.");
       } else if (e.statusCode == 502) {
-        msg = 'The parsing service is unavailable right now: ${e.message}';
+        msg = 'Could not store the recording right now: ${e.message}';
       } else {
-        msg = 'Could not parse: ${e.message}';
+        msg = 'Could not send: ${e.message}';
       }
       setState(() => _errorMessage = msg);
     } catch (e) {

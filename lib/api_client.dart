@@ -353,11 +353,15 @@ class ApiClient {
   }
 
   /// Uploads a raw recording for the backend to transcribe (Gemini, not
-  /// on-device) and parse in one step — see voice_sale_screen.dart for why
-  /// this replaced on-device speech-to-text. [audioFile] is whatever the
+  /// on-device) and parse — see voice_sale_screen.dart for why this
+  /// replaced on-device speech-to-text. [audioFile] is whatever the
   /// `record` package wrote (a .wav file); the filename's extension is what
   /// the backend uses to infer the audio MIME type.
-  Future<VoiceOrder> parseVoiceOrderAudio(File audioFile, {int? voiceOrderId}) async {
+  ///
+  /// Returns immediately with a job id — transcription+parsing now run in a
+  /// background worker, not inline in this request — so the caller polls
+  /// getVoiceOrderJob() until it reaches a terminal status.
+  Future<int> submitVoiceOrderAudio(File audioFile, {int? voiceOrderId}) async {
     final query = voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null;
     final request = http.MultipartRequest('POST', _uri('/voice-orders/parse-audio', query))
       ..headers.addAll(_authHeader)
@@ -365,7 +369,13 @@ class ApiClient {
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);
     _checkOk(res);
-    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
+  }
+
+  Future<VoiceOrderJob> getVoiceOrderJob(int jobId) async {
+    final res = await http.get(_uri('/voice-orders/jobs/$jobId'), headers: _authHeader);
+    _checkOk(res);
+    return VoiceOrderJob.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   Future<VoiceOrder> getVoiceOrder(int id) async {

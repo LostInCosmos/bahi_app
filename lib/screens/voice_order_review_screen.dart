@@ -174,11 +174,50 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  // VoiceSaleScreen now pops with a job id the moment the recording is
+  // submitted, not once it's parsed — appending is polled locally here
+  // (rather than handed off to a list like SalesScreen's fresh-sale jobs)
+  // since the owner is already looking at exactly the one order this
+  // addition belongs to and naturally expects to see it land here.
   Future<void> _addMore() async {
-    final updated = await Navigator.of(context).push<VoiceOrder>(
+    final jobId = await Navigator.of(context).push<int>(
       MaterialPageRoute(builder: (_) => VoiceSaleScreen(appendToOrderId: _order.id)),
     );
-    if (updated != null && mounted) setState(() => _order = updated);
+    if (jobId == null || !mounted) return;
+    setState(() {
+      _busy = true;
+      _message = 'Adding more…';
+    });
+    final deadline = DateTime.now().add(const Duration(seconds: 180));
+    try {
+      while (true) {
+        final job = await ApiClient.instance.getVoiceOrderJob(jobId);
+        if (job.status == 'done') {
+          if (!mounted) return;
+          setState(() {
+            _order = job.order!;
+            _message = null;
+          });
+          return;
+        }
+        if (job.status == 'failed') {
+          if (!mounted) return;
+          setState(() => _message = job.errorMessage ?? 'Could not add that recording.');
+          return;
+        }
+        if (DateTime.now().isAfter(deadline)) {
+          if (!mounted) return;
+          setState(() => _message = 'This is taking longer than expected — please try again.');
+          return;
+        }
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _message = 'Could not reach the server.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -212,8 +251,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                   ),
                 const SizedBox(height: Spacing.l),
                 OutlinedButton.icon(
-                  onPressed: _confirming ? null : _addMore,
-                  icon: const Icon(Icons.add),
+                  onPressed: (_confirming || _busy) ? null : _addMore,
+                  icon: _busy
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.add),
                   label: const Text('Add more'),
                 ),
               ],
