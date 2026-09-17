@@ -26,11 +26,9 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
   bool _exporting = false;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-  }
+  // Deliberately no fetch here — see the same note in purchases_screen.dart:
+  // HomeScreen's tab switcher calls refresh() the first (and every) time
+  // this tab is actually selected, so every tab doesn't fetch on app open.
 
   String? _iso(DateTime? d) => d?.toIso8601String().split('T').first;
 

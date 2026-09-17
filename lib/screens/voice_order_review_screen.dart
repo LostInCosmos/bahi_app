@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../theme.dart';
+import '../utils/poll.dart';
 import 'sale_receipt_screen.dart';
 import 'voice_sale_screen.dart';
 
@@ -69,6 +70,33 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   Future<void> _submitPrescriptionRef(VoiceOrderLine line, String value) => _applyLineUpdate(
         () => ApiClient.instance.updateVoiceOrderLine(_order.id, line.id, prescriptionRef: value.trim()),
       );
+
+  Future<void> _submitQuantity(VoiceOrderLine line, String value) {
+    final qty = double.tryParse(value.trim());
+    if (qty == null || qty <= 0) return Future.value();
+    return _applyLineUpdate(() => ApiClient.instance.updateVoiceOrderLine(_order.id, line.id, quantity: qty));
+  }
+
+  Future<void> _submitMrp(VoiceOrderLine line, String value) {
+    final mrp = double.tryParse(value.trim());
+    if (mrp == null || mrp < 0) return Future.value();
+    return _applyLineUpdate(() => ApiClient.instance.updateVoiceOrderLine(_order.id, line.id, mrp: mrp));
+  }
+
+  /// Discount type and value always travel together — switching the toggle
+  /// re-sends whatever value is already on screen (defaulting to 0, i.e. no
+  /// discount yet) so the effective price recomputes immediately rather than
+  /// waiting for the value field to also be edited.
+  Future<void> _submitDiscount(VoiceOrderLine line, {String? type, String? valueText}) {
+    final value = valueText != null ? double.tryParse(valueText.trim()) : line.discountValue;
+    if (value == null || value < 0) return Future.value();
+    return _applyLineUpdate(() => ApiClient.instance.updateVoiceOrderLine(
+          _order.id,
+          line.id,
+          discountType: type ?? line.discountType ?? 'percentage',
+          discountValue: value,
+        ));
+  }
 
   void _openCandidates(VoiceOrderLine line) {
     showModalBottomSheet(
@@ -188,30 +216,24 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       _busy = true;
       _message = 'Adding more…';
     });
-    final deadline = DateTime.now().add(const Duration(seconds: 180));
     try {
-      while (true) {
-        final job = await ApiClient.instance.getVoiceOrderJob(jobId);
-        if (job.status == 'done') {
-          if (!mounted) return;
-          setState(() {
-            _order = job.order!;
-            _message = null;
-          });
-          return;
-        }
-        if (job.status == 'failed') {
-          if (!mounted) return;
-          setState(() => _message = job.errorMessage ?? 'Could not add that recording.');
-          return;
-        }
-        if (DateTime.now().isAfter(deadline)) {
-          if (!mounted) return;
-          setState(() => _message = 'This is taking longer than expected — please try again.');
-          return;
-        }
-        await Future.delayed(const Duration(seconds: 2));
+      final job = await pollUntilTerminal<VoiceOrderJob>(
+        fetch: () => ApiClient.instance.getVoiceOrderJob(jobId),
+        isTerminal: (j) => j.status == 'done' || j.status == 'failed',
+        timeout: const Duration(seconds: 180),
+      );
+      if (!mounted) return;
+      if (job.status == 'done') {
+        setState(() {
+          _order = job.order!;
+          _message = null;
+        });
+      } else {
+        setState(() => _message = job.errorMessage ?? 'Could not add that recording.');
       }
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _message = 'This is taking longer than expected — please try again.');
     } catch (_) {
       if (!mounted) return;
       setState(() => _message = 'Could not reach the server.');
@@ -243,6 +265,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                       onTapUnresolved: () => _openCandidates(l),
                       onToggleSkip: () => _toggleSkip(l),
                       onSubmitPrescriptionRef: (v) => _submitPrescriptionRef(l, v),
+                      onSubmitQuantity: (v) => _submitQuantity(l, v),
+                      onSubmitMrp: (v) => _submitMrp(l, v),
+                      onSubmitDiscountType: (t) => _submitDiscount(l, type: t),
+                      onSubmitDiscountValue: (v) => _submitDiscount(l, valueText: v),
                     )),
                 if (_message != null)
                   Padding(
@@ -360,6 +386,10 @@ class _VoiceLineCard extends StatefulWidget {
   final VoidCallback onTapUnresolved;
   final VoidCallback onToggleSkip;
   final ValueChanged<String> onSubmitPrescriptionRef;
+  final ValueChanged<String> onSubmitQuantity;
+  final ValueChanged<String> onSubmitMrp;
+  final ValueChanged<String> onSubmitDiscountType;
+  final ValueChanged<String> onSubmitDiscountValue;
 
   const _VoiceLineCard({
     required this.line,
@@ -367,15 +397,30 @@ class _VoiceLineCard extends StatefulWidget {
     required this.onTapUnresolved,
     required this.onToggleSkip,
     required this.onSubmitPrescriptionRef,
+    required this.onSubmitQuantity,
+    required this.onSubmitMrp,
+    required this.onSubmitDiscountType,
+    required this.onSubmitDiscountValue,
   });
 
   @override
   State<_VoiceLineCard> createState() => _VoiceLineCardState();
 }
 
+/// Formats a number for a text field: whole numbers plain, fractional ones
+/// with minimal decimals — the same shape numbers arrive in from the server,
+/// so re-typing the same field back never nudges the cursor around.
+String _numText(double? v) {
+  if (v == null) return '';
+  return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+}
+
 class _VoiceLineCardState extends State<_VoiceLineCard> {
   late final TextEditingController _prescriptionController =
       TextEditingController(text: widget.line.prescriptionRef ?? '');
+  late final TextEditingController _quantityController = TextEditingController(text: _numText(widget.line.quantity));
+  late final TextEditingController _mrpController = TextEditingController(text: _numText(widget.line.mrp));
+  late final TextEditingController _discountController = TextEditingController(text: _numText(widget.line.discountValue));
 
   @override
   void didUpdateWidget(covariant _VoiceLineCard oldWidget) {
@@ -384,11 +429,24 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
         _prescriptionController.text != (widget.line.prescriptionRef ?? '')) {
       _prescriptionController.text = widget.line.prescriptionRef ?? '';
     }
+    if (oldWidget.line.quantity != widget.line.quantity && _quantityController.text != _numText(widget.line.quantity)) {
+      _quantityController.text = _numText(widget.line.quantity);
+    }
+    if (oldWidget.line.mrp != widget.line.mrp && _mrpController.text != _numText(widget.line.mrp)) {
+      _mrpController.text = _numText(widget.line.mrp);
+    }
+    if (oldWidget.line.discountValue != widget.line.discountValue &&
+        _discountController.text != _numText(widget.line.discountValue)) {
+      _discountController.text = _numText(widget.line.discountValue);
+    }
   }
 
   @override
   void dispose() {
     _prescriptionController.dispose();
+    _quantityController.dispose();
+    _mrpController.dispose();
+    _discountController.dispose();
     super.dispose();
   }
 
@@ -417,8 +475,7 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${line.quantity.toStringAsFixed(line.quantity == line.quantity.roundToDouble() ? 0 : 1)} '
-                        '${line.unit ?? ''} · ${line.productName ?? '(unmatched)'}'
+                        '${line.productName ?? '(unmatched)'}'
                         '${line.strengthSpoken != null ? ' ${line.strengthSpoken}' : ''}',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
@@ -465,6 +522,22 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                 Text('₹${(line.lineTotal ?? 0).toStringAsFixed(2)}', style: amountTextStyle(context)),
               ],
             ),
+            if (line.status == 'resolved')
+              Padding(
+                padding: const EdgeInsets.only(top: Spacing.m),
+                child: _PricingRow(
+                  busy: widget.busy,
+                  unit: line.unit,
+                  quantityController: _quantityController,
+                  mrpController: _mrpController,
+                  discountController: _discountController,
+                  discountType: line.discountType ?? 'percentage',
+                  onSubmitQuantity: widget.onSubmitQuantity,
+                  onSubmitMrp: widget.onSubmitMrp,
+                  onSubmitDiscountType: widget.onSubmitDiscountType,
+                  onSubmitDiscountValue: widget.onSubmitDiscountValue,
+                ),
+              ),
             if (line.schedule == 'H1' && line.isSellable)
               Padding(
                 padding: const EdgeInsets.only(top: Spacing.m),
@@ -501,6 +574,105 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
       borderRadius: BorderRadius.circular(AppRadius.card),
       onTap: widget.busy ? null : widget.onTapUnresolved,
       child: card,
+    );
+  }
+}
+
+/// Quantity + MRP + discount (percentage-of-MRP or a flat per-unit amount)
+/// editor for a resolved line — every field round-trips through the same
+/// PATCH the rest of this screen uses, so [VoiceOrderReviewScreen] stays the
+/// single source of truth for the recomputed unit_price/line_total.
+class _PricingRow extends StatelessWidget {
+  final bool busy;
+  final String? unit;
+  final TextEditingController quantityController;
+  final TextEditingController mrpController;
+  final TextEditingController discountController;
+  final String discountType;
+  final ValueChanged<String> onSubmitQuantity;
+  final ValueChanged<String> onSubmitMrp;
+  final ValueChanged<String> onSubmitDiscountType;
+  final ValueChanged<String> onSubmitDiscountValue;
+
+  const _PricingRow({
+    required this.busy,
+    required this.unit,
+    required this.quantityController,
+    required this.mrpController,
+    required this.discountController,
+    required this.discountType,
+    required this.onSubmitQuantity,
+    required this.onSubmitMrp,
+    required this.onSubmitDiscountType,
+    required this.onSubmitDiscountValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 90,
+              child: TextField(
+                controller: quantityController,
+                enabled: !busy,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: 'Qty', isDense: true, suffixText: unit),
+                textInputAction: TextInputAction.done,
+                onSubmitted: onSubmitQuantity,
+                onEditingComplete: () => onSubmitQuantity(quantityController.text),
+              ),
+            ),
+            const SizedBox(width: Spacing.s),
+            Expanded(
+              child: TextField(
+                controller: mrpController,
+                enabled: !busy,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'MRP', isDense: true, prefixText: '₹'),
+                textInputAction: TextInputAction.done,
+                onSubmitted: onSubmitMrp,
+                onEditingComplete: () => onSubmitMrp(mrpController.text),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: Spacing.s),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: discountController,
+                enabled: !busy,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Discount',
+                  isDense: true,
+                  prefixText: discountType == 'amount' ? '₹' : null,
+                  suffixText: discountType == 'percentage' ? '%' : null,
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: onSubmitDiscountValue,
+                onEditingComplete: () => onSubmitDiscountValue(discountController.text),
+              ),
+            ),
+            const SizedBox(width: Spacing.s),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'percentage', label: Text('%')),
+                ButtonSegment(value: 'amount', label: Text('₹')),
+              ],
+              selected: {discountType},
+              showSelectedIcon: false,
+              onSelectionChanged: busy ? null : (s) => onSubmitDiscountType(s.first),
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

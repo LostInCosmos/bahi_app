@@ -19,11 +19,9 @@ class InventoryScreenState extends State<InventoryScreen> {
   bool _loading = false;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _search();
-  }
+  // Deliberately no fetch here — see the same note in purchases_screen.dart:
+  // HomeScreen's tab switcher calls refresh() the first (and every) time
+  // this tab is actually selected, so every tab doesn't fetch on app open.
 
   @override
   void dispose() {

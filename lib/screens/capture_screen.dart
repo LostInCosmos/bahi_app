@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../theme.dart';
+import '../utils/poll.dart';
 import 'crop_screen.dart';
 import 'invoice_detail_screen.dart';
 import 'review_screen.dart';
@@ -316,29 +317,22 @@ class _CaptureScreenState extends State<CaptureScreen> {
         await _persistBatch();
       }
 
-      late final ExtractionResult result;
-      final deadline = DateTime.now().add(_pollTimeout);
-      while (true) {
-        final job = await ApiClient.instance.getExtractionJob(jobId);
-        if (job.status == 'done') {
-          result = job.result!;
-          break;
-        }
-        if (job.status == 'failed') {
-          if (job.errorKind == 'structural_validation_failed') {
-            result = ExtractionResult.blank(
-              job.sourceImage ?? item.sourceImages.first,
-              job.errorMessage ?? "Automatic extraction couldn't read this bill — please enter its details by hand.",
-            );
-            break;
-          }
-          throw ApiException(502, job.errorMessage ?? 'extraction failed');
-        }
-        // still pending/processing
-        if (DateTime.now().isAfter(deadline)) {
-          throw ApiException(504, "This bill is taking longer than expected — please try again.");
-        }
-        await Future.delayed(_pollInterval);
+      final job = await pollUntilTerminal<ExtractionJob>(
+        fetch: () => ApiClient.instance.getExtractionJob(jobId),
+        isTerminal: (j) => j.status == 'done' || j.status == 'failed',
+        interval: _pollInterval,
+        timeout: _pollTimeout,
+      );
+      final ExtractionResult result;
+      if (job.status == 'done') {
+        result = job.result!;
+      } else if (job.errorKind == 'structural_validation_failed') {
+        result = ExtractionResult.blank(
+          job.sourceImage ?? item.sourceImages.first,
+          job.errorMessage ?? "Automatic extraction couldn't read this bill — please enter its details by hand.",
+        );
+      } else {
+        throw ApiException(502, job.errorMessage ?? 'extraction failed');
       }
 
       item.jobId = null;
@@ -351,6 +345,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
         // to the full edit form instead of a summary confirm.
         item.status = result.issues.isEmpty ? _ItemStatus.pendingConfirm : _ItemStatus.needsReview;
         item.result = result;
+      });
+    } on TimeoutException {
+      item.jobId = null;
+      if (!mounted) return;
+      setState(() {
+        item.status = _ItemStatus.failed;
+        item.errorMessage = "This bill is taking longer than expected — please try again.";
       });
     } catch (e) {
       item.jobId = null;

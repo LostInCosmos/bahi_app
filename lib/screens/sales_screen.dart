@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api_client.dart';
 import '../models.dart';
+import '../utils/poll.dart';
 import 'sale_receipt_screen.dart';
 import 'sale_review_screen.dart';
 import 'voice_order_review_screen.dart';
@@ -51,7 +52,12 @@ class SalesScreenState extends State<SalesScreen> {
   @override
   void initState() {
     super.initState();
-    _search();
+    // No _search() here deliberately — see the same note in
+    // purchases_screen.dart: HomeScreen's tab switcher calls refresh() the
+    // first (and every) time this tab is actually selected, so every tab
+    // doesn't fetch on app open. _restoreVoiceJobs still runs unconditionally
+    // though — an in-flight voice note needs to resume polling regardless of
+    // which tab the owner happens to be looking at.
     _restoreVoiceJobs();
   }
 
@@ -188,39 +194,35 @@ class SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _pollVoiceJob(_VoiceJobItem item) async {
-    final deadline = DateTime.now().add(_voiceJobPollTimeout);
     try {
-      while (true) {
-        final job = await ApiClient.instance.getVoiceOrderJob(item.jobId);
-        if (job.status == 'done') {
-          if (!mounted) return;
-          setState(() {
-            item.status = _VoiceJobStatus.ready;
-            item.order = job.order;
-          });
-          _persistVoiceJobs();
-          return;
-        }
-        if (job.status == 'failed') {
-          if (!mounted) return;
-          setState(() {
-            item.status = _VoiceJobStatus.failed;
-            item.errorMessage = job.errorMessage ?? 'Could not process that recording.';
-          });
-          _persistVoiceJobs();
-          return;
-        }
-        if (DateTime.now().isAfter(deadline)) {
-          if (!mounted) return;
-          setState(() {
-            item.status = _VoiceJobStatus.failed;
-            item.errorMessage = 'This is taking longer than expected — please try again.';
-          });
-          _persistVoiceJobs();
-          return;
-        }
-        await Future.delayed(_voiceJobPollInterval);
+      final job = await pollUntilTerminal<VoiceOrderJob>(
+        fetch: () => ApiClient.instance.getVoiceOrderJob(item.jobId),
+        isTerminal: (j) => j.status == 'done' || j.status == 'failed',
+        interval: _voiceJobPollInterval,
+        timeout: _voiceJobPollTimeout,
+      );
+      if (!mounted) return;
+      if (job.status == 'done') {
+        setState(() {
+          item.status = _VoiceJobStatus.ready;
+          item.order = job.order;
+        });
+        _persistVoiceJobs();
+        _notifyVoiceJobReady(item);
+      } else {
+        setState(() {
+          item.status = _VoiceJobStatus.failed;
+          item.errorMessage = job.errorMessage ?? 'Could not process that recording.';
+        });
+        _persistVoiceJobs();
       }
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        item.status = _VoiceJobStatus.failed;
+        item.errorMessage = 'This is taking longer than expected — please try again.';
+      });
+      _persistVoiceJobs();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -229,6 +231,22 @@ class SalesScreenState extends State<SalesScreen> {
       });
       _persistVoiceJobs();
     }
+  }
+
+  /// Surfaces a job finishing as an actual pop-up notification (not just the
+  /// chip strip, which the owner might not be looking at if they switched
+  /// tabs or started a second recording) — tapping it opens straight into
+  /// the review screen, same destination as tapping the chip.
+  void _notifyVoiceJobReady(_VoiceJobItem item) {
+    if (!mounted) return;
+    final count = item.order?.itemCountHeard ?? 0;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Voice order ready — $count item${count == 1 ? '' : 's'} heard'),
+        action: SnackBarAction(label: 'View', onPressed: () => _openVoiceJobResult(item)),
+        duration: const Duration(seconds: 6),
+      ),
+    );
   }
 
   /// Tapping a ready chip opens the review screen (same downstream flow as

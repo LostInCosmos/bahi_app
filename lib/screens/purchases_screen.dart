@@ -27,11 +27,12 @@ class PurchasesScreenState extends State<PurchasesScreen> {
   bool _exporting = false;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-  }
+  // Deliberately no fetch here — HomeScreen builds every tab up front (via
+  // IndexedStack, so switching tabs is instant and preserves scroll/filter
+  // state), but that means an unconditional fetch in initState would fire
+  // for every tab the moment the app opens, not just the one actually being
+  // looked at. HomeScreen's tab switcher calls refresh() the first (and
+  // every) time this tab is actually selected instead.
 
   @override
   void dispose() {
