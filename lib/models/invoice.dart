@@ -26,7 +26,12 @@ class LineItem {
   double? cgstAmount;
   double? sgstAmount;
   double? igstAmount;
-  double lineAmount;
+  // Renamed from lineAmount (backend: line_amount -> gross_amount) — the
+  // row's main printed pre-tax amount, still required. A netAmount
+  // (after-discount-and-tax total) field was tried and removed — extraction
+  // couldn't reliably tell it apart from a per-unit "Net Rate" column, so
+  // gross_amount is the only per-line amount now.
+  double grossAmount;
 
   LineItem({
     this.productName = "",
@@ -48,7 +53,7 @@ class LineItem {
     this.cgstAmount,
     this.sgstAmount,
     this.igstAmount,
-    this.lineAmount = 0,
+    this.grossAmount = 0,
   });
 
   factory LineItem.fromJson(Map<String, dynamic> json) => LineItem(
@@ -71,7 +76,7 @@ class LineItem {
         cgstAmount: (json['cgst_amount'] as num?)?.toDouble(),
         sgstAmount: (json['sgst_amount'] as num?)?.toDouble(),
         igstAmount: (json['igst_amount'] as num?)?.toDouble(),
-        lineAmount: (json['line_amount'] as num?)?.toDouble() ?? 0,
+        grossAmount: (json['gross_amount'] as num?)?.toDouble() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -94,7 +99,7 @@ class LineItem {
         'cgst_amount': cgstAmount,
         'sgst_amount': sgstAmount,
         'igst_amount': igstAmount,
-        'line_amount': lineAmount,
+        'gross_amount': grossAmount,
       };
 }
 

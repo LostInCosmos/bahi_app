@@ -49,6 +49,18 @@ extension InvoiceApi on ApiClient {
     return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
   }
 
+  /// Re-queues an already-submitted job for another Gemini attempt — the
+  /// SAME job id, not a new one (see api/v1/extraction.py's retry_extraction:
+  /// calling submitExtraction again on a "resend to Gemini" tap used to
+  /// create a brand-new row per retry, splitting one bill's real attempt
+  /// count and Gemini cost across several admin-dashboard entries instead
+  /// of one honest total). Same submit-then-poll shape as submitExtraction.
+  Future<int> retryExtraction(int jobId) async {
+    final res = await http.post(_uri('/invoices/extract/$jobId/retry'), headers: _authHeader);
+    _checkOk(res);
+    return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
+  }
+
   Future<ExtractionJob> getExtractionJob(int jobId) async {
     final res = await http.get(_uri('/invoices/extract/$jobId'), headers: _authHeader);
     _checkOk(res);

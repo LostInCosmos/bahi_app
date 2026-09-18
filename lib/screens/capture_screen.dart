@@ -67,6 +67,13 @@ class _BatchItem {
   // _restoreBatch can resume polling the SAME job instead of resubmitting
   // one that's still (or already) running server-side.
   int? jobId;
+  // Unlike jobId above, this is never cleared once set — it's this item's
+  // extraction_logs row for as long as the batch item exists. A "resend to
+  // Gemini" tap (_reprocessItem) uses it to retry that SAME row via
+  // ApiClient.retryExtraction instead of submitExtraction, which would
+  // otherwise create a brand-new row (and a brand-new "attempts: 1") every
+  // single retry instead of the row honestly accumulating both.
+  int? lastJobId;
   ExtractionResult? result;
   String? errorMessage;
   int? savedInvoiceId;
@@ -135,6 +142,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
               // yet. Otherwise _restoreBatch resumes polling the same job.
               'status': (i.status == _ItemStatus.processing && i.jobId == null ? _ItemStatus.ready : i.status).name,
               'jobId': i.jobId,
+              'lastJobId': i.lastJobId,
               'result': i.result?.toJson(),
               'errorMessage': i.errorMessage,
               'savedInvoiceId': i.savedInvoiceId,
@@ -174,6 +182,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
         orElse: () => _ItemStatus.ready,
       );
       item.jobId = map['jobId'] as int?;
+      // Older persisted batches (saved before lastJobId existed) have no
+      // key for it — fall back to jobId, which is the same value for any
+      // item whose FIRST submission hadn't reached a terminal state yet
+      // when the batch was last saved; an item that had already finished
+      // simply won't get a retry-reuse for its pre-upgrade row, and starts
+      // a fresh one on next resend, same as before this existed.
+      item.lastJobId = map['lastJobId'] as int? ?? item.jobId;
       item.errorMessage = map['errorMessage'] as String?;
       item.savedInvoiceId = map['savedInvoiceId'] as int?;
       final resultJson = map['result'] as Map<String, dynamic>?;
@@ -308,12 +323,19 @@ class _CaptureScreenState extends State<CaptureScreen> {
       int jobId;
       if (resumeJobId != null) {
         jobId = resumeJobId;
+      } else if (item.lastJobId != null) {
+        // Not this item's first attempt — reuse the existing row instead of
+        // submitExtraction, which would spawn a separate one every retry.
+        jobId = await ApiClient.instance.retryExtraction(item.lastJobId!);
+        item.jobId = jobId;
+        await _persistBatch();
       } else {
         jobId = await ApiClient.instance.submitExtraction(
           item.sourceImages.first,
           extraSourceImages: item.sourceImages.skip(1).toList(),
         );
         item.jobId = jobId;
+        item.lastJobId = jobId;
         await _persistBatch();
       }
 

@@ -26,7 +26,7 @@ class _LineItemForm {
   final TextEditingController cgstAmount;
   final TextEditingController sgstAmount;
   final TextEditingController igstAmount;
-  final TextEditingController lineAmount;
+  final TextEditingController grossAmount;
 
   _LineItemForm.fromLineItem(LineItem item)
       : productName = TextEditingController(text: item.productName),
@@ -44,7 +44,7 @@ class _LineItemForm {
         cgstAmount = TextEditingController(text: _fmtNullable(item.cgstAmount)),
         sgstAmount = TextEditingController(text: _fmtNullable(item.sgstAmount)),
         igstAmount = TextEditingController(text: _fmtNullable(item.igstAmount)),
-        lineAmount = TextEditingController(text: _fmt(item.lineAmount));
+        grossAmount = TextEditingController(text: _fmt(item.grossAmount));
 
   _LineItemForm.empty() : this.fromLineItem(LineItem());
 
@@ -64,13 +64,13 @@ class _LineItemForm {
         cgstAmount: double.tryParse(cgstAmount.text),
         sgstAmount: double.tryParse(sgstAmount.text),
         igstAmount: double.tryParse(igstAmount.text),
-        lineAmount: double.tryParse(lineAmount.text) ?? 0,
+        grossAmount: double.tryParse(grossAmount.text) ?? 0,
       );
 
   void dispose() {
     for (final c in [
       productName, pack, batchNo, expiry, hsnCode, qty, freeQty, freeScheme, mrp, rate,
-      discountPct, gstPct, cgstAmount, sgstAmount, igstAmount, lineAmount,
+      discountPct, gstPct, cgstAmount, sgstAmount, igstAmount, grossAmount,
     ]) {
       c.dispose();
     }
@@ -249,7 +249,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         // (or discount_amount) derived on a *previous* click would look
         // identical to a value genuinely printed on the bill, and the
         // "only fill if empty" server-side derivation would leave it stale
-        // instead of recomputing it against whatever line_amount/
+        // instead of recomputing it against whatever gross_amount/
         // discount_pct/gst_pct was just edited.
         li.discountAmount = null;
         li.cgstAmount = null;
@@ -324,7 +324,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       form.cgstAmount.text = _fmtNullable(item.cgstAmount);
       form.sgstAmount.text = _fmtNullable(item.sgstAmount);
       form.igstAmount.text = _fmtNullable(item.igstAmount);
-      form.lineAmount.text = _fmt(item.lineAmount);
+      form.grossAmount.text = _fmt(item.grossAmount);
     }
   }
 
@@ -614,16 +614,41 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _LineItemCard extends StatelessWidget {
+class _LineItemCard extends StatefulWidget {
   final _LineItemForm form;
   final List<ValidationIssue> issues;
   final VoidCallback onRemove;
   const _LineItemCard({required this.form, required this.issues, required this.onRemove});
 
+  @override
+  State<_LineItemCard> createState() => _LineItemCardState();
+}
+
+class _LineItemCardState extends State<_LineItemCard> {
+  // Collapsed by default so a long bill doesn't force scrolling past every
+  // clean row to find the one that needs attention — a row with an issue
+  // starts open instead, since that's exactly the one the user came here
+  // to look at.
+  late bool _expanded = widget.issues.isNotEmpty;
+
+  @override
+  void didUpdateWidget(_LineItemCard old) {
+    super.didUpdateWidget(old);
+    // A fresh revalidate can put a NEW issue on a row that was clean (and
+    // collapsed) before — force it open so the user sees it without having
+    // to go hunting through every row again. A row the user already had
+    // open, or already had open for a still-standing issue, is left alone
+    // either way (including one they manually collapsed while it still has
+    // an issue — that's their call, not something to fight every rebuild).
+    if (old.issues.isEmpty && widget.issues.isNotEmpty) {
+      _expanded = true;
+    }
+  }
+
   // issues here are already filtered to this row by the parent; strip the
   // "line_items[N]." prefix so lookups are by plain field name (e.g. "qty").
   Map<String, ValidationIssue> get _bySuffix => {
-        for (final i in issues) i.field.split('.').skip(1).join('.'): i,
+        for (final i in widget.issues) i.field.split('.').skip(1).join('.'): i,
       };
 
   InputDecoration _decoration(String label, String field) {
@@ -642,6 +667,10 @@ class _LineItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final form = widget.form;
+    final hasError = widget.issues.any((i) => i.isError);
+    final hasIssue = widget.issues.isNotEmpty;
+
     return Card(
       margin: const EdgeInsets.only(top: Spacing.m),
       child: Padding(
@@ -649,26 +678,52 @@ class _LineItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(child: TextField(controller: form.productName, decoration: _decoration('Product name', 'product_name'))),
-                IconButton(onPressed: onRemove, icon: const Icon(Icons.delete_outline)),
-              ],
-            ),
-            _pairRow(form.pack, 'Pack', 'pack', form.batchNo, 'Batch no.', 'batch_no'),
-            _pairRow(form.expiry, 'Expiry (MM/YY)', 'expiry', form.hsnCode, 'HSN code', 'hsn_code'),
-            _pairRow(form.qty, 'Qty', 'qty', form.freeQty, 'Free qty', 'free_qty', numeric: true),
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextField(
-                controller: form.freeScheme,
-                decoration: _decoration('Free scheme (e.g. 10+1) — leave blank unless printed as a ratio', 'free_scheme'),
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Row(
+                children: [
+                  if (hasIssue)
+                    Padding(
+                      padding: const EdgeInsets.only(right: Spacing.xs),
+                      child: Icon(
+                        hasError ? Icons.error_outline : Icons.warning_amber_outlined,
+                        color: hasError ? Theme.of(context).colorScheme.error : const Color(0xFFB45309),
+                        size: 20,
+                      ),
+                    ),
+                  Expanded(
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: form.productName,
+                      builder: (context, value, _) => Text(
+                        value.text.isEmpty ? 'Line item' : value.text,
+                        style: Theme.of(context).textTheme.titleSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  IconButton(onPressed: widget.onRemove, icon: const Icon(Icons.delete_outline)),
+                  Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+                ],
               ),
             ),
-            _pairRow(form.mrp, 'MRP', 'mrp', form.rate, 'Rate', 'rate', numeric: true),
-            _pairRow(form.discountPct, 'Discount %', 'discount_pct', form.gstPct, 'GST %', 'gst_pct', numeric: true),
-            _pairRow(form.cgstAmount, 'CGST amt', 'cgst_amount', form.sgstAmount, 'SGST amt', 'sgst_amount', numeric: true),
-            _pairRow(form.igstAmount, 'IGST amt', 'igst_amount', form.lineAmount, 'Line amount', 'line_amount', numeric: true),
+            if (_expanded) ...[
+              const SizedBox(height: Spacing.xs),
+              TextField(controller: form.productName, decoration: _decoration('Product name', 'product_name')),
+              _pairRow(form.pack, 'Pack', 'pack', form.batchNo, 'Batch no.', 'batch_no'),
+              _pairRow(form.expiry, 'Expiry (MM/YY)', 'expiry', form.hsnCode, 'HSN code', 'hsn_code'),
+              _pairRow(form.qty, 'Qty', 'qty', form.freeQty, 'Free qty', 'free_qty', numeric: true),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextField(
+                  controller: form.freeScheme,
+                  decoration: _decoration('Free scheme (e.g. 10+1) — leave blank unless printed as a ratio', 'free_scheme'),
+                ),
+              ),
+              _pairRow(form.mrp, 'MRP', 'mrp', form.rate, 'Rate', 'rate', numeric: true),
+              _pairRow(form.discountPct, 'Discount %', 'discount_pct', form.gstPct, 'GST %', 'gst_pct', numeric: true),
+              _pairRow(form.cgstAmount, 'CGST amt', 'cgst_amount', form.sgstAmount, 'SGST amt', 'sgst_amount', numeric: true),
+              _pairRow(form.igstAmount, 'IGST amt', 'igst_amount', form.grossAmount, 'Gross amount', 'gross_amount', numeric: true),
+            ],
           ],
         ),
       ),
