@@ -182,6 +182,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Uint8List? _photoBytes;
   bool _photoFailed = false;
+  bool _photoMinimized = false;
 
   Map<String, ValidationIssue> get _headerIssues => {
         for (final i in _issues)
@@ -666,8 +667,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Widget _buildPhotoHeader(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      height: 180,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      height: _photoMinimized ? 44 : 180,
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: Spacing.l),
       decoration: BoxDecoration(
@@ -675,13 +678,37 @@ class _ReviewScreenState extends State<ReviewScreen> {
         borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       clipBehavior: Clip.antiAlias,
-      child: _photoBytes != null
-          ? GestureDetector(
-              onTap: _viewPhotoFullScreen,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.memory(_photoBytes!, fit: BoxFit.contain),
+      child: _photoMinimized
+          ? InkWell(
+              onTap: () => setState(() => _photoMinimized = false),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
+                child: Row(
+                  children: [
+                    Icon(Icons.image_outlined, size: 18, color: colors.onSurfaceVariant),
+                    const SizedBox(width: Spacing.s),
+                    Text('Bill photo', style: TextStyle(color: colors.onSurfaceVariant)),
+                    const Spacer(),
+                    Icon(Icons.expand_more, color: colors.onSurfaceVariant),
+                  ],
+                ),
+              ),
+            )
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                if (_photoBytes != null)
+                  GestureDetector(
+                    onTap: _viewPhotoFullScreen,
+                    child: Image.memory(_photoBytes!, fit: BoxFit.contain),
+                  )
+                else
+                  Center(
+                    child: _photoFailed
+                        ? Icon(Icons.broken_image_outlined, size: 36, color: colors.outline)
+                        : const CircularProgressIndicator(),
+                  ),
+                if (_photoBytes != null)
                   Positioned(
                     right: 6,
                     bottom: 6,
@@ -691,13 +718,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       child: const Icon(Icons.zoom_in, color: Colors.white, size: 18),
                     ),
                   ),
-                ],
-              ),
-            )
-          : Center(
-              child: _photoFailed
-                  ? Icon(Icons.broken_image_outlined, size: 36, color: colors.outline)
-                  : const CircularProgressIndicator(),
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => setState(() => _photoMinimized = true),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(6)),
+                      child: const Icon(Icons.expand_less, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ),
+              ],
             ),
     );
   }

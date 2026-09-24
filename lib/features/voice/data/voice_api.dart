@@ -68,6 +68,31 @@ extension VoiceApi on ApiClient {
     _checkOk(res);
     return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
+  Future<VoiceOrder> addVoiceOrderLine(
+    int orderId, {
+    required int productId,
+    required double quantity,
+    required String unit,
+    double? mrp,
+    String? discountType,
+    double? discountValue,
+  }) async {
+    final body = <String, dynamic>{
+      'product_id': productId,
+      'quantity': quantity,
+      'unit': unit,
+    };
+    if (mrp != null) body['mrp'] = mrp;
+    if (discountType != null) body['discount_type'] = discountType;
+    if (discountValue != null) body['discount_value'] = discountValue;
+    final res = await http.post(
+      _uri('/voice-orders/$orderId/lines'),
+      headers: {..._authHeader, 'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _checkOk(res);
+    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
 
   Future<Map<String, dynamic>> confirmVoiceOrder(
     int orderId, {
