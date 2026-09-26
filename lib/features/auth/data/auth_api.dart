@@ -5,7 +5,6 @@ extension AuthApi on ApiClient {
     required String tenantName,
     required String email,
     required String password,
-    String? geminiApiKey,
     String? businessType,
   }) async {
     final res = await http.post(
@@ -15,7 +14,6 @@ extension AuthApi on ApiClient {
         'tenant_name': tenantName,
         'email': email,
         'password': password,
-        'gemini_api_key': geminiApiKey,
         'business_type': businessType,
       }),
     );
@@ -43,22 +41,17 @@ extension AuthApi on ApiClient {
     return account;
   }
 
-  /// Omit any field left unchanged. [geminiApiKey] as an empty string clears
-  /// it (falls back to the pooled server key); omit it entirely to leave
-  /// whatever's already set untouched — same convention as the web app.
   Future<AccountInfo> updateAccount({
     String? tenantName,
     String? gstin,
     String? address,
     String? businessType,
-    String? geminiApiKey,
   }) async {
     final body = <String, dynamic>{};
     if (tenantName != null) body['tenant_name'] = tenantName;
     if (gstin != null) body['gstin'] = gstin;
     if (address != null) body['address'] = address;
     if (businessType != null) body['business_type'] = businessType;
-    if (geminiApiKey != null) body['gemini_api_key'] = geminiApiKey;
     final res = await http.patch(
       _uri('/account'),
       headers: {..._authHeader, 'Content-Type': 'application/json'},

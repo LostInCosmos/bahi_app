@@ -1,4 +1,4 @@
-package com.example.gst_bill_app
+package com.dastavez.bahi
 
 import io.flutter.embedding.android.FlutterActivity
 

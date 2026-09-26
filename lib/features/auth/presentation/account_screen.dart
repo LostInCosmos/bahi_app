@@ -21,7 +21,6 @@ class _AccountScreenState extends State<AccountScreen> {
   final _shopNameController = TextEditingController();
   final _gstinController = TextEditingController();
   final _addressController = TextEditingController();
-  final _geminiKeyController = TextEditingController();
   String _businessType = 'medical';
 
   AccountInfo? _account;
@@ -41,7 +40,6 @@ class _AccountScreenState extends State<AccountScreen> {
     _shopNameController.dispose();
     _gstinController.dispose();
     _addressController.dispose();
-    _geminiKeyController.dispose();
     super.dispose();
   }
 
@@ -80,12 +78,10 @@ class _AccountScreenState extends State<AccountScreen> {
         gstin: _gstinController.text.trim().toUpperCase(),
         address: _addressController.text.trim(),
         businessType: _businessType,
-        geminiApiKey: _geminiKeyController.text.isEmpty ? null : _geminiKeyController.text,
       );
       if (!mounted) return;
       setState(() {
         _account = account;
-        _geminiKeyController.clear();
         _savedMessage = 'Saved.';
       });
     } on ApiException catch (e) {
@@ -150,19 +146,6 @@ class _AccountScreenState extends State<AccountScreen> {
                     onChanged: (v) {
                       if (v != null) setState(() => _businessType = v);
                     },
-                  ),
-                  const SizedBox(height: Spacing.m),
-                  TextField(
-                    controller: _geminiKeyController,
-                    obscureText: true,
-                    autocorrect: false,
-                    decoration: InputDecoration(
-                      labelText: 'Gemini API key',
-                      helperText: (_account?.hasGeminiApiKey ?? false)
-                          ? 'A key is already set — leave this blank to keep it, or enter a new one to replace it.'
-                          : 'No key set — using the pooled server key. Enter one here to use your own instead.',
-                      helperMaxLines: 2,
-                    ),
                   ),
                   const SizedBox(height: Spacing.l),
                   if (_error != null)

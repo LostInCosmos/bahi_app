@@ -16,3 +16,5 @@ ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 ios/Pods/
 ios/.symlinks/
+.claude/
+.claude

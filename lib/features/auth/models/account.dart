@@ -5,7 +5,6 @@ class AccountInfo {
   final String? gstin;
   final String? address;
   final String email;
-  final bool hasGeminiApiKey;
   final String businessType;
 
   AccountInfo({
@@ -13,7 +12,6 @@ class AccountInfo {
     this.gstin,
     this.address,
     required this.email,
-    required this.hasGeminiApiKey,
     required this.businessType,
   });
 
@@ -22,7 +20,6 @@ class AccountInfo {
         gstin: json['gstin'] as String?,
         address: json['address'] as String?,
         email: json['email'] as String,
-        hasGeminiApiKey: json['has_gemini_api_key'] as bool,
         businessType: json['business_type'] as String? ?? 'medical',
       );
 }

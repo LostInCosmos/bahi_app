@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,8 +48,13 @@ class ApiClient {
   ApiClient._internal();
   static final ApiClient instance = ApiClient._internal();
 
-  String baseUrl = "http://10.0.2.2:8000";
+  static const _productionBaseUrl = "https://api.dastavez.co.in";
+  String baseUrl = kReleaseMode ? _productionBaseUrl : "http://10.0.2.2:8000";
   String? token;
+
+  static const _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   /// Drives the app's color scheme (teal for medical, red for kirana — see
   /// theme.dart) — a [ValueNotifier] so the theme updates live the moment
@@ -57,8 +63,18 @@ class ApiClient {
 
   Future<void> loadFromDisk() async {
     final prefs = await SharedPreferences.getInstance();
-    baseUrl = prefs.getString('base_url') ?? baseUrl;
-    token = prefs.getString('token');
+    if (!kReleaseMode) {
+      baseUrl = prefs.getString('base_url') ?? baseUrl;
+    }
+    token = await _secureStorage.read(key: 'token');
+    if (token == null) {
+      final legacyToken = prefs.getString('token');
+      if (legacyToken != null) {
+        token = legacyToken;
+        await _secureStorage.write(key: 'token', value: legacyToken);
+        await prefs.remove('token');
+      }
+    }
     businessTypeNotifier.value = prefs.getString('business_type') ?? 'medical';
   }
 
@@ -76,15 +92,21 @@ class ApiClient {
 
   Future<void> _saveToken(String token) async {
     this.token = token;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', token);
+    await _secureStorage.write(key: 'token', value: token);
   }
 
   Future<void> logout() async {
+    if (token != null) {
+      try {
+        await http.post(_uri('/auth/logout'), headers: _authHeader);
+      } catch (_) {
+        // ignored — local logout still proceeds
+      }
+    }
     token = null;
     businessTypeNotifier.value = 'medical';
+    await _secureStorage.delete(key: 'token');
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
     await prefs.remove('business_type');
   }
 

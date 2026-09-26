@@ -4,10 +4,14 @@
          recording is uploaded to the backend for transcription, not
          transcribed on-device. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- allowBackup off: the login token lives in app storage, and a device
+         backup would carry it off the phone. -->
     <application
         android:label="gst_bill_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

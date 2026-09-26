@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,7 +17,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _tenantNameController = TextEditingController();
-  final _geminiKeyController = TextEditingController();
   final _baseUrlController = TextEditingController(text: ApiClient.instance.baseUrl);
 
   bool _signupMode = false;
@@ -30,7 +30,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _tenantNameController.dispose();
-    _geminiKeyController.dispose();
     _baseUrlController.dispose();
     super.dispose();
   }
@@ -41,13 +40,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await ApiClient.instance.setBaseUrl(_baseUrlController.text.trim());
+      if (!kReleaseMode) {
+        await ApiClient.instance.setBaseUrl(_baseUrlController.text.trim());
+      }
       if (_signupMode) {
         await ApiClient.instance.signup(
           tenantName: _tenantNameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
-          geminiApiKey: _geminiKeyController.text.trim().isEmpty ? null : _geminiKeyController.text.trim(),
           businessType: _businessType,
         );
       } else {
@@ -187,47 +187,38 @@ class _LoginScreenState extends State<LoginScreen> {
                                       child: const Text('Forgot password?'),
                                     ),
                                   ),
-                                if (_signupMode) ...[
-                                  const SizedBox(height: Spacing.m),
+                ],
+                            ),
+                          ),
+                          if (!kReleaseMode) ...[
+                            const SizedBox(height: Spacing.s),
+                            Theme(
+                              data: Theme.of(context).copyWith(
+                                listTileTheme: const ListTileThemeData(dense: true),
+                              ),
+                              child: ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                leading: Icon(Icons.settings_outlined, color: colors.onSurfaceVariant, size: 20),
+                                title: const Text('Advanced setting'),
+                                subtitle: Text(
+                                  'Optional · keep the default unless instructed',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                                ),
+                                childrenPadding: const EdgeInsets.only(bottom: Spacing.s),
+                                children: [
                                   TextField(
-                                    controller: _geminiKeyController,
+                                    controller: _baseUrlController,
                                     decoration: const InputDecoration(
-                                      labelText: 'Gemini API key (optional)',
-                                      helperText: 'Leave blank to use the pooled server key',
-                                      prefixIcon: Icon(Icons.vpn_key_outlined),
+                                      labelText: 'API base URL',
+                                      helperText:
+                                          'Emulator: http://10.0.2.2:8000 — physical device: http://<your-computer-LAN-IP>:8000',
+                                      prefixIcon: Icon(Icons.dns_outlined),
                                     ),
                                   ),
                                 ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: Spacing.s),
-                          Theme(
-                            data: Theme.of(context).copyWith(
-                              listTileTheme: const ListTileThemeData(dense: true),
-                            ),
-                            child: ExpansionTile(
-                              tilePadding: EdgeInsets.zero,
-                              leading: Icon(Icons.settings_outlined, color: colors.onSurfaceVariant, size: 20),
-                              title: const Text('Advanced setting'),
-                              subtitle: Text(
-                                'Optional · keep the default unless instructed',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
                               ),
-                              childrenPadding: const EdgeInsets.only(bottom: Spacing.s),
-                              children: [
-                                TextField(
-                                  controller: _baseUrlController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'API base URL',
-                                    helperText:
-                                        'Emulator: http://10.0.2.2:8000 — physical device: http://<your-computer-LAN-IP>:8000',
-                                    prefixIcon: Icon(Icons.dns_outlined),
-                                  ),
-                                ),
-                              ],
                             ),
-                          ),
+                          ],
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 180),
                             child: _error == null
