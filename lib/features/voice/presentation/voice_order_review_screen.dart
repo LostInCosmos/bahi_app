@@ -64,6 +64,13 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
         () => ApiClient.instance.updateVoiceOrderLine(_order.id, line.id, productId: candidate.id),
       );
 
+  // Same as _pickCandidate, but for a product found by searching the whole
+  // catalog rather than picking from the LLM/phonetic-match suggestions —
+  // the escape hatch for when none of those actually fit.
+  Future<void> _pickProduct(VoiceOrderLine line, ProductSummary product) => _applyLineUpdate(
+        () => ApiClient.instance.updateVoiceOrderLine(_order.id, line.id, productId: product.id),
+      );
+
   Future<void> _toggleSkip(VoiceOrderLine line) => _applyLineUpdate(
         () => ApiClient.instance.updateVoiceOrderLine(_order.id, line.id, skip: !line.skip),
       );
@@ -99,6 +106,16 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
         ));
   }
 
+  Future<void> _searchInventoryFor(VoiceOrderLine line) async {
+    final picked = await showModalBottomSheet<_AddItemResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => const _AddItemSheet(),
+    );
+    if (picked == null || !mounted) return;
+    await _pickProduct(line, picked.product);
+  }
+
   void _openCandidates(VoiceOrderLine line) {
     showModalBottomSheet(
       context: context,
@@ -108,6 +125,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
         onPick: (c) {
           Navigator.of(ctx).pop();
           _pickCandidate(line, c);
+        },
+        onSearch: () {
+          Navigator.of(ctx).pop();
+          _searchInventoryFor(line);
         },
         onSkip: () {
           Navigator.of(ctx).pop();
@@ -282,6 +303,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                       line: l,
                       busy: _busy,
                       onTapUnresolved: () => _openCandidates(l),
+                      onPickCandidate: (c) => _pickCandidate(l, c),
                       onToggleSkip: () => _toggleSkip(l),
                       onSubmitPrescriptionRef: (v) => _submitPrescriptionRef(l, v),
                       onSubmitQuantity: (v) => _submitQuantity(l, v),
@@ -417,6 +439,7 @@ class _VoiceLineCard extends StatefulWidget {
   final VoiceOrderLine line;
   final bool busy;
   final VoidCallback onTapUnresolved;
+  final ValueChanged<VoiceLineCandidate> onPickCandidate;
   final VoidCallback onToggleSkip;
   final ValueChanged<String> onSubmitPrescriptionRef;
   final ValueChanged<String> onSubmitQuantity;
@@ -428,6 +451,7 @@ class _VoiceLineCard extends StatefulWidget {
     required this.line,
     required this.busy,
     required this.onTapUnresolved,
+    required this.onPickCandidate,
     required this.onToggleSkip,
     required this.onSubmitPrescriptionRef,
     required this.onSubmitQuantity,
@@ -539,6 +563,32 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                         const SizedBox(height: Spacing.xs),
                         Text(_statusLabel(line.status), style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
                       ],
+                      // Surfaces the same candidates the full picker sheet
+                      // shows, right on the card — a shopkeeper shouldn't
+                      // need an extra tap-to-open-a-sheet step to see the
+                      // 2-3 likely products (e.g. two flavors of the same
+                      // snack) the server already narrowed it down to.
+                      if (tappable && line.candidates.isNotEmpty && !line.skip)
+                        Padding(
+                          padding: const EdgeInsets.only(top: Spacing.xs),
+                          child: Wrap(
+                            spacing: Spacing.xs,
+                            runSpacing: Spacing.xs,
+                            children: [
+                              ...line.candidates.take(4).map((c) => ActionChip(
+                                    label: Text(
+                                      c.strength != null && c.strength!.isNotEmpty ? '${c.name} ${c.strength}' : c.name,
+                                    ),
+                                    onPressed: widget.busy ? null : () => widget.onPickCandidate(c),
+                                  )),
+                              if (line.candidates.length > 4)
+                                ActionChip(
+                                  label: const Text('More…'),
+                                  onPressed: widget.busy ? null : widget.onTapUnresolved,
+                                ),
+                            ],
+                          ),
+                        ),
                       if (line.skip)
                         Padding(
                           padding: const EdgeInsets.only(top: Spacing.xs),
@@ -760,8 +810,9 @@ class _BatchLine extends StatelessWidget {
 class _CandidatePickerSheet extends StatelessWidget {
   final VoiceOrderLine line;
   final void Function(VoiceLineCandidate) onPick;
+  final VoidCallback onSearch;
   final VoidCallback onSkip;
-  const _CandidatePickerSheet({required this.line, required this.onPick, required this.onSkip});
+  const _CandidatePickerSheet({required this.line, required this.onPick, required this.onSearch, required this.onSkip});
 
   @override
   Widget build(BuildContext context) {
@@ -787,6 +838,15 @@ class _CandidatePickerSheet extends StatelessWidget {
                         : null,
                     onTap: () => onPick(c),
                   )),
+            const SizedBox(height: Spacing.s),
+            // Escape hatch for when none of the above are actually right —
+            // none of these candidates are guaranteed correct, they're the
+            // LLM/phonetic-match's best guesses.
+            OutlinedButton.icon(
+              onPressed: onSearch,
+              icon: const Icon(Icons.search),
+              label: const Text('Search inventory instead'),
+            ),
             const SizedBox(height: Spacing.s),
             OutlinedButton(onPressed: onSkip, child: const Text('Skip this line')),
           ],
