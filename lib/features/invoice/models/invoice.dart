@@ -14,6 +14,11 @@ class LineItem {
   String? freeScheme;
   double? mrp;
   double rate;
+  // The single printed Disc/Discount value. The server decides whether it is a
+  // % or a rupee amount and returns its answer in discountPct/discountAmount.
+  // Kept and echoed back so revalidate still has the printed figure after the
+  // derived ones are cleared (DAS-9).
+  double? discount;
   double? discountPct;
   double? discountAmount;
   double gstPct;
@@ -44,6 +49,7 @@ class LineItem {
     this.freeScheme,
     this.mrp,
     this.rate = 0,
+    this.discount,
     this.discountPct,
     this.discountAmount,
     this.gstPct = 0,
@@ -67,6 +73,7 @@ class LineItem {
         freeScheme: json['free_scheme'] as String?,
         mrp: (json['mrp'] as num?)?.toDouble(),
         rate: (json['rate'] as num?)?.toDouble() ?? 0,
+        discount: (json['discount'] as num?)?.toDouble(),
         discountPct: (json['discount_pct'] as num?)?.toDouble(),
         discountAmount: (json['discount_amount'] as num?)?.toDouble(),
         gstPct: (json['gst_pct'] as num?)?.toDouble() ?? 0,
@@ -90,6 +97,7 @@ class LineItem {
         'free_scheme': freeScheme,
         'mrp': mrp,
         'rate': rate,
+        'discount': discount,
         'discount_pct': discountPct,
         'discount_amount': discountAmount,
         'gst_pct': gstPct,

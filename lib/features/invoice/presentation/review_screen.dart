@@ -60,6 +60,12 @@ class _LineItemForm {
   // states its discount as either a percentage or a flat amount, never
   // both, so only the one that's actually present is worth showing/editing.
   final bool showDiscountAmount;
+  // The printed Disc value the server resolved from (DAS-9). Not editable —
+  // the two boxes below are. Kept so revalidate can re-resolve it, and
+  // dropped the moment the user overrides either box.
+  final double? printedDiscount;
+  final String _origDiscountPct;
+  final String _origDiscountAmount;
 
   final TextEditingController productName;
   final TextEditingController pack;
@@ -80,7 +86,10 @@ class _LineItemForm {
   final TextEditingController grossAmount;
 
   _LineItemForm.fromLineItem(LineItem item)
-      : cgstPct = item.cgstPct,
+      : printedDiscount = item.discount,
+        _origDiscountPct = _fmtNullable(item.discountPct),
+        _origDiscountAmount = _fmtNullable(item.discountAmount),
+        cgstPct = item.cgstPct,
         sgstPct = item.sgstPct,
         igstPct = item.igstPct,
         showDiscountAmount = (item.discountPct == null || item.discountPct == 0) && item.discountAmount != null,
@@ -104,6 +113,11 @@ class _LineItemForm {
 
   _LineItemForm.empty() : this.fromLineItem(LineItem());
 
+  /// True once the user has typed over either discount box, so their value
+  /// must win over the printed figure the server resolved earlier.
+  bool get discountEdited =>
+      discountPct.text != _origDiscountPct || discountAmount.text != _origDiscountAmount;
+
   LineItem toLineItem() => LineItem(
         productName: productName.text,
         pack: pack.text.isEmpty ? null : pack.text,
@@ -115,6 +129,7 @@ class _LineItemForm {
         freeScheme: freeScheme.text.isEmpty ? null : freeScheme.text,
         mrp: double.tryParse(mrp.text),
         rate: double.tryParse(rate.text) ?? 0,
+        discount: discountEdited ? null : printedDiscount,
         discountPct: double.tryParse(discountPct.text),
         discountAmount: double.tryParse(discountAmount.text),
         gstPct: double.tryParse(gstPct.text) ?? 0,
@@ -336,16 +351,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final lineItems = items.map((f) {
       final li = f.toLineItem();
       if (forceRederiveTax) {
-        // Revalidate is "recompute from my current inputs" — a cgst_amount
-        // (or discount_amount) derived on a *previous* click would look
-        // identical to a value genuinely printed on the bill, and the
-        // "only fill if empty" server-side derivation would leave it stale
-        // instead of recomputing it against whatever gross_amount/
-        // discount_pct/gst_pct was just edited.
-        li.discountAmount = null;
-        li.cgstAmount = null;
-        li.sgstAmount = null;
-        li.igstAmount = null;
+        // Revalidate is "recompute from my current inputs" — an amount
+        // derived on a *previous* click would look like a printed value and
+        // be trusted as input instead of recomputed. Clear each one ONLY when
+        // its percentage counterpart survives to recompute it from: on a bill
+        // that prints tax (or a discount) in rupees with no percentage, that
+        // figure is the only copy there is, and dropping it made the server
+        // see no discount/tax at all and flag every total (DAS-9).
+        if (li.discount != null) li.discountAmount = null;
+        if (li.cgstPct != null || li.gstPct != 0) li.cgstAmount = null;
+        if (li.sgstPct != null || li.gstPct != 0) li.sgstAmount = null;
+        if (li.igstPct != null) li.igstAmount = null;
       }
       return li;
     }).toList();

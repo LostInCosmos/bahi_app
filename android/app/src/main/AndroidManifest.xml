@@ -7,7 +7,7 @@
     <!-- allowBackup off: the login token lives in app storage, and a device
          backup would carry it off the phone. -->
     <application
-        android:label="gst_bill_app"
+        android:label="Dastavez"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"

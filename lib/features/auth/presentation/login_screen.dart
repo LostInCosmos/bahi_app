@@ -91,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: Spacing.l),
                   Text(
-                    'Bahi',
+                    'Dastavez',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.displaySmall,
                   ),
