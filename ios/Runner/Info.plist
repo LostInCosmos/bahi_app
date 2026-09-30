@@ -26,8 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Dastavez uses the camera to photograph a purchase bill so its items, taxes and totals can be read automatically instead of typed in.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Bahi uses the microphone to record you speaking out a sale (e.g. "pan forty ka do strip") instead of typing it in — the recording is sent to the server to be turned into a priced bill for you to review.</string>
+	<string>Dastavez uses the microphone to record you speaking out a sale (e.g. "pan forty ka do strip") instead of typing it in — the recording is sent to the server to be turned into a priced bill for you to review.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Dastavez lets you pick an existing photo of a bill from your library instead of taking a new one.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

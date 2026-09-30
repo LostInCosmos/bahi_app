@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/utils/recording_error.dart';
 
 /// Mic capture for the "Voice sale" flow: tap to start, tap to stop (an
 /// utterance can run 30-60s so press-and-hold would be awkward), then
@@ -128,7 +129,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
       _startElapsedTimer();
       if (mounted) setState(() => _recording = true);
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Could not start recording: $e');
+      if (mounted) setState(() => _errorMessage = recordingErrorMessage(e));
     }
   }
 

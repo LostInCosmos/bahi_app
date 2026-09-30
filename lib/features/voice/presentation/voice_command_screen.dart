@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import '../../../core/api/api_client.dart';
 import '../models/voice.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/utils/recording_error.dart';
 
 /// General voice commands — "how much Maggi do I have", "delete Sharma's
 /// sale from yesterday", "add 20 Maggi to inventory" — distinct from the
@@ -100,7 +101,7 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
       });
       if (mounted) setState(() => _recording = true);
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Could not start recording: $e');
+      if (mounted) setState(() => _errorMessage = recordingErrorMessage(e));
     }
   }
 
