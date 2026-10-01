@@ -57,6 +57,11 @@ class _BatchItem {
   List<_BatchItemPage> pages;
 
   Uint8List? correctedBytes; // first page's corrected image, for the thumbnail
+  // The thumbnail download failed. Distinct from `status`: the BILL can be
+  // perfectly fine (extracted, reviewable) while only its picture is missing.
+  // Without this the card cannot tell "still downloading" from "never will",
+  // and a failed fetch span forever under a progress spinner.
+  bool thumbnailFailed = false;
   // Every page's uploaded/cropped path, in order. Always populated once
   // preparing finishes (length 1 for the ordinary single-photo bill) so
   // every call site has one shape to deal with instead of two.
@@ -198,16 +203,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
     if (restored.isEmpty || !mounted) return;
     setState(() => _items.addAll(restored));
 
-    // Thumbnails need refetching -- raw bytes from last session are gone,
-    // but the corrected image itself is still sitting on the server.
+    // Resuming extraction must NOT wait on pictures. It used to run after
+    // each thumbnail inside one sequential loop, so a dozen slow downloads
+    // held up a dozen jobs -- and an unmount partway through abandoned every
+    // item after that point.
     for (final item in restored) {
-      try {
-        final bytes = await ApiClient.instance.fetchImage(item.sourceImages.first);
-        if (!mounted) return;
-        setState(() => item.correctedBytes = bytes);
-      } catch (_) {
-        // thumbnail just won't load for this one -- the rest of the item is still usable
-      }
       // A "ready" item here means a job was never actually submitted last
       // session (see the status-rewind comment in _persistBatch) -- start
       // fresh, automatically, the same way a freshly-cropped bill does. A
@@ -220,6 +220,28 @@ class _CaptureScreenState extends State<CaptureScreen> {
         unawaited(_processOne(item, resumeJobId: item.jobId));
       }
     }
+    unawaited(_loadThumbnails(restored));
+  }
+
+  /// Fills in each restored card's picture. Cached images (the usual case
+  /// after the first run) come off the device; the rest are fetched together
+  /// rather than one after another, since a dozen bills used to mean a dozen
+  /// serial full-resolution downloads before the grid finished drawing.
+  Future<void> _loadThumbnails(List<_BatchItem> items) async {
+    await Future.wait(items.map((item) async {
+      if (item.sourceImages.isEmpty) return;
+      try {
+        final bytes = await ApiClient.instance.fetchImage(item.sourceImages.first);
+        if (!mounted) return;
+        setState(() => item.correctedBytes = bytes);
+      } catch (_) {
+        // The bill itself is still usable -- only its picture is missing, so
+        // the card has to say so rather than spin. One failure must not stop
+        // the others, hence per-item handling inside the wait.
+        if (!mounted) return;
+        setState(() => item.thumbnailFailed = true);
+      }
+    }));
   }
 
   /// Captures one or more photos for a single bill: after each crop, the
@@ -765,7 +787,10 @@ class _ItemCard extends StatelessWidget {
           children: [
             if (item.correctedBytes != null)
               Image.memory(item.correctedBytes!, fit: BoxFit.cover)
-            else if (item.status == _ItemStatus.failed)
+            // thumbnailFailed is checked alongside a failed item: the photo
+            // can be missing on a bill that read perfectly, and either way
+            // the one thing the card must not do is imply it is still coming.
+            else if (item.status == _ItemStatus.failed || item.thumbnailFailed)
               const Center(child: Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey))
             else
               const Center(child: CircularProgressIndicator()),
