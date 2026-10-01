@@ -12,6 +12,7 @@ import '../../features/invoice/models/invoice.dart';
 import '../../features/inventory/models/product.dart';
 import '../../features/sales/models/sale.dart';
 import '../../features/voice/models/voice.dart';
+import '../utils/bill_image_cache.dart';
 import 'api_exception.dart';
 
 export 'api_exception.dart';

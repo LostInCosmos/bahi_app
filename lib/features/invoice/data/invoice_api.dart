@@ -22,9 +22,16 @@ extension InvoiceApi on ApiClient {
     return jsonDecode(res.body)['source_image'] as String;
   }
 
+  /// The corrected bill photo, served from the device if it has been seen
+  /// before. A given source path's bytes never change — the server writes a
+  /// new uuid on re-crop — so a hit needs no revalidation, and this is the
+  /// only place that has to know the cache exists. See [BillImageCache].
   Future<Uint8List> fetchImage(String sourceImage) async {
+    final cached = await BillImageCache.read(sourceImage);
+    if (cached != null) return cached;
     final res = await http.get(_uri('/invoices/image/$sourceImage'), headers: _authHeader);
     _checkOk(res);
+    await BillImageCache.write(sourceImage, res.bodyBytes);
     return res.bodyBytes;
   }
 
