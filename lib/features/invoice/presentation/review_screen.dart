@@ -225,38 +225,81 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
   }
 
-  /// A misread GSTIN character can itself land on a checksum-valid GSTIN, so
-  /// the backend can't always tell two OCR readings apart on its own (see
-  /// validation.resolve_gstin_candidates) — rather than making the
-  /// shopkeeper retype all 15 characters, this offers every reading that
-  /// actually passed validation as a tap-to-fill chip.
-  Widget _gstinCandidatePicker() {
-    final candidates = _headerIssues['seller_gstin']?.candidates;
-    if (candidates == null || candidates.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: Spacing.xs, bottom: Spacing.s),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Which GSTIN is correct?', style: Theme.of(context).textTheme.labelSmall),
-          const SizedBox(height: Spacing.xs),
-          Wrap(
-            spacing: Spacing.xs,
-            runSpacing: Spacing.xs,
-            children: candidates.map((candidate) {
-              final selected = sellerGstin.text.toUpperCase() == candidate.toUpperCase();
-              return ChoiceChip(
-                label: Text(candidate),
-                selected: selected,
-                onSelected: (_) {
-                  setState(() => sellerGstin.text = candidate);
-                  _revalidate();
-                },
-              );
-            }).toList(),
-          ),
-        ],
+  /// Asks for the GSTIN of a supplier we have never seen, with the bill
+  /// photo above it so the shopkeeper can read it off the paper (pinch to
+  /// zoom — these are faint dot-matrix prints).
+  ///
+  /// Only ever shown for a genuinely NEW vendor. Once saved, the fuzzy
+  /// vendor match recognises that supplier on every later bill even if the
+  /// GSTIN is misread, so this is asked once per supplier, not once per bill.
+  Future<String?> _askForGstin(String sellerName) async {
+    final controller = TextEditingController();
+    final bytes = _photoBytes;
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) {
+          final value = controller.text.trim().toUpperCase();
+          final valid = RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$').hasMatch(value);
+          return AlertDialog(
+            title: const Text('New supplier — GSTIN needed'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sellerName.isEmpty
+                        ? "We haven't seen this supplier before. Please type their GSTIN from the bill."
+                        : "We haven't seen $sellerName before. Please type their GSTIN from the bill.",
+                  ),
+                  const SizedBox(height: Spacing.s),
+                  if (bytes != null)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          color: Colors.black,
+                          child: InteractiveViewer(
+                            minScale: 0.5,
+                            maxScale: 8,
+                            child: Image.memory(bytes, fit: BoxFit.contain),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (bytes != null)
+                    const Padding(
+                      padding: EdgeInsets.only(top: Spacing.xs),
+                      child: Text('Pinch to zoom', style: TextStyle(fontSize: 11)),
+                    ),
+                  const SizedBox(height: Spacing.s),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    maxLength: 15,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      labelText: 'GSTIN',
+                      hintText: '09ABCDE1234F1Z5',
+                      errorText: value.isEmpty || valid ? null : 'Needs 15 characters in the GSTIN format',
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: valid ? () => Navigator.of(context).pop(value) : null,
+                child: const Text('Save bill'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -287,6 +330,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     grandTotal = TextEditingController(text: _fmt(inv.totals.grandTotal));
     _loadPhoto();
   }
+
 
   Future<void> _loadPhoto() async {
     try {
@@ -488,6 +532,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
       Navigator.of(context).pop(id);
     } on ApiException catch (e) {
       HapticFeedback.heavyImpact();
+      // A new supplier: ask for the GSTIN once, with the bill in view, then
+      // retry. Every later bill from them is matched automatically.
+      if (e.detail is Map && e.detail['error'] == 'gstin_required') {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        final entered = await _askForGstin((e.detail['seller_name'] as String?) ?? '');
+        if (entered == null) {
+          if (mounted) setState(() => _error = 'Saving needs the supplier\'s GSTIN.');
+          return;
+        }
+        sellerGstin.text = entered;
+        await _save();   // one retry; the server accepts it now there is a vendor identity
+        return;
+      }
       if (e.detail is Map && e.detail['error'] == 'validation_failed') {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
         setState(() {
@@ -565,7 +623,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 TextField(controller: sellerName, decoration: _decoration('Seller name', 'seller_name')),
                 const SizedBox(height: Spacing.s),
                 TextField(controller: sellerGstin, maxLength: 15, decoration: _decoration('Seller GSTIN', 'seller_gstin')),
-                _gstinCandidatePicker(),
                 const SizedBox(height: Spacing.s),
                 TextField(controller: sellerAddress, decoration: _decoration('Seller address', 'seller_address')),
                 const SizedBox(height: Spacing.s),
