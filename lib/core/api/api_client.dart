@@ -113,6 +113,23 @@ class ApiClient {
 
   bool get isLoggedIn => token != null;
 
+  /// The signed-in shop, read from the JWT's own payload rather than fetched
+  /// — on-device storage (the capture batch, pending photos, the image
+  /// cache) is scoped by it and needs it before any request has been made.
+  /// Not verified here; the server verifies the token on every request.
+  int? get tenantId {
+    final t = token;
+    if (t == null) return null;
+    try {
+      final parts = t.split('.');
+      if (parts.length != 3) return null;
+      final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map<String, dynamic>;
+      return payload['tenant_id'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Map<String, String> get _authHeader => {'Authorization': 'Bearer $token'};
 
   Uri _uri(String path, [Map<String, String>? query]) =>
