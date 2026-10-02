@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -40,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      if (!kReleaseMode) {
+      if (kAllowServerOverride) {
         await ApiClient.instance.setBaseUrl(_baseUrlController.text.trim());
       }
       if (_signupMode) {
@@ -190,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
                             ),
                           ),
-                          if (!kReleaseMode) ...[
+                          if (kAllowServerOverride) ...[
                             const SizedBox(height: Spacing.s),
                             Theme(
                               data: Theme.of(context).copyWith(
