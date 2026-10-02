@@ -66,4 +66,16 @@ void main() {
     expect(restored.status, BatchItemStatus.pendingConfirm);
     expect(restored.pages, isEmpty);
   });
+
+  test('a failed save is not remembered across a restart', () {
+    // Deliberate: failedAtSave lets Retry re-save instead of re-extracting,
+    // but it is not persisted — after a restart the item falls back to a
+    // fresh extraction, slower but never wrong.
+    final item = BatchItem(label: 'Photo 5', pages: [])
+      ..sourceImages = ['1/abc.jpg']
+      ..status = BatchItemStatus.failed
+      ..failedAtSave = true;
+    final restored = BatchItem.fromJson(item.toJson());
+    expect(restored?.failedAtSave ?? false, isFalse);
+  });
 }

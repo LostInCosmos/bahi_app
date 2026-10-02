@@ -8,6 +8,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/utils/pending_photo_store.dart';
 import '../../../core/utils/poll.dart';
 import '../../invoice/models/invoice.dart';
+import '../../invoice/presentation/gstin_confirm.dart';
 import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../../invoice/presentation/review_screen.dart';
 import '../data/batch_store.dart';
@@ -381,10 +382,15 @@ class _CaptureScreenState extends State<CaptureScreen> {
         return;
       case BatchItemStatus.pendingConfirm:
         final result = item.result!;
+        // Look the supplier up while the confirm dialog is open, so tapping
+        // Save can show the GSTIN step at once instead of after a round trip
+        // — the same head start the review screen gets. Advisory only: the
+        // save call re-decides.
+        final hint = ApiClient.instance.lookupVendor(result.invoice);
         final action = await showConfirmBillDialog(context, item.label, result.invoice);
         if (!mounted) return;
         if (action == ConfirmBillAction.save) {
-          await _confirmAndSave(item, result);
+          await _confirmAndSave(item, result, hint: hint);
         } else if (action == ConfirmBillAction.edit) {
           await _openReview(item, result);
         }
@@ -408,6 +414,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
       ),
     );
     if (retry != true) return;
+    // A save that failed is retried as a save. Re-extracting would spend an
+    // LLM call to reproduce the result that has just failed to save.
+    final result = item.result;
+    if (item.failedAtSave && result != null) {
+      await _confirmAndSave(item, result);
+      return;
+    }
     // A failed upload has nothing on the server to extract yet — redo the
     // upload, and let it start extraction itself once it succeeds.
     await (item.isUploaded ? _processOne(item) : _uploadAndExtract(item));
@@ -440,44 +453,101 @@ class _CaptureScreenState extends State<CaptureScreen> {
   /// Only reached from the one-tap confirm dialog — never automatic. A
   /// duplicate can still surface here even though extraction-time validation
   /// was clean, since the duplicate check only runs at save time.
-  Future<void> _confirmAndSave(BatchItem item, ExtractionResult result) async {
+  ///
+  /// Asks for the supplier's GSTIN when the server needs a confirmation —
+  /// before the round trip if the prefetched [hint] already says so, or
+  /// after it if the hint was stale or never landed. Backing out of that
+  /// question leaves the bill ready to confirm, not failed: nothing went
+  /// wrong, the shopkeeper just has not answered yet.
+  Future<void> _confirmAndSave(BatchItem item, ExtractionResult result, {Future<VendorHint?>? hint}) async {
     final meta = ExtractionMeta(
       sourceImage: item.sourceImages.first,
       extraSourceImages: item.sourceImages.skip(1).toList(),
       method: result.meta.method,
       reviewedByUser: true,
     );
-    try {
-      final id = await ApiClient.instance.saveInvoice(result.invoice, meta);
-      if (!mounted) return;
-      setState(() {
-        item.status = BatchItemStatus.saved;
-        item.savedInvoiceId = id;
-      });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.detail is Map && e.detail['error'] == 'validation_failed') {
-        final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
+    var gstinConfirmed = false;
+    int? confirmedVendorId;
+
+    Future<bool> ask(VendorHint question) async {
+      final answer = await showGstinConfirmDialog(
+        context, question,
+        photo: item.correctedBytes,
+        fallbackName: result.invoice.sellerName,
+      );
+      if (answer == null || !mounted) return false;
+      result.invoice.sellerGstin = answer;
+      gstinConfirmed = true;
+      confirmedVendorId = question.vendorId;
+      return true;
+    }
+
+    final prefetched = hint == null ? null : await hint;
+    if (!mounted) return;
+    if (prefetched != null && prefetched.needsConfirmation && !await ask(prefetched)) return;
+
+    // At most a couple of rounds: the dialog only accepts a well-formed
+    // GSTIN, which is all the server's "usable" check asks for.
+    for (var round = 0; round < 3; round++) {
+      try {
+        final id = await ApiClient.instance.saveInvoice(
+          result.invoice, meta,
+          gstinConfirmed: gstinConfirmed,
+          confirmedVendorId: confirmedVendorId,
+        );
+        if (!mounted) return;
         setState(() {
-          item.status = BatchItemStatus.needsReview;
-          item.result = ExtractionResult(
-            invoice: result.invoice,
-            meta: result.meta,
-            issues: rawIssues.map((j) => ValidationIssue.fromJson(j as Map<String, dynamic>)).toList(),
-          );
+          item.status = BatchItemStatus.saved;
+          item.savedInvoiceId = id;
+          item.failedAtSave = false;
+          item.errorMessage = null;
         });
-      } else {
+        // Nothing was asked, so show that it landed.
+        if (!gstinConfirmed) await showSavedTick(context);
+        break;
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        final detail = e.detail;
+        final kind = detail is Map ? detail['error'] : null;
+        if (kind == 'gstin_confirmation_required' || kind == 'gstin_required') {
+          final asked = await ask(VendorHint(
+            needsConfirmation: true,
+            vendorKnown: detail['vendor_known'] as bool? ?? false,
+            verified: false,
+            vendorId: detail['vendor_id'] as int?,
+            gstin: (detail['gstin'] ?? detail['read_gstin']) as String? ?? '',
+            vendorName: (detail['seller_name'] as String?) ?? '',
+          ));
+          if (!asked) break;   // backed out: still ready to confirm
+          continue;
+        }
+        if (kind == 'validation_failed') {
+          final rawIssues = (detail['issues'] as List<dynamic>? ?? []);
+          setState(() {
+            item.status = BatchItemStatus.needsReview;
+            item.result = ExtractionResult(
+              invoice: result.invoice,
+              meta: result.meta,
+              issues: rawIssues.map((j) => ValidationIssue.fromJson(j as Map<String, dynamic>)).toList(),
+            );
+          });
+        } else {
+          setState(() {
+            item.status = BatchItemStatus.failed;
+            item.failedAtSave = true;
+            item.errorMessage = e.message;
+          });
+        }
+        break;
+      } catch (e) {
+        if (!mounted) return;
         setState(() {
           item.status = BatchItemStatus.failed;
+          item.failedAtSave = true;
           item.errorMessage = e.toString();
         });
+        break;
       }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        item.status = BatchItemStatus.failed;
-        item.errorMessage = e.toString();
-      });
     }
     await _persistBatch();
   }

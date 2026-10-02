@@ -94,6 +94,13 @@ class BatchItem {
   String? errorMessage;
   int? savedInvoiceId;
 
+  /// The bill extracted fine and it was the SAVE that failed. Retrying then
+  /// means saving again — not re-running extraction, which costs an LLM call
+  /// and produces the same result that just failed to save. Not persisted:
+  /// after a restart such an item falls back to a fresh extraction, which is
+  /// slower but still correct.
+  bool failedAtSave = false;
+
   /// Set while the server is retrying a failed read. The bill is not stuck:
   /// the server tries again at [retryAt], so the card says so instead of an
   /// indefinite spinner or, worse, a failure. Not persisted — a restart
