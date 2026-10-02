@@ -177,14 +177,30 @@ class VoiceOrder {
 /// longer 'pending'/'transcribing'/'parsing'.
 class VoiceOrderJob {
   final int jobId;
-  final String status; // 'pending' | 'transcribing' | 'parsing' | 'done' | 'failed'
+  /// 'queued' | 'transcribing' | 'parsing' | 'retrying' | 'done' | 'failed' | 'cancelled'
+  final String status;
   final VoiceOrder? order; // set iff status == 'done'
-  final String? errorKind; // 'structural_parse_failed' | 'no_speech' | 'generic' — set iff status == 'failed'
+  final String? errorKind; // 'structural_parse_failed' | 'no_speech' | 'attempts_exhausted' | 'generic'
   final String? errorMessage;
+  final int attempt;
+  final int maxAttempts;
 
-  VoiceOrderJob({required this.jobId, required this.status, this.order, this.errorKind, this.errorMessage});
+  VoiceOrderJob({
+    required this.jobId,
+    required this.status,
+    this.order,
+    this.errorKind,
+    this.errorMessage,
+    this.attempt = 0,
+    this.maxAttempts = 3,
+  });
 
-  bool get isTerminal => status == 'done' || status == 'failed';
+  /// See ExtractionJob.isTerminal — `cancelled` was missing, so a cancelled
+  /// job was polled for ever. Listed as finished states, so an unknown new
+  /// status keeps polling rather than being mistaken for done.
+  bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
+
+  bool get isRetrying => status == 'retrying';
 
   factory VoiceOrderJob.fromJson(Map<String, dynamic> json) {
     final error = json['error'] as Map<String, dynamic>?;
@@ -194,6 +210,8 @@ class VoiceOrderJob {
       order: json['order'] != null ? VoiceOrder.fromJson(json['order'] as Map<String, dynamic>) : null,
       errorKind: error?['kind'] as String?,
       errorMessage: error?['message'] as String?,
+      attempt: json['attempt'] as int? ?? 0,
+      maxAttempts: json['max_attempts'] as int? ?? 3,
     );
   }
 }

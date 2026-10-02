@@ -77,6 +77,13 @@ class _BatchItem {
   ExtractionResult? result;
   String? errorMessage;
   int? savedInvoiceId;
+  // Set while the server is retrying a failed read. The bill is not stuck:
+  // the server will try again at [retryAt], so the card says so instead of
+  // showing an indefinite spinner or, worse, a failure.
+  int retryAttempt = 0;
+  int retryMax = 3;
+  DateTime? retryAt;
+  bool get isRetrying => retryAt != null;
 
   _BatchItem({required this.label, required this.pages});
 }
@@ -311,6 +318,9 @@ class _CaptureScreenState extends State<CaptureScreen> {
   // still safe and will get reclaimed/retried server-side regardless.
   static const _pollTimeout = Duration(seconds: 120);
   static const _pollInterval = Duration(seconds: 2);
+  // The server's reconciler re-queues a due retry on a 60s sweep, so pickup
+  // can lag `retryAt` by up to that much.
+  static const _retrySweepMargin = Duration(seconds: 60);
 
   /// Submits (or, if [resumeJobId] is given, resumes polling an
   /// already-submitted) extraction job and waits for it to finish. Extraction
@@ -326,7 +336,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
       } else if (item.lastJobId != null) {
         // Not this item's first attempt — reuse the existing row instead of
         // submitExtraction, which would spawn a separate one every retry.
-        jobId = await ApiClient.instance.retryExtraction(item.lastJobId!);
+        try {
+          jobId = await ApiClient.instance.retryExtraction(item.lastJobId!);
+        } on ApiException catch (e) {
+          // 409: the server is ALREADY working on it — typically retrying a
+          // read on its own after this screen had stopped waiting. That is
+          // not an error, it is the answer the user wanted. Resume watching
+          // that job instead of showing a failure they cannot get past.
+          if (e.statusCode != 409) rethrow;
+          jobId = item.lastJobId!;
+        }
         item.jobId = jobId;
         await _persistBatch();
       } else {
@@ -339,12 +358,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
         await _persistBatch();
       }
 
-      final job = await pollUntilTerminal<ExtractionJob>(
-        fetch: () => ApiClient.instance.getExtractionJob(jobId),
-        isTerminal: (j) => j.status == 'done' || j.status == 'failed',
-        interval: _pollInterval,
-        timeout: _pollTimeout,
-      );
+      final job = await _waitForJob(item, jobId);
       final ExtractionResult result;
       if (job.status == 'done') {
         result = job.result!;
@@ -358,6 +372,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       }
 
       item.jobId = null;
+      item.retryAt = null;
       if (!mounted) return;
       setState(() {
         // Zero validation issues means the numbers are internally
@@ -384,6 +399,41 @@ class _CaptureScreenState extends State<CaptureScreen> {
       });
     }
     _persistBatch();
+  }
+
+  /// Polls until the job finishes, waiting out the server's retries rather
+  /// than giving up on them.
+  ///
+  /// The 120s timeout is per ATTEMPT, not for the whole job. A job the server
+  /// is retrying can legitimately take 20+ minutes end to end (backoff is
+  /// 1, 5, 15 minutes); giving up on it at 120s used to leave the card saying
+  /// "failed" for a bill that was about to be read.
+  ///
+  /// During a retry's backoff nothing is polled at all — the next attempt is
+  /// minutes away, and asking every 2 seconds would only cost requests. The
+  /// wait runs to `retryAt` plus the reconciler's sweep interval, since that
+  /// sweep is what actually puts the job back in the queue.
+  Future<ExtractionJob> _waitForJob(_BatchItem item, int jobId) async {
+    while (true) {
+      final job = await pollUntilTerminal<ExtractionJob>(
+        fetch: () => ApiClient.instance.getExtractionJob(jobId),
+        // Stop fast-polling on a finish OR on entering a retry wait.
+        isTerminal: (j) => j.isTerminal || j.isRetrying,
+        interval: _pollInterval,
+        timeout: _pollTimeout,
+      );
+      if (job.isTerminal || !mounted) return job;
+
+      setState(() {
+        item.retryAttempt = job.attempt;
+        item.retryMax = job.maxAttempts;
+        item.retryAt = job.retryAt ?? DateTime.now().toUtc();
+      });
+      final due = item.retryAt!.difference(DateTime.now().toUtc());
+      await Future<void>.delayed((due.isNegative ? Duration.zero : due) + _retrySweepMargin);
+      if (!mounted) return job;
+      setState(() => item.retryAt = null);
+    }
   }
 
   /// Re-runs extraction on an already-uploaded image — available any time
@@ -792,9 +842,17 @@ class _ItemCard extends StatelessWidget {
               transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
               child: item.status == _ItemStatus.processing
                   ? Container(
-                      key: const ValueKey('processing'),
+                      key: ValueKey(item.isRetrying ? 'retrying' : 'processing'),
                       color: Colors.black45,
-                      child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      // During a retry's backoff a spinner would imply work is
+                      // happening right now; it is not — the server tries
+                      // again at retryAt. Say that, so a slow bill does not
+                      // read as a hung one.
+                      child: Center(
+                        child: item.isRetrying
+                            ? _RetryLabel(attempt: item.retryAttempt, max: item.retryMax, at: item.retryAt!)
+                            : const CircularProgressIndicator(color: Colors.white),
+                      ),
                     )
                   : const SizedBox.shrink(key: ValueKey('idle')),
             ),
@@ -913,6 +971,65 @@ class _ChromeButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// Shown over a bill the server is retrying. Counts down to the next attempt
+/// so the shopkeeper can see the bill is queued, not stuck.
+class _RetryLabel extends StatefulWidget {
+  final int attempt;
+  final int max;
+  final DateTime at;
+  const _RetryLabel({required this.attempt, required this.max, required this.at});
+
+  @override
+  State<_RetryLabel> createState() => _RetryLabelState();
+}
+
+class _RetryLabelState extends State<_RetryLabel> {
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // Repaint so the countdown moves; minute resolution needs nothing finer.
+    _tick = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  String _until() {
+    final left = widget.at.difference(DateTime.now().toUtc());
+    if (left.inSeconds <= 30) return 'retrying shortly';
+    if (left.inMinutes < 1) return 'retrying in under a minute';
+    return 'retrying in ${left.inMinutes + 1} min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.refresh_rounded, color: Colors.white, size: 28),
+        const SizedBox(height: 4),
+        const Text(
+          "Couldn't read it yet",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+        ),
+        Text(
+          '${_until()} · ${widget.attempt} of ${widget.max}',
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }

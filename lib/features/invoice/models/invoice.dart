@@ -341,18 +341,25 @@ class ExtractionResult {
       );
 }
 
-/// GET /invoices/extract/{jobId} — extraction now runs in a background
-/// worker instead of inline during POST /invoices/extract, so the client
-/// submits a job (see ApiClient.submitExtraction) and polls this until
-/// status is no longer 'pending'/'processing'.
+/// GET /invoices/extract/{jobId} — extraction runs in a background worker,
+/// so the client submits a job (see ApiClient.submitExtraction) and polls
+/// this until [isTerminal].
 class ExtractionJob {
   final int jobId;
-  final String status; // 'pending' | 'processing' | 'done' | 'failed'
+  /// 'queued' | 'processing' | 'retrying' | 'done' | 'failed' | 'cancelled'
+  /// ('pending' may still arrive from a server mid-deploy.)
+  final String status;
   final ExtractionResult? result; // set iff status == 'done'
-  final String? errorKind; // 'structural_validation_failed' | 'generic' — set iff status == 'failed'
+  final String? errorKind; // e.g. 'structural_validation_failed', 'attempts_exhausted' — set iff status == 'failed'
   final String? errorMessage;
   final String? sourceImage;
   final List<String>? extraSourceImages;
+  /// Worker attempts so far, out of [maxAttempts]. A failed read is retried
+  /// automatically with a growing delay before it is given up on.
+  final int attempt;
+  final int maxAttempts;
+  /// When a `retrying` job will next be picked up. UTC.
+  final DateTime? retryAt;
 
   ExtractionJob({
     required this.jobId,
@@ -362,9 +369,18 @@ class ExtractionJob {
     this.errorMessage,
     this.sourceImage,
     this.extraSourceImages,
+    this.attempt = 0,
+    this.maxAttempts = 3,
+    this.retryAt,
   });
 
-  bool get isTerminal => status == 'done' || status == 'failed';
+  /// `cancelled` belongs here too: without it a cancelled job was not
+  /// terminal, so the app polled it for ever. Written as the set of finished
+  /// states rather than the set of unfinished ones, so a status the server
+  /// adds later keeps the app polling instead of falsely calling it done.
+  bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
+
+  bool get isRetrying => status == 'retrying';
 
   factory ExtractionJob.fromJson(Map<String, dynamic> json) {
     final error = json['error'] as Map<String, dynamic>?;
@@ -376,6 +392,9 @@ class ExtractionJob {
       errorMessage: error?['message'] as String?,
       sourceImage: error?['source_image'] as String?,
       extraSourceImages: (error?['extra_source_images'] as List?)?.cast<String>(),
+      attempt: json['attempt'] as int? ?? 0,
+      maxAttempts: json['max_attempts'] as int? ?? 3,
+      retryAt: json['retry_at'] != null ? DateTime.tryParse(json['retry_at'] as String)?.toUtc() : null,
     );
   }
 }

@@ -199,7 +199,7 @@ class SalesScreenState extends State<SalesScreen> {
     try {
       final job = await pollUntilTerminal<VoiceOrderJob>(
         fetch: () => ApiClient.instance.getVoiceOrderJob(item.jobId),
-        isTerminal: (j) => j.status == 'done' || j.status == 'failed',
+        isTerminal: (j) => j.isTerminal,
         interval: _voiceJobPollInterval,
         timeout: _voiceJobPollTimeout,
       );

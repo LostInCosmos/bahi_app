@@ -241,7 +241,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     try {
       final job = await pollUntilTerminal<VoiceOrderJob>(
         fetch: () => ApiClient.instance.getVoiceOrderJob(jobId),
-        isTerminal: (j) => j.status == 'done' || j.status == 'failed',
+        isTerminal: (j) => j.isTerminal,
         timeout: const Duration(seconds: 180),
       );
       if (!mounted) return;
