@@ -502,3 +502,42 @@ class InvoiceDetail {
             .toList(),
       );
 }
+
+/// What the server knows about this bill's supplier, fetched while the review
+/// screen is open so that tapping Save can show the GSTIN confirmation
+/// immediately. A hint for the UI only — the save call re-decides for itself.
+class VendorHint {
+  /// False only for a vendor our team has verified: the one case that saves
+  /// in a single tap.
+  final bool needsConfirmation;
+  final bool vendorKnown;
+  final bool verified;
+  /// The vendor row whose GSTIN is being shown. Sent back on save so a
+  /// correction lands on the right row instead of being guessed at.
+  final int? vendorId;
+  /// What to pre-fill: the stored identity when we have one, else what was
+  /// read off the bill.
+  final String gstin;
+  final String vendorName;
+  final String? matchReason;
+
+  const VendorHint({
+    required this.needsConfirmation,
+    required this.vendorKnown,
+    required this.verified,
+    required this.vendorId,
+    required this.gstin,
+    required this.vendorName,
+    this.matchReason,
+  });
+
+  factory VendorHint.fromJson(Map<String, dynamic> json) => VendorHint(
+        needsConfirmation: json['needs_confirmation'] as bool? ?? true,
+        vendorKnown: json['vendor_known'] as bool? ?? false,
+        verified: json['verified'] as bool? ?? false,
+        vendorId: json['vendor_id'] as int?,
+        gstin: json['gstin'] as String? ?? '',
+        vendorName: json['vendor_name'] as String? ?? '',
+        matchReason: json['match_reason'] as String?,
+      );
+}
