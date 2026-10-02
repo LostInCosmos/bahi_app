@@ -12,6 +12,7 @@ import '../../features/invoice/models/invoice.dart';
 import '../../features/inventory/models/product.dart';
 import '../../features/sales/models/sale.dart';
 import '../../features/voice/models/voice.dart';
+import '../utils/bill_image_cache.dart';
 import 'api_exception.dart';
 
 export 'api_exception.dart';
@@ -111,6 +112,23 @@ class ApiClient {
   }
 
   bool get isLoggedIn => token != null;
+
+  /// The signed-in shop, read from the JWT's own payload rather than fetched
+  /// — on-device storage (the capture batch, pending photos, the image
+  /// cache) is scoped by it and needs it before any request has been made.
+  /// Not verified here; the server verifies the token on every request.
+  int? get tenantId {
+    final t = token;
+    if (t == null) return null;
+    try {
+      final parts = t.split('.');
+      if (parts.length != 3) return null;
+      final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map<String, dynamic>;
+      return payload['tenant_id'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Map<String, String> get _authHeader => {'Authorization': 'Bearer $token'};
 
