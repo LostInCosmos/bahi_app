@@ -84,7 +84,13 @@ extension InvoiceApi on ApiClient {
     return RevalidateResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
-  Future<int> saveInvoice(InvoiceData invoice, ExtractionMeta meta, {bool overrideErrors = false}) async {
+  Future<int> saveInvoice(
+    InvoiceData invoice,
+    ExtractionMeta meta, {
+    bool overrideErrors = false,
+    bool gstinConfirmed = false,
+    int? confirmedVendorId,
+  }) async {
     final res = await http.post(
       _uri('/invoices'),
       headers: {..._authHeader, 'Content-Type': 'application/json'},
@@ -92,10 +98,33 @@ extension InvoiceApi on ApiClient {
         'invoice': invoice.toJson(),
         'extraction_meta': meta.toJson(),
         'override_errors': overrideErrors,
+        'gstin_confirmed': gstinConfirmed,
+        'confirmed_vendor_id': confirmedVendorId,
       }),
     );
     _checkOk(res);
     return jsonDecode(res.body)['invoice_id'] as int;
+  }
+
+  /// Who this bill is from, and whether saving will need the shopkeeper to
+  /// confirm the GSTIN. Called while the review screen is still being read so
+  /// that Save opens the confirmation with no wait — the fuzzy vendor search
+  /// is the slow part and does not depend on anything they do on that screen.
+  ///
+  /// Advisory only: the save endpoint runs the same check and is the one that
+  /// decides. A failure here is not an error, just a lost head start.
+  Future<VendorHint?> lookupVendor(InvoiceData invoice) async {
+    try {
+      final res = await http.post(
+        _uri('/invoices/vendor-lookup'),
+        headers: {..._authHeader, 'Content-Type': 'application/json'},
+        body: jsonEncode(invoice.toJson()),
+      );
+      if (res.statusCode >= 400) return null;
+      return VendorHint.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<List<InvoiceSummary>> listInvoices({
