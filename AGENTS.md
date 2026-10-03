@@ -27,6 +27,20 @@ Keep it honest:
 python3 ../backend/ops/check_docs.py      # verifies code_paths + links
 ```
 
+## Find before you write
+`~/Desktop/GSTApp/codeintel/` indexes every file, symbol and import in backend, mobile and admin panel. Before adding a function, look for one that already exists:
+
+```bash
+cd ~/Desktop/GSTApp/codeintel
+.venv/bin/python -m codeintel scan          # incremental, ~0.1s when little changed
+.venv/bin/python -m codeintel find <name>   # where is it defined, in any repo
+.venv/bin/python -m codeintel file <path>   # a file's symbols, and what it really imports
+```
+
+**`MODULE_REGISTRY.md`** at this repo's root lists every module and what is in it — the quickest way to find where new code belongs. It is generated (`codeintel registry --write`) and quotes the code verbatim, so a blank there means the code says nothing about itself. Regenerate it after adding or moving modules.
+
+The index itself is local only — never deployed, never committed. What it can and cannot tell you: the vault's `14 - Tooling/Codebase Intelligence.md`.
+
 ## Layout
 ```
 lib/features/<domain>/{data,models,presentation}
