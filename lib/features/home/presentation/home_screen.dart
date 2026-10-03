@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _titles = ['New bills', 'Purchases', 'Inventory', 'New sale', 'Sales'];
 
   int _tab = 0;
+  final _captureKey = GlobalKey<CaptureScreenState>();
   final _purchasesKey = GlobalKey<PurchasesScreenState>();
   final _inventoryKey = GlobalKey<InventoryScreenState>();
   final _salesKey = GlobalKey<SalesScreenState>();
@@ -48,6 +49,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _selectTab(int i) {
     setState(() => _tab = i);
     switch (i) {
+      case 0:
+        _captureKey.currentState?.refreshFolders();
+        break;
       case 1:
         _purchasesKey.currentState?.refresh();
         break;
@@ -66,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      CaptureScreen(onBatchFinished: _goToPurchases),
+      CaptureScreen(key: _captureKey, onBatchFinished: _goToPurchases),
       PurchasesScreen(key: _purchasesKey),
       InventoryScreen(key: _inventoryKey),
       SalesScreen(key: _salesKey),

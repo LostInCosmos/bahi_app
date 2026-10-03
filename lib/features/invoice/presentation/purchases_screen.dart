@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../folders/data/folder_controller.dart';
+import '../../folders/widgets/folder_widgets.dart';
 import '../models/invoice.dart';
 import '../../../app/theme/app_theme.dart';
 import 'invoice_detail_screen.dart';
@@ -22,8 +24,15 @@ class PurchasesScreenState extends State<PurchasesScreen> {
   DateTime? _endDate;
   final _gstinController = TextEditingController();
 
+  /// The shop's folders and where this tab is in them. With no filter set the
+  /// list shows the bills in the current folder; with one set it searches every
+  /// folder, since a date or supplier search is about the bill, not where it is.
+  final FolderController _folders = FolderController();
+  int? _listedFolderId;
+
   List<InvoiceSummary> _invoices = [];
   bool _loading = false;
+  bool _refreshAgain = false;
   bool _exporting = false;
   String? _error;
 
@@ -35,9 +44,26 @@ class PurchasesScreenState extends State<PurchasesScreen> {
   // every) time this tab is actually selected instead.
 
   @override
+  void initState() {
+    super.initState();
+    _folders.addListener(_onFoldersChanged);
+  }
+
+  @override
   void dispose() {
+    _folders.removeListener(_onFoldersChanged);
+    _folders.dispose();
     _gstinController.dispose();
     super.dispose();
+  }
+
+  bool get _searching => _startDate != null || _endDate != null || _gstinController.text.trim().isNotEmpty;
+
+  void _onFoldersChanged() {
+    if (!mounted) return;
+    setState(() {});
+    // Stepping into another folder shows that folder's bills.
+    if (_folders.currentId != _listedFolderId) _refresh();
   }
 
   String? _iso(DateTime? d) => d?.toIso8601String().split('T').first;
@@ -65,24 +91,67 @@ class PurchasesScreenState extends State<PurchasesScreen> {
   Future<void> refresh() => _refresh();
 
   Future<void> _refresh() async {
-    if (_loading) return;
+    // A refresh asked for mid-load (stepping into a folder, a move) is run
+    // again afterwards rather than dropped, so the list never shows a folder
+    // other than the one you are in.
+    if (_loading) {
+      _refreshAgain = true;
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
     });
+    // Recorded up front: loading the tree notifies listeners, and a folder
+    // that differs from this one is what means "navigated, load again".
+    _listedFolderId = _folders.currentId;
     try {
-      final invoices = await ApiClient.instance.listInvoices(
-        startDate: _iso(_startDate),
-        endDate: _iso(_endDate),
-        vendorGstin: _gstinController.text.trim(),
-      );
+      // The folder tree and the bills load together; a failed tree load keeps
+      // the last good tree and shows the bills regardless.
+      final results = await Future.wait([
+        _folders.load(),
+        ApiClient.instance.listInvoices(
+          startDate: _iso(_startDate),
+          endDate: _iso(_endDate),
+          vendorGstin: _gstinController.text.trim(),
+          // Searching looks in every folder; otherwise just this one.
+          folderId: _searching ? null : _folders.currentId,
+          unfiled: !_searching && _folders.currentId == null,
+        ),
+      ]);
       if (!mounted) return;
-      setState(() => _invoices = invoices);
+      setState(() {
+        _invoices = results[1] as List<InvoiceSummary>;
+      });
     } catch (e) {
-      setState(() => _error = 'Could not load purchases: $e');
+      if (mounted) setState(() => _error = 'Could not load purchases: $e');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        if (_refreshAgain) {
+          _refreshAgain = false;
+          _refresh();
+        }
+      }
     }
+  }
+
+  Future<void> _moveInvoice(InvoiceSummary inv) async {
+    final choice = await showFolderPicker(
+      context,
+      tree: _folders.tree,
+      title: 'Move this bill to…',
+      currentId: inv.folderId,
+    );
+    if (choice == null || choice.folderId == inv.folderId || !mounted) return;
+    try {
+      await ApiClient.instance.moveInvoice(inv.id, folderId: choice.folderId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
+      return;
+    }
+    _refresh();
   }
 
   Future<void> _export() async {
@@ -168,13 +237,46 @@ class PurchasesScreenState extends State<PurchasesScreen> {
               child: Text(_error!, style: TextStyle(color: colors.error)),
             ),
           const SizedBox(height: Spacing.m),
+          if (_searching)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Spacing.s),
+              child: Row(children: [
+                Icon(Icons.search, size: 16, color: colors.onSurfaceVariant),
+                const SizedBox(width: Spacing.xs),
+                Text('Searching all folders', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+              ]),
+            )
+          else ...[
+            // Negative padding cancels the ListView's own, so the breadcrumb
+            // sits flush like it does on New bills.
+            Transform.translate(
+              offset: const Offset(-Spacing.s, 0),
+              child: FolderBar(controller: _folders, onNewFolder: () => showNewFolderDialog(context, _folders)),
+            ),
+            if (_folders.children.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Spacing.m, top: Spacing.xs),
+                child: folderTileGridBox(
+                  folders: _folders.children,
+                  onOpen: (f) => _folders.open(f.id),
+                  onMenu: (f) => showFolderActions(context, _folders, f, onDeleted: (_, __) => _refresh()),
+                ),
+              ),
+          ],
           if (_invoices.isEmpty && !_loading)
             Padding(
-              padding: const EdgeInsets.only(top: Spacing.xxl),
+              padding: const EdgeInsets.only(top: Spacing.xl),
               child: Column(children: [
                 Icon(Icons.inbox_outlined, size: 48, color: colors.outline),
                 const SizedBox(height: Spacing.s),
-                Text('No purchases yet', style: TextStyle(color: colors.onSurfaceVariant)),
+                Text(
+                  _searching
+                      ? 'No bills match'
+                      : _folders.atHome
+                          ? (_folders.children.isEmpty ? 'No purchases yet' : 'No bills here — open a folder')
+                          : 'No bills in this folder',
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
               ]),
             ),
           ..._invoices.map((inv) => Padding(
@@ -217,6 +319,18 @@ class PurchasesScreenState extends State<PurchasesScreen> {
                         ),
                         const SizedBox(width: Spacing.s),
                         Text('₹${inv.grandTotal.toStringAsFixed(2)}', style: amountTextStyle(context)),
+                        SizedBox(
+                          width: 36,
+                          child: PopupMenuButton<String>(
+                            tooltip: 'Bill options',
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.more_vert_rounded, size: 20, color: colors.onSurfaceVariant),
+                            onSelected: (_) => _moveInvoice(inv),
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(value: 'move', child: Text('Move to folder…')),
+                            ],
+                          ),
+                        ),
                       ]),
                     ),
                   ),

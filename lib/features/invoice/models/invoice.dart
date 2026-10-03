@@ -408,6 +408,7 @@ class InvoiceSummary {
   final double grandTotal;
   final bool reviewed;
   final String extractionMethod;
+  final int? folderId;
 
   InvoiceSummary({
     required this.id,
@@ -418,6 +419,7 @@ class InvoiceSummary {
     required this.grandTotal,
     required this.reviewed,
     required this.extractionMethod,
+    this.folderId,
   });
 
   factory InvoiceSummary.fromJson(Map<String, dynamic> json) => InvoiceSummary(
@@ -429,6 +431,7 @@ class InvoiceSummary {
         grandTotal: (json['grand_total'] as num).toDouble(),
         reviewed: json['reviewed'] as bool,
         extractionMethod: json['extraction_method'] as String,
+        folderId: json['folder_id'] as int?,
       );
 }
 

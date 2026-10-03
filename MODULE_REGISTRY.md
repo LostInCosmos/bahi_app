@@ -12,16 +12,19 @@ Find the module whose names fit what you are adding, then read its section.
 |---|---|---|---|
 | [`lib`](#lib) | `main` | 1 | 0 |
 | [`lib/app`](#libapp) | `GstBillApp` | 1 | 1 |
-| [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 8 |
-| [`lib/core/api`](#libcoreapi) | `Offset2D`, `ApiClient`, `ApiException` | 2 | 10 |
+| [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 9 |
+| [`lib/core/api`](#libcoreapi) | `Offset2D`, `ApiClient`, `ApiException` | 2 | 12 |
 | [`lib/core/utils`](#libcoreutils) | `BillImageCache`, `PendingPhotoStore`, `recordingErrorMessage` | 4 | 6 |
 | [`lib/features/auth/data`](#libfeaturesauthdata) | `AuthApi` | 1 | 1 |
 | [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo` | 1 | 2 |
 | [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LoginScreen` | 2 | 2 |
 | [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore` | 1 | 1 |
 | [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem` | 1 | 3 |
-| [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CropScreen`, `CropResult` | 2 | 1 |
+| [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult` | 2 | 1 |
 | [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog` +2 | 6 | 1 |
+| [`lib/features/folders/data`](#libfeaturesfoldersdata) | `FolderApi`, `FolderController` | 2 | 4 |
+| [`lib/features/folders/models`](#libfeaturesfoldersmodels) | `Folder`, `FolderTree` | 1 | 4 |
+| [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +3 | 1 | 2 |
 | [`lib/features/home/presentation`](#libfeatureshomepresentation) | `HomeScreen` | 1 | 2 |
 | [`lib/features/inventory/data`](#libfeaturesinventorydata) | `InventoryApi` | 1 | 1 |
 | [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `ProductSummary`, `ProductBatchInfo`, `ProductDetail` | 1 | 4 |
@@ -36,7 +39,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/models`](#libfeaturesvoicemodels) | `VoiceLineCandidate`, `BatchAllocation`, `VoiceOrderLine`, `VoiceOrder`, `VoiceOrderJob` +1 | 1 | 3 |
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 
-**Coverage:** 0 of 25 modules state their purpose; 22 of 47 files have a purpose line (1 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 28 modules state their purpose; 24 of 51 files have a purpose line (1 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -76,7 +79,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 **Public:** `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius`, `buildAppTheme`
 
-**Used by:** `lib/app`, `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
+**Used by:** `lib/app`, `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/widgets`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
 
 ---
 
@@ -84,14 +87,14 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `api_client.dart` | 154 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
+| `api_client.dart` | 156 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
 | `api_exception.dart` | 16 | — |
 
 **Public:** `Offset2D`, `ApiClient`, `ApiException`
 
-**Depends on:** `lib/core/utils`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/inventory/data`, `lib/features/inventory/models`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/sales/data`, `lib/features/sales/models`, `lib/features/voice/data`, `lib/features/voice/models`
+**Depends on:** `lib/core/utils`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/folders/data`, `lib/features/folders/models`, `lib/features/inventory/data`, `lib/features/inventory/models`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/sales/data`, `lib/features/sales/models`, `lib/features/voice/data`, `lib/features/voice/models`
 
-**Used by:** `lib/app`, `lib/features/auth/presentation`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/home/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
+**Used by:** `lib/app`, `lib/features/auth/presentation`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/folders/data`, `lib/features/folders/widgets`, `lib/features/home/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
 
 ---
 
@@ -165,7 +168,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item.dart` | 165 | — |
+| `batch_item.dart` | 173 | — |
 
 **Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`
 
@@ -177,12 +180,12 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `capture_screen.dart` | 618 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
+| `capture_screen.dart` | 758 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
 | `crop_screen.dart` | 115 | One page of a batch capture: drag the four corners onto this bill, pick a  *[CropScreen]* |
 
-**Public:** `CaptureScreen`, `CropScreen`, `CropResult`
+**Public:** `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/utils`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/widgets`, `lib/features/invoice/models`, `lib/features/invoice/presentation`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/utils`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/widgets`, `lib/features/folders/data`, `lib/features/folders/models`, `lib/features/folders/widgets`, `lib/features/invoice/models`, `lib/features/invoice/presentation`
 
 **Used by:** `lib/features/home/presentation`
 
@@ -190,7 +193,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item_card.dart` | 207 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
+| `batch_item_card.dart` | 222 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
 | `capture_bottom_bar.dart` | 93 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
 | `capture_empty_state.dart` | 83 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
 | `confirm_bill_dialog.dart` | 43 | — |
@@ -205,13 +208,52 @@ Find the module whose names fit what you are adding, then read its section.
 
 ---
 
+## lib/features/folders
+
+### `lib/features/folders/data`
+
+| file | lines | purpose |
+|---|---|---|
+| `folder_api.dart` | 64 | — |
+| `folder_controller.dart` | 76 | The folder tree plus where a screen currently is in it. Each screen that  *[FolderController]* |
+
+**Public:** `FolderApi`, `FolderController`
+
+**Depends on:** `lib/core/api`, `lib/features/folders/models`
+
+**Used by:** `lib/core/api`, `lib/features/capture/presentation`, `lib/features/folders/widgets`, `lib/features/invoice/presentation`
+
+### `lib/features/folders/models`
+
+| file | lines | purpose |
+|---|---|---|
+| `folder.dart` | 87 | A shopkeeper's folder for saved bills. The server owns the tree; this is  *[Folder]* |
+
+**Public:** `Folder`, `FolderTree`
+
+**Used by:** `lib/core/api`, `lib/features/capture/presentation`, `lib/features/folders/data`, `lib/features/folders/widgets`
+
+### `lib/features/folders/widgets`
+
+| file | lines | purpose |
+|---|---|---|
+| `folder_widgets.dart` | 488 | — |
+
+**Public:** `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog`, `FolderChoice`, `showFolderPicker`, `showFolderActions`
+
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/folders/data`, `lib/features/folders/models`
+
+**Used by:** `lib/features/capture/presentation`, `lib/features/invoice/presentation`
+
+---
+
 ## lib/features/home
 
 ### `lib/features/home/presentation`
 
 | file | lines | purpose |
 |---|---|---|
-| `home_screen.dart` | 99 | — |
+| `home_screen.dart` | 103 | — |
 
 **Public:** `HomeScreen`
 
@@ -264,7 +306,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice_api.dart` | 184 | — |
+| `invoice_api.dart` | 194 | — |
 
 **Public:** `InvoiceApi`
 
@@ -274,7 +316,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice.dart` | 563 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
+| `invoice.dart` | 566 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
 
 **Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `ExtractionJob`, `InvoiceSummary`, `InvoiceDetail`, `VendorHint`
 
@@ -286,12 +328,12 @@ Find the module whose names fit what you are adding, then read its section.
 |---|---|---|
 | `gstin_confirm.dart` | 209 | — |
 | `invoice_detail_screen.dart` | 215 | — |
-| `purchases_screen.dart` | 230 | — |
-| `review_screen.dart` | 1018 | — |
+| `purchases_screen.dart` | 348 | — |
+| `review_screen.dart` | 1021 | — |
 
 **Public:** `showGstinConfirmDialog`, `showSavedTick`, `SavedTick`, `InvoiceDetailScreen`, `PurchasesScreen`, `PurchasesScreenState`, `ReviewScreen`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/invoice/models`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/folders/data`, `lib/features/folders/widgets`, `lib/features/invoice/models`
 
 **Used by:** `lib/features/capture/presentation`, `lib/features/home/presentation`
 

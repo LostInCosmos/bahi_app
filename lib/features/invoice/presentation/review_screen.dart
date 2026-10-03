@@ -162,7 +162,9 @@ class ReviewScreen extends StatefulWidget {
   // and revalidated, would still show the stale "needs review" badge on the
   // batch grid until it's actually saved.
   final void Function(ExtractionResult updatedResult, bool hasErrors)? onRevalidated;
-  const ReviewScreen({super.key, required this.result, this.onRevalidated});
+  /// The folder the bill is saved into; null is home.
+  final int? folderId;
+  const ReviewScreen({super.key, required this.result, this.onRevalidated, this.folderId});
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -492,6 +494,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         overrideErrors: _overrideErrors,
         gstinConfirmed: _gstinConfirmed,
         confirmedVendorId: _confirmedVendorId,
+        folderId: widget.folderId,
       );
       if (!mounted) return;
       HapticFeedback.mediumImpact();

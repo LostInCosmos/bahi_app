@@ -7,6 +7,9 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/utils/pending_photo_store.dart';
 import '../../../core/utils/poll.dart';
+import '../../folders/data/folder_controller.dart';
+import '../../folders/models/folder.dart';
+import '../../folders/widgets/folder_widgets.dart';
 import '../../invoice/models/invoice.dart';
 import '../../invoice/presentation/gstin_confirm.dart';
 import '../../invoice/presentation/invoice_detail_screen.dart';
@@ -41,11 +44,16 @@ class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key, required this.onBatchFinished});
 
   @override
-  State<CaptureScreen> createState() => _CaptureScreenState();
+  State<CaptureScreen> createState() => CaptureScreenState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen> {
+class CaptureScreenState extends State<CaptureScreen> {
   final List<BatchItem> _items = [];
+
+  /// The shop's folders and where this screen is in them. Bills are shown
+  /// folder by folder: a bill captured inside a folder is saved into it.
+  final FolderController _folders = FolderController();
+  bool _foldersLoaded = false;
 
   /// Fixed to the shop signed in when this screen was created, so work that
   /// finishes after a logout can't be saved under the next shop's batch.
@@ -69,7 +77,47 @@ class _CaptureScreenState extends State<CaptureScreen> {
   @override
   void initState() {
     super.initState();
+    _folders.addListener(_onFoldersChanged);
     _restoreBatch();
+    refreshFolders();
+  }
+
+  @override
+  void dispose() {
+    _folders.removeListener(_onFoldersChanged);
+    _folders.dispose();
+    super.dispose();
+  }
+
+  void _onFoldersChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Public so HomeScreen can reload folders when this tab is selected — a
+  /// folder made or removed on the Purchases tab would otherwise not show here.
+  Future<void> refreshFolders() async {
+    await _folders.load();
+    if (!mounted) return;
+    _foldersLoaded = _foldersLoaded || _folders.loadError == null;
+    _reconcileItemFolders();
+  }
+
+  /// A bill whose folder no longer exists (deleted on another device) goes
+  /// home instead of failing its save. Only judged once the tree has actually
+  /// loaded: being offline must not send every filed bill home.
+  void _reconcileItemFolders() {
+    if (!_foldersLoaded || _folders.loadError != null) return;
+    var changed = false;
+    for (final item in _items) {
+      if (!_folders.tree.contains(item.folderId)) {
+        item.folderId = null;
+        changed = true;
+      }
+    }
+    if (changed) {
+      setState(() {});
+      _persistBatch();
+    }
   }
 
   // ==================== persistence ====================
@@ -87,6 +135,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     final restored = await store.load();
     if (restored.isEmpty || !mounted) return;
     setState(() => _items.addAll(restored));
+    _reconcileItemFolders();
 
     final uploaded = restored.where((i) => i.isUploaded).toList();
     for (final item in uploaded) {
@@ -138,6 +187,9 @@ class _CaptureScreenState extends State<CaptureScreen> {
   /// Each photo is written to the device as soon as its crop is confirmed.
   Future<void> _addPhoto(ImageSource source) async {
     final tenantId = _store?.tenantId;
+    // Fixed now, not when the photo is done: the folder you were in when you
+    // tapped capture is the one the bill belongs to.
+    final folderId = _folders.currentId;
     final pages = <BatchItemPage>[];
     while (true) {
       final file = await ImagePicker().pickImage(source: source, imageQuality: 95);
@@ -171,7 +223,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     }
     if (!mounted) return;
 
-    final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: pages);
+    final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: pages)..folderId = folderId;
     setState(() => _items.add(item));
     // Recorded before the upload starts, so a logout mid-upload still finds
     // this bill next time.
@@ -431,6 +483,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
           result: result,
+          folderId: item.folderId,
           onRevalidated: (updatedResult, hasErrors) {
             setState(() {
               item.result = updatedResult;
@@ -494,6 +547,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
           result.invoice, meta,
           gstinConfirmed: gstinConfirmed,
           confirmedVendorId: confirmedVendorId,
+          folderId: item.folderId,
         );
         if (!mounted) return;
         setState(() {
@@ -509,6 +563,14 @@ class _CaptureScreenState extends State<CaptureScreen> {
         if (!mounted) return;
         final detail = e.detail;
         final kind = detail is Map ? detail['error'] : null;
+        // Its folder was deleted since the bill was filed. Not worth failing
+        // the save over: file it at home and say so.
+        if (e.statusCode == 404 && e.message.contains('folder') && item.folderId != null) {
+          setState(() => item.folderId = null);
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('That folder no longer exists — saving to Home.')));
+          continue;
+        }
         if (kind == 'gstin_confirmation_required' || kind == 'gstin_required') {
           final asked = await ask(VendorHint(
             needsConfirmation: true,
@@ -552,6 +614,49 @@ class _CaptureScreenState extends State<CaptureScreen> {
     await _persistBatch();
   }
 
+  // ==================== folders ====================
+
+  Future<void> _openFolderMenu(Folder folder) => showFolderActions(
+        context,
+        _folders,
+        folder,
+        // The server moved the saved bills; bills still in this batch are only
+        // known to this phone, so they move up a level here.
+        onDeleted: (deleted, _) {
+          for (final item in _items.where((i) => i.folderId == deleted.id)) {
+            item.folderId = deleted.parentId;
+          }
+          setState(() {});
+          _persistBatch();
+        },
+      );
+
+  /// Moving an unsaved bill only changes where it will be saved; moving a
+  /// saved one is a server call, and the card follows only if that succeeds.
+  Future<void> _moveItem(BatchItem item) async {
+    final choice = await showFolderPicker(
+      context,
+      tree: _folders.tree,
+      title: 'Move ${item.label} to…',
+      currentId: item.folderId,
+    );
+    if (choice == null || choice.folderId == item.folderId || !mounted) return;
+    final savedId = item.savedInvoiceId;
+    if (item.status == BatchItemStatus.saved && savedId != null) {
+      try {
+        await ApiClient.instance.moveInvoice(savedId, folderId: choice.folderId);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() => item.folderId = choice.folderId);
+    await _persistBatch();
+    unawaited(_folders.load()); // bill counts on the folder tiles
+  }
+
   void _finish() {
     setState(() => _items.clear());
     _persistBatch();
@@ -562,16 +667,30 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final here = _items.where((i) => i.folderId == _folders.currentId).toList();
+    final subfolders = _folders.children;
     return SafeArea(
       child: Column(
         children: [
+          FolderBar(controller: _folders, onNewFolder: () => showNewFolderDialog(context, _folders)),
+          if (_folders.loadError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
+              child: Row(children: [
+                Expanded(
+                  child: Text("Couldn't load folders",
+                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+                ),
+                TextButton(onPressed: refreshFolders, child: const Text('Retry')),
+              ]),
+            ),
           Expanded(
-            child: _items.isEmpty
+            child: here.isEmpty && subfolders.isEmpty
                 ? CaptureEmptyState(
                     onTakePhoto: () => _addPhoto(ImageSource.camera),
                     onPickFromGallery: () => _addPhoto(ImageSource.gallery),
                   )
-                : _buildGrid(),
+                : _buildGrid(here, subfolders),
           ),
           CaptureBottomBar(
             hasItems: _items.isNotEmpty,
@@ -586,32 +705,49 @@ class _CaptureScreenState extends State<CaptureScreen> {
     );
   }
 
-  Widget _buildGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(Spacing.m),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: Spacing.m,
-        crossAxisSpacing: Spacing.m,
-        childAspectRatio: 0.72,
-      ),
-      itemCount: _items.length,
-      itemBuilder: (context, i) {
-        final item = _items[i];
-        return BatchItemCard(
-          key: ValueKey(item),
-          item: item,
-          onTap: () => _openItem(item),
-          onDelete: item.status != BatchItemStatus.processing && item.status != BatchItemStatus.saved
-              ? () => _removeItem(item)
-              : null,
-          onReprocess: item.isUploaded &&
-                  item.status != BatchItemStatus.preparing &&
-                  item.status != BatchItemStatus.processing
-              ? () => _reprocessItem(item)
-              : null,
-        );
-      },
+  /// Three across, so more bills fit than the old two-up grid; folder tiles sit
+  /// above them.
+  Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders) {
+    return CustomScrollView(
+      slivers: [
+        if (subfolders.isNotEmpty)
+          folderTileGrid(folders: subfolders, onOpen: (f) => _folders.open(f.id), onMenu: _openFolderMenu),
+        SliverPadding(
+          padding: const EdgeInsets.all(Spacing.m),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: Spacing.s,
+              crossAxisSpacing: Spacing.s,
+              childAspectRatio: 0.75,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                final item = items[i];
+                return BatchItemCard(
+                  key: ValueKey(item),
+                  item: item,
+                  onTap: () => _openItem(item),
+                  onDelete: item.status != BatchItemStatus.processing && item.status != BatchItemStatus.saved
+                      ? () => _removeItem(item)
+                      : null,
+                  onReprocess: item.isUploaded &&
+                          item.status != BatchItemStatus.preparing &&
+                          item.status != BatchItemStatus.processing
+                      ? () => _reprocessItem(item)
+                      : null,
+                  // Not while an upload or extraction is in flight; its folder
+                  // is read when it is saved, so it can be moved any time after.
+                  onMove: item.status != BatchItemStatus.preparing && item.status != BatchItemStatus.processing
+                      ? () => _moveItem(item)
+                      : null,
+                );
+              },
+              childCount: items.length,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

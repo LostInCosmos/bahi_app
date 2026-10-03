@@ -94,6 +94,12 @@ class BatchItem {
   String? errorMessage;
   int? savedInvoiceId;
 
+  /// The folder this bill is in; null is home. Set from wherever the bill was
+  /// captured, changed by "Move to…", and sent with the save so the saved
+  /// bill lands in the same place. Batches saved before folders existed have no
+  /// key for it and load as home.
+  int? folderId;
+
   /// The bill extracted fine and it was the SAVE that failed. Retrying then
   /// means saving again — not re-running extraction, which costs an LLM call
   /// and produces the same result that just failed to save. Not persisted:
@@ -132,6 +138,7 @@ class BatchItem {
         'result': result?.toJson(),
         'errorMessage': errorMessage,
         'savedInvoiceId': savedInvoiceId,
+        'folderId': folderId,
       };
 
   static BatchItem? fromJson(Map<String, dynamic> json) {
@@ -157,6 +164,7 @@ class BatchItem {
     item.lastJobId = json['lastJobId'] as int? ?? item.jobId;
     item.errorMessage = json['errorMessage'] as String?;
     item.savedInvoiceId = json['savedInvoiceId'] as int?;
+    item.folderId = json['folderId'] as int?;
     final resultJson = json['result'] as Map<String, dynamic>?;
     if (resultJson != null) item.result = ExtractionResult.fromJson(resultJson);
     return item;

@@ -78,4 +78,30 @@ void main() {
     final restored = BatchItem.fromJson(item.toJson());
     expect(restored?.failedAtSave ?? false, isFalse);
   });
+
+  test('the folder a bill is in survives a restart', () {
+    final item = BatchItem(label: 'Photo 5', pages: [])
+      ..sourceImages = ['7/ghi.jpg']
+      ..status = BatchItemStatus.pendingConfirm
+      ..folderId = 12;
+
+    expect(BatchItem.fromJson(item.toJson())!.folderId, 12);
+  });
+
+  test('a bill at home stays at home', () {
+    final item = BatchItem(label: 'Photo 6', pages: [])..sourceImages = ['7/jkl.jpg'];
+    expect(BatchItem.fromJson(item.toJson())!.folderId, isNull);
+  });
+
+  test('batches saved before folders existed load as home', () {
+    final legacy = {
+      'label': 'Photo 1',
+      'sourceImages': ['7/old.jpg'],
+      'status': 'saved',
+      'savedInvoiceId': 3,
+    };
+    final restored = BatchItem.fromJson(legacy)!;
+    expect(restored.folderId, isNull);
+    expect(restored.savedInvoiceId, 3);
+  });
 }

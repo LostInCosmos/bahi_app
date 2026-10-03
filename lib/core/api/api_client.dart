@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/models/account.dart';
+import '../../features/folders/models/folder.dart';
 import '../../features/invoice/models/invoice.dart';
 import '../../features/inventory/models/product.dart';
 import '../../features/sales/models/sale.dart';
@@ -19,6 +20,7 @@ export 'api_exception.dart';
 
 part '../../features/auth/data/auth_api.dart';
 part '../../features/invoice/data/invoice_api.dart';
+part '../../features/folders/data/folder_api.dart';
 part '../../features/inventory/data/inventory_api.dart';
 part '../../features/sales/data/sale_api.dart';
 part '../../features/voice/data/voice_api.dart';

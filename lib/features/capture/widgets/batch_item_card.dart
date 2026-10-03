@@ -12,6 +12,7 @@ class BatchItemCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onDelete;
   final VoidCallback? onReprocess;
+  final VoidCallback? onMove;
 
   const BatchItemCard({
     super.key,
@@ -19,6 +20,7 @@ class BatchItemCard extends StatelessWidget {
     required this.onTap,
     required this.onDelete,
     required this.onReprocess,
+    this.onMove,
   });
 
   @override
@@ -47,7 +49,7 @@ class BatchItemCard extends StatelessWidget {
             // can be missing on a bill that read perfectly, and either way
             // the one thing the card must not do is imply it is still coming.
             else if (item.status == BatchItemStatus.failed || item.thumbnailFailed)
-              const Center(child: Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey))
+              const Center(child: Icon(Icons.broken_image_outlined, size: 32, color: Colors.grey))
             else
               const Center(child: CircularProgressIndicator()),
             // Bottom scrim so the label stays legible over any photo.
@@ -55,7 +57,7 @@ class BatchItemCard extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 56,
+              height: 44,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -87,8 +89,8 @@ class BatchItemCard extends StatelessWidget {
                   : const SizedBox.shrink(key: ValueKey('idle')),
             ),
             Positioned(
-              top: 8,
-              right: 8,
+              top: 4,
+              right: 4,
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
@@ -109,8 +111,8 @@ class BatchItemCard extends StatelessWidget {
               ),
             if (onReprocess != null)
               Positioned(
-                bottom: 30,
-                right: 6,
+                bottom: 26,
+                right: 4,
                 child: _ChromeButton(
                   onPressed: () {
                     HapticFeedback.lightImpact();
@@ -120,14 +122,27 @@ class BatchItemCard extends StatelessWidget {
                   tooltip: 'Reprocess this image',
                 ),
               ),
+            if (onMove != null)
+              Positioned(
+                bottom: 26,
+                left: 4,
+                child: _ChromeButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onMove!();
+                  },
+                  icon: Icons.drive_file_move_outlined,
+                  tooltip: 'Move to folder…',
+                ),
+              ),
             Positioned(
-              left: Spacing.s,
-              right: Spacing.s,
-              bottom: Spacing.s,
+              left: Spacing.xs,
+              right: Spacing.xs,
+              bottom: Spacing.xs,
               child: Text(
                 pageCount > 1 ? '${item.label} ($pageCount pages)' : item.label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -164,14 +179,14 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 26,
-      height: 26,
+      width: 22,
+      height: 22,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 3)],
       ),
-      child: Icon(icon, size: 15, color: Colors.white),
+      child: Icon(icon, size: 13, color: Colors.white),
     );
   }
 }
@@ -196,8 +211,8 @@ class _ChromeButton extends StatelessWidget {
           onTap: onPressed,
           customBorder: const CircleBorder(),
           child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Icon(icon, color: Colors.white, size: 18),
+            padding: const EdgeInsets.all(4),
+            child: Icon(icon, color: Colors.white, size: 16),
           ),
         ),
       ),

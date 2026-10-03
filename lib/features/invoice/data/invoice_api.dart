@@ -98,6 +98,7 @@ extension InvoiceApi on ApiClient {
     bool overrideErrors = false,
     bool gstinConfirmed = false,
     int? confirmedVendorId,
+    int? folderId,
   }) async {
     final res = await http.post(
       _uri('/invoices'),
@@ -108,6 +109,7 @@ extension InvoiceApi on ApiClient {
         'override_errors': overrideErrors,
         'gstin_confirmed': gstinConfirmed,
         'confirmed_vendor_id': confirmedVendorId,
+        'folder_id': folderId,
       }),
     );
     _checkOk(res);
@@ -139,11 +141,19 @@ extension InvoiceApi on ApiClient {
     String? startDate,
     String? endDate,
     String? vendorGstin,
+    int? folderId,
+    bool unfiled = false,
   }) async {
     final query = <String, String>{};
     if (startDate != null) query['start_date'] = startDate;
     if (endDate != null) query['end_date'] = endDate;
     if (vendorGstin != null && vendorGstin.isNotEmpty) query['vendor_gstin'] = vendorGstin;
+    // Neither given = every bill, in any folder. `unfiled` is home.
+    if (folderId != null) {
+      query['folder_id'] = '$folderId';
+    } else if (unfiled) {
+      query['unfiled'] = 'true';
+    }
 
     final res = await http.get(_uri('/invoices', query), headers: _authHeader);
     _checkOk(res);
