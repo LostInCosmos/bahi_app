@@ -67,13 +67,6 @@ class BatchItem {
   /// accepted by the server, since [sourceImages] is all that's needed after.
   List<BatchItemPage> pages;
 
-  Uint8List? correctedBytes; // first page's corrected image, for the thumbnail
-
-  /// The thumbnail download failed. Distinct from [status]: the bill can be
-  /// fine (extracted, reviewable) while only its picture is missing, and the
-  /// card must not spin forever implying it is still coming.
-  bool thumbnailFailed = false;
-
   /// Every page's uploaded/cropped server path, in order. Populated once
   /// preparing finishes (length 1 for an ordinary single-photo bill).
   List<String> sourceImages = [];
@@ -111,10 +104,25 @@ class BatchItem {
   /// the server tries again at [retryAt], so the card says so instead of an
   /// indefinite spinner or, worse, a failure. Not persisted — a restart
   /// resumes polling the job and picks the retry state up from the server.
+  /// When the server first said it was actually working on this bill, as
+  /// opposed to leaving it queued. The per-attempt timeout runs from here,
+  /// so a bill sitting behind a hundred others is never called failed for
+  /// waiting its turn. Not persisted: a restart re-learns it from the server.
+  DateTime? processingSince;
+
   int retryAttempt = 0;
   int retryMax = 3;
   DateTime? retryAt;
   bool get isRetrying => retryAt != null;
+
+  /// Sitting out the server's backoff, so asking about it now would only be
+  /// told "retrying" again. [sweepMargin] is how late the server's own
+  /// reconciler may be in re-queueing it, since it is not picked up at
+  /// `retryAt` but on the next sweep after that.
+  bool isBackingOff(Duration sweepMargin) {
+    final at = retryAt;
+    return at != null && DateTime.now().toUtc().isBefore(at.add(sweepMargin));
+  }
 
   BatchItem({required this.label, required this.pages});
 

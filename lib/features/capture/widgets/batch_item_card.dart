@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../models/batch_item.dart';
+import 'bill_thumbnail.dart';
 import 'retry_label.dart';
 
 /// One bill in the capture grid: its corrected photo, a status badge, and
@@ -43,15 +44,10 @@ class BatchItemCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (item.correctedBytes != null)
-              Image.memory(item.correctedBytes!, fit: BoxFit.cover)
-            // thumbnailFailed is checked alongside a failed item: the photo
-            // can be missing on a bill that read perfectly, and either way
-            // the one thing the card must not do is imply it is still coming.
-            else if (item.status == BatchItemStatus.failed || item.thumbnailFailed)
-              const Center(child: Icon(Icons.broken_image_outlined, size: 32, color: Colors.grey))
-            else
-              const Center(child: CircularProgressIndicator()),
+            BillThumbnail(
+              sourceImage: item.isUploaded ? item.sourceImages.first : null,
+              failed: item.status == BatchItemStatus.failed,
+            ),
             // Bottom scrim so the label stays legible over any photo.
             Positioned(
               left: 0,

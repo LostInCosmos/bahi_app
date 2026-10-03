@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/utils/pending_photo_store.dart';
-import '../../../core/utils/poll.dart';
 import '../../folders/data/folder_controller.dart';
 import '../../folders/models/folder.dart';
 import '../../folders/widgets/folder_widgets.dart';
@@ -62,11 +62,14 @@ class CaptureScreenState extends State<CaptureScreen> {
   // How long one bill may sit in pending/processing before this screen stops
   // waiting — shorter than the worker's own stale-job reclaim. It only stops
   // the spinner; the job is still reclaimed and retried server-side.
-  static const _pollTimeout = Duration(seconds: 120);
-  static const _pollInterval = Duration(seconds: 2);
+  // How long the server may be actively working on ONE attempt before the
+  // card gives up. Queue time is excluded — see _timeOutStuckBills.
+  static const _attemptTimeout = Duration(seconds: 120);
   // The server's reconciler re-queues a due retry on a 60s sweep, so pickup
   // can lag `retryAt` by up to that much.
   static const _retrySweepMargin = Duration(seconds: 60);
+
+  bool _statusLoopRunning = false;
 
   bool get _hasUnresolved => _items.any((i) =>
       i.status == BatchItemStatus.needsReview ||
@@ -148,8 +151,6 @@ class CaptureScreenState extends State<CaptureScreen> {
         unawaited(_processOne(item, resumeJobId: item.jobId));
       }
     }
-    // Resuming extraction must not wait on pictures.
-    unawaited(_loadThumbnails(uploaded));
     unawaited(_resumeUploads(restored.where((i) => !i.isUploaded).toList()));
   }
 
@@ -161,23 +162,6 @@ class CaptureScreenState extends State<CaptureScreen> {
       if (!mounted) return;
       await _uploadAndExtract(item);
     }
-  }
-
-  /// Fills in each restored card's picture — from the device cache in the
-  /// usual case, otherwise fetched in parallel rather than one after another.
-  Future<void> _loadThumbnails(List<BatchItem> items) async {
-    await Future.wait(items.map((item) async {
-      try {
-        final bytes = await ApiClient.instance.fetchImage(item.sourceImages.first);
-        if (!mounted) return;
-        setState(() => item.correctedBytes = bytes);
-      } catch (_) {
-        // The bill is still usable — only its picture is missing, so the card
-        // has to say so rather than spin. One failure must not stop the rest.
-        if (!mounted) return;
-        setState(() => item.thumbnailFailed = true);
-      }
-    }));
   }
 
   // ==================== capture & upload ====================
@@ -286,15 +270,6 @@ class CaptureScreenState extends State<CaptureScreen> {
       final id = page.photoId;
       if (id != null) await PendingPhotoStore.delete(id);
     }
-
-    // The thumbnail is separate from the upload: failing to download it must
-    // not send an uploaded bill back to re-uploading.
-    try {
-      final corrected = await ApiClient.instance.fetchImage(sourceImages.first);
-      if (mounted) setState(() => item.correctedBytes = corrected);
-    } catch (_) {
-      if (mounted) setState(() => item.thumbnailFailed = true);
-    }
   }
 
   void _removeItem(BatchItem item) {
@@ -308,11 +283,13 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   // ==================== extraction ====================
 
-  /// Submits (or, given [resumeJobId], resumes polling) an extraction job and
-  /// waits for it. Extraction runs in a backend worker, so this is a
-  /// submit-then-poll loop rather than one long request.
+  /// Submits a bill for extraction, or adopts an id already in flight. Does
+  /// not wait — [_statusLoop] watches every in-flight bill together.
   Future<void> _processOne(BatchItem item, {int? resumeJobId}) async {
-    setState(() => item.status = BatchItemStatus.processing);
+    setState(() {
+      item.status = BatchItemStatus.processing;
+      item.processingSince = null;
+    });
     try {
       int jobId;
       if (resumeJobId != null) {
@@ -331,7 +308,6 @@ class CaptureScreenState extends State<CaptureScreen> {
           jobId = item.lastJobId!;
         }
         item.jobId = jobId;
-        await _persistBatch();
       } else {
         jobId = await ApiClient.instance.submitExtraction(
           item.sourceImages.first,
@@ -339,10 +315,120 @@ class CaptureScreenState extends State<CaptureScreen> {
         );
         item.jobId = jobId;
         item.lastJobId = jobId;
-        await _persistBatch();
+      }
+      await _persistBatch();
+      _ensureStatusLoop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        item.jobId = null;
+        item.status = BatchItemStatus.failed;
+        item.errorMessage = e.toString();
+      });
+      await _persistBatch();
+    }
+  }
+
+  // ==================== watching ====================
+
+  /// One request watches the whole batch, instead of a 2-second timer per
+  /// bill. At a hundred bills that was fifty requests a second, each one a
+  /// full row of result JSON to deliver a word of status; this is one held
+  /// request for all of them, answered the moment anything changes.
+  void _ensureStatusLoop() {
+    if (_statusLoopRunning) return;
+    _statusLoopRunning = true;
+    unawaited(_statusLoop().whenComplete(() {
+      _statusLoopRunning = false;
+      // A bill submitted while the loop was winding down saw the flag still
+      // set and did not start one. Without this it would be watched by
+      // nobody and spin for ever.
+      if (mounted && _watching.isNotEmpty) _ensureStatusLoop();
+    }));
+  }
+
+  Map<int, BatchItem> get _watching => {
+        for (final i in _items)
+          if (i.jobId != null && i.status == BatchItemStatus.processing) i.jobId!: i,
+      };
+
+  Future<void> _statusLoop() async {
+    var idleRounds = 0;
+    while (mounted) {
+      final watching = _watching;
+      if (watching.isEmpty) {
+        // Nothing to ask about. Costs no request at all; a few local ticks
+        // then stop, and the next submission starts the loop again.
+        if (++idleRounds > 3) return;
+        await Future<void>.delayed(const Duration(seconds: 1));
+        continue;
+      }
+      idleRounds = 0;
+
+      // A bill the server is backing off on is not worth asking about until
+      // it is due; it would only return "retrying" again.
+      final due = watching.entries.where((e) => !e.value.isBackingOff(_retrySweepMargin)).toList();
+      if (due.isEmpty) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        continue;
       }
 
-      final job = await _waitForJob(item, jobId);
+      final JobStatusBatch batch;
+      try {
+        batch = await ApiClient.instance.jobStatuses(due.map((e) => e.key).toList());
+      } catch (_) {
+        // A dropped connection is expected on mobile and is NOT a failed
+        // bill: the server holds the request open for ~25s, so a tunnel or a
+        // wifi-to-cellular switch lands here routinely. Ask again — every
+        // request re-reads current state, so nothing that happened while we
+        // were away is lost.
+        if (!mounted) return;
+        await Future<void>.delayed(const Duration(seconds: 2));
+        continue;
+      }
+      if (!mounted) return;
+
+      for (final brief in batch.jobs) {
+        final item = watching[brief.jobId];
+        if (item != null) await _applyStatus(item, brief);
+      }
+      _timeOutStuckBills();
+      await _persistBatch();
+    }
+  }
+
+  /// Folds one bill's reported state into its card.
+  Future<void> _applyStatus(BatchItem item, JobStatusBrief brief) async {
+    if (brief.isRetrying) {
+      setState(() {
+        item.retryAttempt = brief.attempt;
+        item.retryMax = brief.maxAttempts;
+        item.retryAt = brief.retryAt ?? DateTime.now().toUtc();
+        item.processingSince = null;
+      });
+      return;
+    }
+    if (!brief.isTerminal) {
+      setState(() {
+        item.retryAt = null;
+        if (brief.isProcessing) {
+          // The clock starts when the server picks it up, not when the bill
+          // was queued — see _timeOutStuckBills.
+          item.processingSince ??= DateTime.now().toUtc();
+        } else {
+          // Back to queued: whatever the last attempt had done is void, and
+          // a stale clock would time out a bill waiting its turn again.
+          item.processingSince = null;
+        }
+      });
+      return;
+    }
+
+    // Terminal. The full result is fetched once, here, rather than being
+    // carried on every status answer.
+    try {
+      final job = await ApiClient.instance.getExtractionJob(brief.jobId);
+      if (!mounted) return;
       final ExtractionResult result;
       if (job.status == 'done') {
         result = job.result!;
@@ -352,68 +438,48 @@ class CaptureScreenState extends State<CaptureScreen> {
           job.errorMessage ?? "Automatic extraction couldn't read this bill — please enter its details by hand.",
         );
       } else {
-        throw ApiException(502, job.errorMessage ?? 'extraction failed');
+        setState(() {
+          item.jobId = null;
+          item.processingSince = null;
+          item.status = BatchItemStatus.failed;
+          item.errorMessage = job.errorMessage ?? 'extraction failed';
+        });
+        return;
       }
-
-      if (!mounted) return;
       setState(() {
         item.jobId = null;
         item.retryAt = null;
+        item.processingSince = null;
         // Zero issues means the numbers are internally consistent, not that
         // they were read correctly — so this still waits on a human tap.
         item.status = result.issues.isEmpty ? BatchItemStatus.pendingConfirm : BatchItemStatus.needsReview;
         item.result = result;
       });
-    } on TimeoutException {
-      if (!mounted) return;
+    } catch (_) {
+      // Fetching the result failed, but the bill itself is finished. Leave it
+      // in flight so the next round picks it up rather than calling a read
+      // bill failed over one dropped request.
+    }
+  }
+
+  /// A bill the server has actually been working on for too long.
+  ///
+  /// The clock runs from `processingSince`, NOT from submission. Queue time
+  /// does not count: at three bills at a time, a bill twenty deep waits
+  /// minutes before anyone looks at it, and the old timer called that failed
+  /// — then Retry spent a fresh model call reproducing a result the server
+  /// was already about to deliver.
+  void _timeOutStuckBills() {
+    final now = DateTime.now().toUtc();
+    for (final item in _items) {
+      final since = item.processingSince;
+      if (since == null || now.difference(since) < _attemptTimeout) continue;
       setState(() {
         item.jobId = null;
+        item.processingSince = null;
         item.status = BatchItemStatus.failed;
         item.errorMessage = 'This bill is taking longer than expected — please try again.';
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        item.jobId = null;
-        item.status = BatchItemStatus.failed;
-        item.errorMessage = e.toString();
-      });
-    }
-    await _persistBatch();
-  }
-
-  /// Polls until the job finishes, waiting out the server's retries rather
-  /// than giving up on them.
-  ///
-  /// The 120s timeout is per ATTEMPT, not for the whole job. A job the server
-  /// is retrying can legitimately take 20+ minutes end to end (backoff is 1,
-  /// 5, 15 minutes); giving up at 120s used to leave the card saying "failed"
-  /// for a bill that was about to be read.
-  ///
-  /// During a retry's backoff nothing is polled — the next attempt is minutes
-  /// away, and asking every 2 seconds would only cost requests. The wait runs
-  /// to `retryAt` plus the reconciler's sweep interval, since that sweep is
-  /// what actually puts the job back in the queue.
-  Future<ExtractionJob> _waitForJob(BatchItem item, int jobId) async {
-    while (true) {
-      final job = await pollUntilTerminal<ExtractionJob>(
-        fetch: () => ApiClient.instance.getExtractionJob(jobId),
-        // Stop fast-polling on a finish OR on entering a retry wait.
-        isTerminal: (j) => j.isTerminal || j.isRetrying,
-        interval: _pollInterval,
-        timeout: _pollTimeout,
-      );
-      if (job.isTerminal || !mounted) return job;
-
-      setState(() {
-        item.retryAttempt = job.attempt;
-        item.retryMax = job.maxAttempts;
-        item.retryAt = job.retryAt ?? DateTime.now().toUtc();
-      });
-      final due = item.retryAt!.difference(DateTime.now().toUtc());
-      await Future<void>.delayed((due.isNegative ? Duration.zero : due) + _retrySweepMargin);
-      if (!mounted) return job;
-      setState(() => item.retryAt = null);
     }
   }
 
@@ -523,9 +589,17 @@ class CaptureScreenState extends State<CaptureScreen> {
     int? confirmedVendorId;
 
     Future<bool> ask(VendorHint question) async {
+      // Loaded here rather than kept on every card: this is one bill, at the
+      // moment it is being confirmed, and it is a cache hit in the normal
+      // case. A missing picture just means the dialog shows none.
+      Uint8List? photo;
+      try {
+        photo = await ApiClient.instance.fetchImage(item.sourceImages.first);
+      } catch (_) {}
+      if (!mounted) return false;
       final answer = await showGstinConfirmDialog(
         context, question,
-        photo: item.correctedBytes,
+        photo: photo,
         fallbackName: result.invoice.sellerName,
       );
       if (answer == null || !mounted) return false;

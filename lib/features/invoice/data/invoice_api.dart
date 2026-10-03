@@ -76,6 +76,31 @@ extension InvoiceApi on ApiClient {
     return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
   }
 
+  /// Status for every bill still in flight, in ONE request the server holds
+  /// open until something changes.
+  ///
+  /// Replaces a 2-second timer per bill: 1000 bills used to mean ~500
+  /// requests a second, each a `SELECT *` carrying ~2 KB of result JSON to
+  /// deliver ~13 bytes of status. This is one request per ~25s for the whole
+  /// batch, and it returns the instant a bill finishes rather than up to two
+  /// seconds later.
+  ///
+  /// The timeout is longer than the server's hold on purpose — the server
+  /// answers at ~25s, so anything past that is a dead connection, not a slow
+  /// one. A throw here means "ask again", never "the bill failed": every
+  /// request re-reads current state, so nothing is missed by reconnecting.
+  Future<JobStatusBatch> jobStatuses(List<int> jobIds, {bool wait = true}) async {
+    final res = await http
+        .post(
+          _uri('/invoices/extract/status'),
+          headers: {..._authHeader, 'Content-Type': 'application/json'},
+          body: jsonEncode({'job_ids': jobIds, 'wait': wait}),
+        )
+        .timeout(const Duration(seconds: 40));
+    _checkOk(res);
+    return JobStatusBatch.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
   Future<ExtractionJob> getExtractionJob(int jobId) async {
     final res = await http.get(_uri('/invoices/extract/$jobId'), headers: _authHeader);
     _checkOk(res);

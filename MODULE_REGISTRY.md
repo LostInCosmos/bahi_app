@@ -13,7 +13,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib`](#lib) | `main` | 1 | 0 |
 | [`lib/app`](#libapp) | `GstBillApp` | 1 | 1 |
 | [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 9 |
-| [`lib/core/api`](#libcoreapi) | `Offset2D`, `ApiClient`, `ApiException` | 2 | 12 |
+| [`lib/core/api`](#libcoreapi) | `Offset2D`, `ApiClient`, `ApiException` | 2 | 13 |
 | [`lib/core/utils`](#libcoreutils) | `BillImageCache`, `PendingPhotoStore`, `recordingErrorMessage` | 4 | 6 |
 | [`lib/features/auth/data`](#libfeaturesauthdata) | `AuthApi` | 1 | 1 |
 | [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo` | 1 | 2 |
@@ -21,16 +21,16 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore` | 1 | 1 |
 | [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem` | 1 | 3 |
 | [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult` | 2 | 1 |
-| [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog` +2 | 6 | 1 |
+| [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction` +3 | 7 | 1 |
 | [`lib/features/folders/data`](#libfeaturesfoldersdata) | `FolderApi`, `FolderController` | 2 | 4 |
 | [`lib/features/folders/models`](#libfeaturesfoldersmodels) | `Folder`, `FolderTree` | 1 | 4 |
-| [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +3 | 1 | 2 |
+| [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +4 | 1 | 2 |
 | [`lib/features/home/presentation`](#libfeatureshomepresentation) | `HomeScreen` | 1 | 2 |
 | [`lib/features/inventory/data`](#libfeaturesinventorydata) | `InventoryApi` | 1 | 1 |
 | [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `ProductSummary`, `ProductBatchInfo`, `ProductDetail` | 1 | 4 |
 | [`lib/features/inventory/presentation`](#libfeaturesinventorypresentation) | `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen` | 2 | 1 |
 | [`lib/features/invoice/data`](#libfeaturesinvoicedata) | `InvoiceApi` | 1 | 1 |
-| [`lib/features/invoice/models`](#libfeaturesinvoicemodels) | `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue` +6 | 1 | 5 |
+| [`lib/features/invoice/models`](#libfeaturesinvoicemodels) | `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue` +8 | 1 | 5 |
 | [`lib/features/invoice/presentation`](#libfeaturesinvoicepresentation) | `showGstinConfirmDialog`, `showSavedTick`, `SavedTick`, `InvoiceDetailScreen`, `PurchasesScreen` +2 | 4 | 2 |
 | [`lib/features/sales/data`](#libfeaturessalesdata) | `SaleApi` | 1 | 1 |
 | [`lib/features/sales/models`](#libfeaturessalesmodels) | `CartEntry`, `SaleLineItemDetail`, `SaleSummary`, `SaleDetail` | 1 | 2 |
@@ -39,7 +39,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/models`](#libfeaturesvoicemodels) | `VoiceLineCandidate`, `BatchAllocation`, `VoiceOrderLine`, `VoiceOrder`, `VoiceOrderJob` +1 | 1 | 3 |
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 
-**Coverage:** 0 of 28 modules state their purpose; 24 of 51 files have a purpose line (1 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 28 modules state their purpose; 25 of 52 files have a purpose line (1 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -94,7 +94,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 **Depends on:** `lib/core/utils`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/folders/data`, `lib/features/folders/models`, `lib/features/inventory/data`, `lib/features/inventory/models`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/sales/data`, `lib/features/sales/models`, `lib/features/voice/data`, `lib/features/voice/models`
 
-**Used by:** `lib/app`, `lib/features/auth/presentation`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/folders/data`, `lib/features/folders/widgets`, `lib/features/home/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
+**Used by:** `lib/app`, `lib/features/auth/presentation`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/data`, `lib/features/folders/widgets`, `lib/features/home/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
 
 ---
 
@@ -168,7 +168,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item.dart` | 173 | — |
+| `batch_item.dart` | 181 | — |
 
 **Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`
 
@@ -180,7 +180,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `capture_screen.dart` | 758 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
+| `capture_screen.dart` | 828 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
 | `crop_screen.dart` | 115 | One page of a batch capture: drag the four corners onto this bill, pick a  *[CropScreen]* |
 
 **Public:** `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult`
@@ -193,16 +193,17 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item_card.dart` | 222 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
+| `batch_item_card.dart` | 218 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
+| `bill_thumbnail.dart` | 96 | One bill's picture, loaded when the card is actually on screen.  *[BillThumbnail]* |
 | `capture_bottom_bar.dart` | 93 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
 | `capture_empty_state.dart` | 83 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
 | `confirm_bill_dialog.dart` | 43 | — |
 | `crop_canvas.dart` | 198 | Lets the user drag four corner handles onto a photographed bill's edges.  *[CropCanvas]* |
 | `retry_label.dart` | 62 | Shown over a bill the server is retrying. Counts down to the next attempt  *[RetryLabel]* |
 
-**Public:** `BatchItemCard`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog`, `CropCanvas`, `RetryLabel`
+**Public:** `BatchItemCard`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog`, `CropCanvas`, `RetryLabel`
 
-**Depends on:** `lib/app/theme`, `lib/features/capture/models`, `lib/features/invoice/models`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/capture/models`, `lib/features/invoice/models`
 
 **Used by:** `lib/features/capture/presentation`
 
@@ -237,9 +238,9 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `folder_widgets.dart` | 488 | — |
+| `folder_widgets.dart` | 493 | — |
 
-**Public:** `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog`, `FolderChoice`, `showFolderPicker`, `showFolderActions`
+**Public:** `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog`, `showNewFolderDialog`, `FolderChoice`, `showFolderPicker`, `showFolderActions`
 
 **Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/folders/data`, `lib/features/folders/models`
 
@@ -306,7 +307,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice_api.dart` | 194 | — |
+| `invoice_api.dart` | 219 | — |
 
 **Public:** `InvoiceApi`
 
@@ -316,9 +317,9 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice.dart` | 566 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
+| `invoice.dart` | 613 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
 
-**Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `ExtractionJob`, `InvoiceSummary`, `InvoiceDetail`, `VendorHint`
+**Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `ExtractionJob`, `JobStatusBrief`, `JobStatusBatch`, `InvoiceSummary`, `InvoiceDetail`, `VendorHint`
 
 **Used by:** `lib/core/api`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/invoice/presentation`
 
@@ -326,9 +327,9 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `gstin_confirm.dart` | 209 | — |
+| `gstin_confirm.dart` | 233 | — |
 | `invoice_detail_screen.dart` | 215 | — |
-| `purchases_screen.dart` | 348 | — |
+| `purchases_screen.dart` | 344 | — |
 | `review_screen.dart` | 1021 | — |
 
 **Public:** `showGstinConfirmDialog`, `showSavedTick`, `SavedTick`, `InvoiceDetailScreen`, `PurchasesScreen`, `PurchasesScreenState`, `ReviewScreen`
