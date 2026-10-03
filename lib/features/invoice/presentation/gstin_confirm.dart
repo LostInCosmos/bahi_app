@@ -28,112 +28,131 @@ Future<String?> showGstinConfirmDialog(
   Uint8List? photo,
   String fallbackName = '',
 }) async {
-    final controller = TextEditingController(text: hint.gstin);
-    final bytes = photo;
-    final name = hint.vendorName.isEmpty ? fallbackName : hint.vendorName;
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setLocal) {
-          final value = controller.text.trim().toUpperCase();
-          final valid = RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$').hasMatch(value);
-          final changed = value != hint.gstin.toUpperCase();
-          return AlertDialog(
-            title: Text(hint.vendorKnown ? 'Check the supplier' : 'New supplier'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hint.vendorKnown
-                        ? (name.isEmpty
-                            ? 'Please check this GSTIN against the bill before saving.'
-                            : 'Please check $name\'s GSTIN against the bill before saving.')
-                        : (name.isEmpty
-                            ? "We haven't seen this supplier before. Please check their GSTIN against the bill."
-                            : "We haven't seen $name before. Please check their GSTIN against the bill."),
-                  ),
-                  const SizedBox(height: Spacing.s),
-                  if (bytes != null)
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 260),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          color: Colors.black,
-                          child: InteractiveViewer(
-                            minScale: 0.5,
-                            maxScale: 8,
-                            child: Image.memory(bytes, fit: BoxFit.contain),
-                          ),
+  final controller = TextEditingController(text: hint.gstin);
+  final bytes = photo;
+  final name = hint.vendorName.isEmpty ? fallbackName : hint.vendorName;
+  return showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setLocal) {
+        final value = controller.text.trim().toUpperCase();
+        final valid =
+            RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$')
+                .hasMatch(value);
+        final changed = value != hint.gstin.toUpperCase();
+        return AlertDialog(
+          title: Text(hint.vendorKnown ? 'Check the supplier' : 'New supplier',
+              textAlign: TextAlign.center),
+          actionsAlignment: MainAxisAlignment.center,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  textAlign: TextAlign.center,
+                  hint.vendorKnown
+                      ? (name.isEmpty
+                          ? 'Please check this GSTIN against the bill before saving.'
+                          : 'Please check $name\'s GSTIN against the bill before saving.')
+                      : (name.isEmpty
+                          ? "We haven't seen this supplier before. Please check their GSTIN against the bill."
+                          : "We haven't seen $name before. Please check their GSTIN against the bill."),
+                ),
+                const SizedBox(height: Spacing.s),
+                if (bytes != null)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 260),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        color: Colors.black,
+                        child: InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 8,
+                          child: Image.memory(bytes, fit: BoxFit.contain),
                         ),
                       ),
                     ),
-                  if (bytes != null)
-                    const Padding(
-                      padding: EdgeInsets.only(top: Spacing.xs),
-                      child: Text('Pinch to zoom', style: TextStyle(fontSize: 11)),
-                    ),
-                  const SizedBox(height: Spacing.s),
-                  TextField(
-                    controller: controller,
-                    // Not autofocused: the point is to READ it, and a keyboard
-                    // over the photo is the opposite of that. It is still
-                    // editable on tap for the times it is wrong.
-                    maxLength: 15,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      labelText: 'GSTIN',
-                      hintText: '09ABCDE1234F1Z5',
-                      errorText: value.isEmpty || valid ? null : 'Needs 15 characters in the GSTIN format',
-                    ),
-                    onChanged: (_) => setLocal(() {}),
                   ),
-                  if (changed && hint.vendorKnown)
-                    const Padding(
-                      padding: EdgeInsets.only(top: Spacing.xs),
-                      child: Text(
-                        'This will correct the supplier\'s saved GSTIN.',
-                        style: TextStyle(fontSize: 11, color: Color(0xFFB45309)),
-                      ),
+                if (bytes != null)
+                  const Padding(
+                    padding: EdgeInsets.only(top: Spacing.xs),
+                    child: Text('Pinch to zoom',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11)),
+                  ),
+                const SizedBox(height: Spacing.s),
+                TextField(
+                  controller: controller,
+                  // Not autofocused: the point is to READ it, and a keyboard
+                  // over the photo is the opposite of that. It is still
+                  // editable on tap for the times it is wrong.
+                  maxLength: 15,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 18,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w600),
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    labelText: 'GSTIN',
+                    floatingLabelAlignment: FloatingLabelAlignment.center,
+                    counterText: '',
+                    hintText: '09ABCDE1234F1Z5',
+                    errorText: value.isEmpty || valid
+                        ? null
+                        : 'Needs 15 characters in the GSTIN format',
+                  ),
+                  onChanged: (_) => setLocal(() {}),
+                ),
+                if (changed && hint.vendorKnown)
+                  const Padding(
+                    padding: EdgeInsets.only(top: Spacing.xs),
+                    child: Text(
+                      'This will correct the supplier\'s saved GSTIN.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 11, color: Color(0xFFB45309)),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-              FilledButton(
-                onPressed: valid ? () => Navigator.of(context).pop(value) : null,
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: valid ? () => Navigator.of(context).pop(value) : null,
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
 
 /// A brief tick so a one-tap save does not look like a dropped tap. Only
 /// shown on the path where nothing was asked — after the confirmation
 /// dialog the Submit press is itself the acknowledgement.
 Future<void> showSavedTick(BuildContext context) async {
-    if (!context.mounted) return;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        // Pops its OWN route rather than the root navigator's top: if this
-        // dialog were ever already gone, popping the root would close the
-        // screen out from under the save.
-        Future<void>.delayed(const Duration(milliseconds: 850), () {
-          if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-        });
-        return const Center(child: SavedTick());
-      },
-    );
-  }
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      // Pops its OWN route rather than the root navigator's top: if this
+      // dialog were ever already gone, popping the root would close the
+      // screen out from under the save.
+      Future<void>.delayed(const Duration(milliseconds: 850), () {
+        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+      });
+      return const Center(child: SavedTick());
+    },
+  );
+}
 
 /// The green tick shown when a bill saves without asking anything — the
 /// verified-vendor path. Scales and fades in together so it reads as a
@@ -146,7 +165,8 @@ class SavedTick extends StatefulWidget {
   State<SavedTick> createState() => _SavedTickState();
 }
 
-class _SavedTickState extends State<SavedTick> with SingleTickerProviderStateMixin {
+class _SavedTickState extends State<SavedTick>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 420),
@@ -192,12 +212,16 @@ class _SavedTickState extends State<SavedTick> with SingleTickerProviderStateMix
                   color: Color(0xFF16A34A),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_rounded, color: Colors.white, size: 52),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 52),
               ),
               const SizedBox(height: Spacing.s),
               const Text(
                 'Bill saved',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16),
               ),
             ],
           ),
