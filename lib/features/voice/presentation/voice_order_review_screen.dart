@@ -240,8 +240,11 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     });
     try {
       final job = await pollUntilTerminal<VoiceOrderJob>(
-        fetch: () => ApiClient.instance.getVoiceOrderJob(jobId),
+        fetch: () => ApiClient.instance.getVoiceOrderJob(jobId, wait: true),
         isTerminal: (j) => j.isTerminal,
+        // 180s of being worked on, not 180s since the Add more was spoken —
+        // see poll.dart. Same clock as the strip on SalesScreen.
+        isStarted: (j) => j.isBeingWorkedOn,
         timeout: const Duration(seconds: 180),
       );
       if (!mounted) return;

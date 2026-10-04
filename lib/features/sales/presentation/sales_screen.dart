@@ -45,11 +45,14 @@ class SalesScreenState extends State<SalesScreen> {
   bool _loading = false;
   String? _error;
 
-  static const _voiceJobPollInterval = Duration(seconds: 2);
-  // Longer than bills' 120s client timeout — voice's worst-case chain
-  // (transcribe up to 2 attempts x 120s + parse up to 2 attempts x 120s) is
-  // genuinely longer, matching the server-side stale-after ratio.
-  static const _voiceJobPollTimeout = Duration(seconds: 180);
+  // No interval: the server holds the request until something changes
+  // (DAS-21), so a client-side delay on top only adds latency.
+  //
+  // 180s is longer than bills' 120s because voice's worst-case chain is two
+  // sequential LLM calls, not one. It measures ONE ATTEMPT, not the whole
+  // job — a note queued behind three other recordings is not a note taking
+  // too long, and timing it out would lose a result already on its way.
+  static const _voiceJobTimeout = Duration(seconds: 180);
 
   @override
   void initState() {
@@ -198,10 +201,10 @@ class SalesScreenState extends State<SalesScreen> {
   Future<void> _pollVoiceJob(_VoiceJobItem item) async {
     try {
       final job = await pollUntilTerminal<VoiceOrderJob>(
-        fetch: () => ApiClient.instance.getVoiceOrderJob(item.jobId),
+        fetch: () => ApiClient.instance.getVoiceOrderJob(item.jobId, wait: true),
         isTerminal: (j) => j.isTerminal,
-        interval: _voiceJobPollInterval,
-        timeout: _voiceJobPollTimeout,
+        isStarted: (j) => j.isBeingWorkedOn,
+        timeout: _voiceJobTimeout,
       );
       if (!mounted) return;
       if (job.status == 'done') {

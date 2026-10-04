@@ -104,7 +104,7 @@ Find the module whose names fit what you are adding, then read its section.
 |---|---|---|
 | `bill_image_cache.dart` | 164 | On-device store for corrected bill photos, so the same image is pulled  *[BillImageCache]* |
 | `pending_photo_store.dart` | 94 | Raw bill photos that have been captured and cropped but not yet uploaded.  *[PendingPhotoStore]* |
-| `poll.dart` | 28 | — |
+| `poll.dart` | 69 | — |
 | `recording_error.dart` | 23 | Turns a recorder failure into something a shopkeeper can act on.  *[recordingErrorMessage]* |
 
 **Public:** `BillImageCache`, `PendingPhotoStore`, `recordingErrorMessage`
@@ -194,7 +194,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `batch_item_card.dart` | 218 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
-| `bill_thumbnail.dart` | 96 | One bill's picture, loaded when the card is actually on screen.  *[BillThumbnail]* |
+| `bill_thumbnail.dart` | 131 | One bill's picture, loaded when the card is actually on screen.  *[BillThumbnail]* |
 | `capture_bottom_bar.dart` | 93 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
 | `capture_empty_state.dart` | 83 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
 | `confirm_bill_dialog.dart` | 43 | — |
@@ -369,7 +369,7 @@ Find the module whose names fit what you are adding, then read its section.
 | `sale_receipt_screen.dart` | 135 | Completing the sale is the one moment stock actually leaves inventory —  *[SaleReceiptScreen]* |
 | `sale_review_screen.dart` | 146 | Buyer GSTIN stays optional and out of the way — needed for a business  *[SaleReviewScreen]* |
 | `sales_history_screen.dart` | 199 | — |
-| `sales_screen.dart` | 557 | Same search idea as the inventory tab, different tap action — one  *[SalesScreen]* |
+| `sales_screen.dart` | 560 | Same search idea as the inventory tab, different tap action — one  *[SalesScreen]* |
 
 **Public:** `SaleReceiptScreen`, `SaleReviewScreen`, `SalesHistoryScreen`, `SalesHistoryScreenState`, `SalesScreen`, `SalesScreenState`
 
@@ -385,7 +385,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `voice_api.dart` | 150 | — |
+| `voice_api.dart` | 158 | — |
 
 **Public:** `VoiceApi`
 
@@ -395,7 +395,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `voice.dart` | 249 | — |
+| `voice.dart` | 254 | — |
 
 **Public:** `VoiceLineCandidate`, `BatchAllocation`, `VoiceOrderLine`, `VoiceOrder`, `VoiceOrderJob`, `VoiceCommandResult`
 
@@ -406,7 +406,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `voice_command_screen.dart` | 296 | General voice commands — "how much Maggi do I have", "delete Sharma's  *[VoiceCommandScreen]* |
-| `voice_order_review_screen.dart` | 1250 | Review/confirm screen for a voice-parsed sale draft. Every mutation  *[VoiceOrderReviewScreen]* |
+| `voice_order_review_screen.dart` | 1253 | Review/confirm screen for a voice-parsed sale draft. Every mutation  *[VoiceOrderReviewScreen]* |
 | `voice_sale_screen.dart` | 383 | Mic capture for the "Voice sale" flow: tap to start, tap to stop (an  *[VoiceSaleScreen]* |
 
 **Public:** `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen`

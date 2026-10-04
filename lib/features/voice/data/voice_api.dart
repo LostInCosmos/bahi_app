@@ -8,8 +8,8 @@ extension VoiceApi on ApiClient {
   /// the backend uses to infer the audio MIME type.
   ///
   /// Returns immediately with a job id — transcription+parsing now run in a
-  /// background worker, not inline in this request — so the caller polls
-  /// getVoiceOrderJob() until it reaches a terminal status.
+  /// background worker, not inline in this request — so the caller waits on
+  /// getVoiceOrderJob(..., wait: true) until it reaches a terminal status.
   Future<int> submitVoiceOrderAudio(File audioFile, {int? voiceOrderId}) async {
     final query = voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null;
     final request = http.MultipartRequest('POST', _uri('/voice-orders/parse-audio', query))
@@ -21,8 +21,16 @@ extension VoiceApi on ApiClient {
     return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
   }
 
-  Future<VoiceOrderJob> getVoiceOrderJob(int jobId) async {
-    final res = await http.get(_uri('/voice-orders/jobs/$jobId'), headers: _authHeader);
+  /// With [wait], the server holds the request open until this job changes
+  /// state — up to ~25s — instead of answering immediately (DAS-21). One
+  /// request per state change rather than one every two seconds. A timeout
+  /// or dropped connection here means "ask again", not "the job failed":
+  /// every answer re-states current status, so nothing is missed.
+  Future<VoiceOrderJob> getVoiceOrderJob(int jobId, {bool wait = false}) async {
+    final res = await http.get(
+      _uri('/voice-orders/jobs/$jobId', wait ? {'wait': 'true'} : null),
+      headers: _authHeader,
+    );
     _checkOk(res);
     return VoiceOrderJob.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
