@@ -22,7 +22,16 @@ class BillThumbnail extends StatefulWidget {
   /// part — show the broken state immediately rather than a spinner.
   final bool failed;
 
-  const BillThumbnail({super.key, required this.sourceImage, this.failed = false});
+  /// How to get the bytes. Defaults to the real client; injectable so the
+  /// widget can be tested without a network.
+  final Future<Uint8List> Function(String path)? loader;
+
+  const BillThumbnail({
+    super.key,
+    required this.sourceImage,
+    this.failed = false,
+    this.loader,
+  });
 
   @override
   State<BillThumbnail> createState() => _BillThumbnailState();
@@ -53,7 +62,8 @@ class _BillThumbnailState extends State<BillThumbnail> {
   /// card — or the bill — down with it.
   Future<Uint8List?> _fetch(String path) async {
     try {
-      return await ApiClient.instance.fetchImage(path);
+      final load = widget.loader ?? ApiClient.instance.fetchImage;
+      return await load(path);
     } catch (_) {
       return null;
     }
@@ -73,11 +83,36 @@ class _BillThumbnailState extends State<BillThumbnail> {
         }
         final bytes = snap.data;
         if (bytes == null) return const _Broken();
-        return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+        return LayoutBuilder(
+          builder: (context, constraints) => Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            // Decode at the size actually drawn, not the size photographed.
+            // A bill is ~1715x1927, which decodes to ~12.6 MB of bitmap;
+            // `fit` only scales at paint time, so without this every visible
+            // card holds a full-resolution image. Flutter's ImageCache caps
+            // at ~100 MB, so a 3-across grid of them does not grow without
+            // bound — it thrashes, evicting and re-decoding while you scroll.
+            // At card size the same image is ~0.7 MB.
+            //
+            // `cacheWidth` never upscales, so a small image is untouched.
+            cacheWidth: _decodeWidth(context, constraints),
+          ),
+        );
       },
     );
   }
 }
+
+/// Physical pixels across the card, or null when the width is unbounded and
+/// there is nothing sensible to size against.
+int? _decodeWidth(BuildContext context, BoxConstraints constraints) {
+  final width = constraints.maxWidth;
+  if (!width.isFinite || width <= 0) return null;
+  return (width * MediaQuery.devicePixelRatioOf(context)).round();
+}
+
 
 class _Loading extends StatelessWidget {
   const _Loading();

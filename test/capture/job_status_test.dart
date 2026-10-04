@@ -124,7 +124,7 @@ void main() {
     test('a long queue wait never looks like a timeout', () {
       final item = _item();
       const timeout = Duration(seconds: 120);
-      final queuedFor = const Duration(minutes: 30);
+      const queuedFor = Duration(minutes: 30);
       // No processingSince, so there is nothing for the timeout to measure.
       expect(item.processingSince, isNull);
       expect(
