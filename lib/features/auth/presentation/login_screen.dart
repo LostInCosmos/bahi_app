@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/widgets/dastavez_logo.dart';
 import '../../home/presentation/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -81,14 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: Spacing.l),
-                  Center(
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(22)),
-                      child: const Icon(Icons.assignment_outlined, color: Colors.white, size: 36),
-                    ),
-                  ),
+                  const Center(child: DastavezLogoTile(size: 88)),
                   const SizedBox(height: Spacing.l),
                   Text(
                     'Dastavez',

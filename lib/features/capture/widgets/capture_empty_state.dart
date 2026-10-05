@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme.dart';
+import '../../../core/widgets/dastavez_logo.dart';
 
 /// What the capture screen shows before any bill has been added.
 class CaptureEmptyState extends StatelessWidget {
@@ -25,7 +26,7 @@ class CaptureEmptyState extends StatelessWidget {
                 color: AppColors.spotSurface,
                 borderRadius: BorderRadius.circular(AppRadius.card),
               ),
-              child: Icon(Icons.receipt_long_rounded, size: 56, color: AppColors.spotSurfaceOn.withValues(alpha: 0.5)),
+              child: const Center(child: DastavezLogoTile(size: 96)),
             ),
             const SizedBox(height: Spacing.xl),
             Text('Scan your first bill', style: Theme.of(context).textTheme.titleLarge),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/widgets/dastavez_logo.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../auth/presentation/account_screen.dart';
@@ -78,7 +79,14 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[_tab]),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const DastavezLogoTile(size: 30),
+            const SizedBox(width: 10),
+            Text(_titles[_tab]),
+          ],
+        ),
         actions: [
           IconButton(onPressed: _openVoiceCommand, icon: const Icon(Icons.record_voice_over_outlined), tooltip: 'Voice command'),
           IconButton(onPressed: _openAccount, icon: const Icon(Icons.storefront_outlined), tooltip: 'Account'),
