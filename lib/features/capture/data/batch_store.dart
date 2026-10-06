@@ -59,6 +59,11 @@ class BatchStore {
         return items;
       }
     }
+    /// Every holder of an unuploaded photo must be named here. Today the
+    /// batch is the only one — a multi-selected photo becomes a batch
+    /// item the moment it is picked, before any cropping — so this list
+    /// is complete. Anything that ever holds photos outside the batch
+    /// has to be added, or loading the batch silently deletes them.
     final referenced = {
       for (final item in items)
         for (final page in item.pages)

@@ -6,7 +6,11 @@ import '../../invoice/models/invoice.dart';
 
 /// Where one bill is in the capture flow. Nothing saves itself: even a clean
 /// extraction only reaches [pendingConfirm], which still needs a human tap.
-enum BatchItemStatus { preparing, ready, processing, pendingConfirm, saved, needsReview, failed }
+/// `needsCrop` is a photo picked from the device that nobody has chosen
+/// corners for yet. Distinct from `preparing` because it must NOT be
+/// uploaded on its own: multi-select puts a whole stack in this state
+/// and each waits for a human, so the resume pass skips them.
+enum BatchItemStatus { needsCrop, preparing, ready, processing, pendingConfirm, saved, needsReview, failed }
 
 /// One captured, cropped photo that has not been uploaded yet. A bill spanning
 /// several photos ("+ Add another page") has several of these.
@@ -160,11 +164,17 @@ class BatchItem {
 
     final item = BatchItem(label: json['label'] as String? ?? 'Photo', pages: sourceImages.isEmpty ? pages : []);
     item.sourceImages = sourceImages;
-    // A bill that never finished uploading always comes back as "preparing",
+    // A bill that never finished uploading comes back as "preparing",
     // whatever it was when saved — including a failed upload, which is
     // simply tried again.
+    //
+    // Except one still waiting to be cropped: that must come back as
+    // `needsCrop`, or the resume pass would upload a stack of uncropped
+    // photos the shopkeeper never looked at.
     item.status = sourceImages.isEmpty
-        ? BatchItemStatus.preparing
+        ? (json['status'] == BatchItemStatus.needsCrop.name
+            ? BatchItemStatus.needsCrop
+            : BatchItemStatus.preparing)
         : BatchItemStatus.values.firstWhere((v) => v.name == json['status'], orElse: () => BatchItemStatus.ready);
     item.jobId = json['jobId'] as int?;
     // Batches saved before lastJobId existed have no key for it — jobId is

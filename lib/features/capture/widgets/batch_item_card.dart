@@ -160,6 +160,11 @@ class BatchItemCard extends StatelessWidget {
         return _Badge(color: Theme.of(context).colorScheme.error, icon: Icons.close_rounded);
       case BatchItemStatus.ready:
         return const _Badge(color: AppColors.statusReady, icon: Icons.hourglass_empty_rounded);
+      case BatchItemStatus.needsCrop:
+        // An instruction, not a state: this card is waiting for the
+        // shopkeeper to choose its corners, and the crop icon is what
+        // says tapping it will help.
+        return const _Badge(color: AppColors.statusNeedsReview, icon: Icons.crop_rounded);
       case BatchItemStatus.preparing:
       case BatchItemStatus.processing:
         return const SizedBox.shrink();

@@ -18,6 +18,8 @@ import '../data/batch_store.dart';
 import '../models/batch_item.dart';
 import '../widgets/batch_item_card.dart';
 import '../widgets/capture_bottom_bar.dart';
+import '../widgets/status_filter_bar.dart';
+import '../models/status_filter.dart';
 import '../widgets/capture_empty_state.dart';
 import '../widgets/confirm_bill_dialog.dart';
 import 'crop_screen.dart';
@@ -54,6 +56,13 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// folder by folder: a bill captured inside a folder is saved into it.
   final FolderController _folders = FolderController();
   bool _foldersLoaded = false;
+
+  /// Ticked statuses (DAS-26). Held on the State, so it survives
+  /// switching tabs — the screen stays alive in the home IndexedStack —
+  /// but not a restart, which is deliberate: coming back tomorrow to a
+  /// grid silently hiding most of the shop's bills, with no memory of
+  /// having set that, is worse than re-ticking a box.
+  Set<String> _statusFilter = {};
 
   /// Fixed to the shop signed in when this screen was created, so work that
   /// finishes after a logout can't be saved under the next shop's batch.
@@ -167,6 +176,125 @@ class CaptureScreenState extends State<CaptureScreen> {
   // ==================== capture & upload ====================
 
   /// Captures one or more photos for a single bill: after each crop, the user
+  /// Several bills picked from the gallery at once (DAS-25).
+  ///
+  /// Each becomes an ordinary bill straight away — saved here, shown on
+  /// the grid, waiting for its corners. No separate tray and no second
+  /// kind of record, so folders, filtering, persistence and resume all
+  /// work on them without knowing they arrived in a batch.
+  ///
+  /// Nothing is uploaded yet: the shopkeeper taps one, chooses its
+  /// corners, and only then does it go to preprocessing.
+  ///
+  /// The camera stays one at a time. A camera cannot multi-select
+  /// anyway, and someone photographing a single bill sees no change.
+  Future<void> _pickManyFromGallery() async {
+    final tenantId = _store?.tenantId;
+    // Fixed now, as in _addPhoto: the folder you were in when you picked
+    // is the one these bills belong to.
+    final folderId = _folders.currentId;
+    final files = await ImagePicker().pickMultiImage(imageQuality: 95);
+    if (files.isEmpty || !mounted) return;
+
+    // One file is the old single-bill flow, unchanged — straight to the
+    // crop rather than onto the grid.
+    if (files.length == 1) {
+      await _addPickedFile(files.first, folderId);
+      return;
+    }
+
+    final made = <BatchItem>[];
+    for (final file in files) {
+      final bytes = await file.readAsBytes();
+      // Written to the device as it is picked, before any cropping:
+      // these bytes exist nowhere else.
+      final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
+      made.add(BatchItem(
+        label: 'Photo ${_items.length + made.length + 1}',
+        pages: [
+          BatchItemPage(
+            photoId: photoId,
+            memoryBytes: photoId == null ? bytes : null,
+            filename: file.name,
+            corners: const [],      // chosen when the shopkeeper crops it
+            rotationDegrees: 0,
+          )
+        ],
+      )
+        ..status = BatchItemStatus.needsCrop
+        ..folderId = folderId);
+    }
+    if (!mounted) return;
+    setState(() => _items.addAll(made));
+    // Recorded before anything else, so being killed keeps the stack.
+    await _persistBatch();
+  }
+
+  /// One file from the gallery: the original single-bill flow, kept
+  /// exactly as it was so nothing changes for someone uploading one
+  /// bill. Crop first, then save, then upload.
+  Future<void> _addPickedFile(XFile file, int? folderId) async {
+    final tenantId = _store?.tenantId;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    final crop = await Navigator.of(context).push<CropResult>(
+      MaterialPageRoute(builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
+    );
+    if (crop == null || crop.corners.length != 4 || !mounted) return;
+
+    final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
+    final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: [
+      BatchItemPage(
+        photoId: photoId,
+        memoryBytes: photoId == null ? bytes : null,
+        filename: file.name,
+        corners: crop.corners.map((o) => Offset2D(o.dx, o.dy)).toList(),
+        rotationDegrees: crop.rotationDegrees,
+      )
+    ])
+      ..folderId = folderId;
+    if (!mounted) return;
+    setState(() => _items.add(item));
+    await _persistBatch();
+    await _uploadAndExtract(item);
+  }
+
+  /// Open the crop for a bill picked from the gallery and still waiting.
+  ///
+  /// The bill already exists and its photo is already on disk, so this
+  /// only fills in the corners and starts the work — it must not write
+  /// a second copy of the photo.
+  Future<void> _cropPending(BatchItem item) async {
+    final page = item.pages.first;
+    final bytes = page.memoryBytes ??
+        (page.photoId == null ? null : await PendingPhotoStore.read(page.photoId!));
+    if (bytes == null) {
+      setState(() {
+        item.status = BatchItemStatus.failed;
+        item.errorMessage = 'that photo is no longer on this device';
+      });
+      await _persistBatch();
+      return;
+    }
+    if (!mounted) return;
+    final crop = await Navigator.of(context).push<CropResult>(
+      MaterialPageRoute(builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
+    );
+    if (crop == null || crop.corners.length != 4 || !mounted) return;
+    setState(() {
+      item.pages[0] = BatchItemPage(
+        photoId: page.photoId,
+        memoryBytes: page.memoryBytes,
+        filename: page.filename,
+        corners: crop.corners.map((o) => Offset2D(o.dx, o.dy)).toList(),
+        rotationDegrees: crop.rotationDegrees,
+      );
+      item.status = BatchItemStatus.preparing;
+    });
+    await _persistBatch();
+    await _uploadAndExtract(item);
+  }
+
   /// can finish or tap "+ Add another page" to add pages to the SAME bill.
   /// Each photo is written to the device as soon as its crop is confirmed.
   Future<void> _addPhoto(ImageSource source) async {
@@ -490,6 +618,9 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _openItem(BatchItem item) async {
     switch (item.status) {
+      case BatchItemStatus.needsCrop:
+        await _cropPending(item);
+        return;
       case BatchItemStatus.saved:
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoiceId: item.savedInvoiceId!)),
@@ -741,8 +872,13 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final here = _items.where((i) => i.folderId == _folders.currentId).toList();
+    final inFolder = _items.where((i) => i.folderId == _folders.currentId).toList();
+    // Filtering composes with the folder rather than replacing it:
+    // ticking a status narrows what is in this folder, it does not
+    // leave it.
+    final here = filterByStatus(inFolder, _statusFilter);
     final subfolders = _folders.children;
+    final filtering = _statusFilter.isNotEmpty;
     return SafeArea(
       child: Column(
         children: [
@@ -758,12 +894,25 @@ class CaptureScreenState extends State<CaptureScreen> {
                 TextButton(onPressed: refreshFolders, child: const Text('Retry')),
               ]),
             ),
+          if (_items.isNotEmpty || filtering)
+            StatusFilterBar(
+              items: inFolder,
+              selected: _statusFilter,
+              onChanged: (next) => setState(() => _statusFilter = next),
+            ),
           Expanded(
             child: here.isEmpty && subfolders.isEmpty
-                ? CaptureEmptyState(
-                    onTakePhoto: () => _addPhoto(ImageSource.camera),
-                    onPickFromGallery: () => _addPhoto(ImageSource.gallery),
-                  )
+                ? (filtering
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text('Nothing here matches those statuses'),
+                        ),
+                      )
+                    : CaptureEmptyState(
+                        onTakePhoto: () => _addPhoto(ImageSource.camera),
+                        onPickFromGallery: _pickManyFromGallery,
+                      ))
                 : _buildGrid(here, subfolders),
           ),
           CaptureBottomBar(
@@ -771,7 +920,7 @@ class CaptureScreenState extends State<CaptureScreen> {
             allResolved: _allResolved,
             hasUnresolved: _hasUnresolved,
             onTakePhoto: () => _addPhoto(ImageSource.camera),
-            onPickFromGallery: () => _addPhoto(ImageSource.gallery),
+            onPickFromGallery: _pickManyFromGallery,
             onFinish: _finish,
           ),
         ],
