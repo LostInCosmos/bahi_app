@@ -18,6 +18,11 @@ dependencies:
   share_plus: ^11.0.0
   path_provider: ^2.1.4
   record: ^7.0.0
+  # PDF bills (DAS-27). `file_picker` because image_picker cannot select a
+  # document; `pdfx` renders pages through the platform's own engine
+  # (Android PdfRenderer / iOS PDFKit) rather than shipping one.
+  file_picker: ^8.1.2
+  pdfx: ^2.6.0
 
 dev_dependencies:
   flutter_test:

@@ -8,7 +8,17 @@ class CaptureEmptyState extends StatelessWidget {
   final VoidCallback onTakePhoto;
   final VoidCallback onPickFromGallery;
 
-  const CaptureEmptyState({super.key, required this.onTakePhoto, required this.onPickFromGallery});
+  /// A PDF invoice emailed by a distributor (DAS-27). Offered here too,
+  /// or it is unreachable for a shop that has captured nothing yet —
+  /// which is exactly who has one sitting in their inbox.
+  final VoidCallback onPickPdf;
+
+  const CaptureEmptyState({
+    super.key,
+    required this.onTakePhoto,
+    required this.onPickFromGallery,
+    required this.onPickPdf,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +83,15 @@ class CaptureEmptyState extends StatelessWidget {
                 onPressed: onPickFromGallery,
                 icon: const Icon(Icons.photo_library_outlined),
                 label: const Text('Choose from Gallery'),
+              ),
+            ),
+            const SizedBox(height: Spacing.s),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onPickPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Upload a PDF bill'),
               ),
             ),
           ],

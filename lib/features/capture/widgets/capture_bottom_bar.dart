@@ -13,6 +13,9 @@ class CaptureBottomBar extends StatelessWidget {
   final VoidCallback onPickFromGallery;
   final VoidCallback onFinish;
 
+  /// A PDF invoice emailed by a distributor (DAS-27).
+  final VoidCallback onPickPdf;
+
   const CaptureBottomBar({
     super.key,
     required this.hasItems,
@@ -21,6 +24,7 @@ class CaptureBottomBar extends StatelessWidget {
     required this.onTakePhoto,
     required this.onPickFromGallery,
     required this.onFinish,
+    required this.onPickPdf,
   });
 
   @override
@@ -52,6 +56,12 @@ class CaptureBottomBar extends StatelessWidget {
                     onPressed: onPickFromGallery,
                     icon: const Icon(Icons.photo_library_outlined),
                     tooltip: 'Add from gallery',
+                  ),
+                  const SizedBox(width: Spacing.s),
+                  IconButton.filledTonal(
+                    onPressed: onPickPdf,
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    tooltip: 'Add a PDF bill',
                   ),
                 ],
               ),

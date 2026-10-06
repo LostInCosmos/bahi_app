@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_theme.dart';
@@ -20,6 +21,7 @@ import '../widgets/batch_item_card.dart';
 import '../widgets/capture_bottom_bar.dart';
 import '../widgets/status_filter_bar.dart';
 import '../models/status_filter.dart';
+import '../models/pdf_pages.dart';
 import '../widgets/capture_empty_state.dart';
 import '../widgets/confirm_bill_dialog.dart';
 import 'crop_screen.dart';
@@ -63,6 +65,9 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// grid silently hiding most of the shop's bills, with no memory of
   /// having set that, is worse than re-ticking a box.
   Set<String> _statusFilter = {};
+
+  /// Non-null while a PDF is being rendered (DAS-27).
+  String? _pdfProgress;
 
   /// Fixed to the shop signed in when this screen was created, so work that
   /// finishes after a logout can't be saved under the next shop's batch.
@@ -257,6 +262,77 @@ class CaptureScreenState extends State<CaptureScreen> {
     setState(() => _items.add(item));
     await _persistBatch();
     await _uploadAndExtract(item);
+  }
+
+  /// A PDF bill (DAS-27).
+  ///
+  /// Rendered to page images here, then sent straight on — NO crop
+  /// screen. A PDF page is already flat and rectangular; there is
+  /// nothing to drag corners around, and asking would be busywork.
+  ///
+  /// One document becomes ONE bill with N pages, which is what the
+  /// extractor's multi-page path is for: every page reaches the model
+  /// in a single call, so totals that continue across a page break are
+  /// read together. Whether a document might be several separate
+  /// invoices is the open question on DAS-27 — silently guessing would
+  /// be worse than defaulting to one.
+  Future<void> _pickPdf() async {
+    final tenantId = _store?.tenantId;
+    final folderId = _folders.currentId;
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    final path = picked?.files.single.path;
+    if (path == null || !mounted) return;
+
+    final name = picked!.files.single.name;
+    setState(() => _pdfProgress = 'Reading $name…');
+    try {
+      final rendered = await renderPdf(
+        path,
+        onProgress: (done, total) {
+          if (mounted) setState(() => _pdfProgress = 'Reading $name — page $done of $total');
+        },
+      );
+      if (rendered.isEmpty || !mounted) return;
+
+      final pages = <BatchItemPage>[];
+      for (var i = 0; i < rendered.length; i++) {
+        final r = rendered[i];
+        final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, r.bytes);
+        pages.add(BatchItemPage(
+          photoId: photoId,
+          memoryBytes: photoId == null ? r.bytes : null,
+          filename: '${name.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '')}-p${i + 1}.jpg',
+          // The whole page. A rendered PDF page needs no crop, and
+          // anything less would cut the bill's edges off.
+          corners: [
+            const Offset2D(0, 0),
+            Offset2D(r.width, 0),
+            Offset2D(r.width, r.height),
+            Offset2D(0, r.height),
+          ],
+          rotationDegrees: 0,
+        ));
+      }
+      if (!mounted) return;
+      final item = BatchItem(label: name, pages: pages)..folderId = folderId;
+      setState(() {
+        _items.add(item);
+        _pdfProgress = null;
+      });
+      await _persistBatch();
+      await _uploadAndExtract(item);
+    } catch (e) {
+      if (!mounted) return;
+      // A page cap or an unreadable file is the shopkeeper's problem to
+      // act on, not a silent no-op that looks like the app ignored them.
+      setState(() => _pdfProgress = null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e is TooManyPdfPages ? e.toString() : 'Could not read $name'),
+      ));
+    }
   }
 
   /// Open the crop for a bill picked from the gallery and still waiting.
@@ -894,6 +970,11 @@ class CaptureScreenState extends State<CaptureScreen> {
                 TextButton(onPressed: refreshFolders, child: const Text('Retry')),
               ]),
             ),
+          if (_pdfProgress != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.m, vertical: Spacing.s),
+              child: Align(alignment: Alignment.centerLeft, child: Text(_pdfProgress!)),
+            ),
           if (_items.isNotEmpty || filtering)
             StatusFilterBar(
               items: inFolder,
@@ -912,6 +993,7 @@ class CaptureScreenState extends State<CaptureScreen> {
                     : CaptureEmptyState(
                         onTakePhoto: () => _addPhoto(ImageSource.camera),
                         onPickFromGallery: _pickManyFromGallery,
+                        onPickPdf: _pickPdf,
                       ))
                 : _buildGrid(here, subfolders),
           ),
@@ -921,6 +1003,7 @@ class CaptureScreenState extends State<CaptureScreen> {
             hasUnresolved: _hasUnresolved,
             onTakePhoto: () => _addPhoto(ImageSource.camera),
             onPickFromGallery: _pickManyFromGallery,
+            onPickPdf: _pickPdf,
             onFinish: _finish,
           ),
         ],
