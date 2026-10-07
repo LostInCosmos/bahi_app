@@ -33,6 +33,18 @@ class Offset2D {
   const Offset2D(this.x, this.y);
 }
 
+/// True in any non-release build (debug/profile), where the server-address
+/// field has always been shown — OR in a release build explicitly compiled
+/// with `--dart-define=ALLOW_SERVER_OVERRIDE=true`. That second case is for
+/// a real release-signed, release-performance build you sideload onto a
+/// device to point at a local dev backend (e.g. exposed via `cloudflared
+/// tunnel`) instead of production — never the default, and never set for
+/// the actual production build. The real security boundary this exists to
+/// protect (see login_screen.dart's docstring) is that a shopkeeper's
+/// ordinary release build — built WITHOUT this flag — can't be talked into
+/// pointing at an attacker's server.
+const bool kAllowServerOverride = !kReleaseMode || bool.fromEnvironment('ALLOW_SERVER_OVERRIDE');
+
 /// Thin REST client for the FastAPI backend. Holds the base URL and JWT in
 /// memory plus SharedPreferences so both survive app restarts. The base URL
 /// is user-editable from the login screen since "localhost" means different
@@ -66,7 +78,7 @@ class ApiClient {
 
   Future<void> loadFromDisk() async {
     final prefs = await SharedPreferences.getInstance();
-    if (!kReleaseMode) {
+    if (kAllowServerOverride) {
       baseUrl = prefs.getString('base_url') ?? baseUrl;
     }
     token = await _secureStorage.read(key: 'token');
