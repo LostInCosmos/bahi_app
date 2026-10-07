@@ -24,10 +24,17 @@ class StatusFilter {
 /// rather than an alphabetised list.
 const List<StatusFilter> kStatusFilters = [
   StatusFilter('tocrop', 'To crop', {BatchItemStatus.needsCrop}),
-  StatusFilter('uploading', 'Uploading', {BatchItemStatus.preparing}),
-  StatusFilter('queued', 'Queued', {BatchItemStatus.ready}),
-  StatusFilter('reading', 'Reading', {BatchItemStatus.processing}),
-  StatusFilter('retrying', 'Retrying', {}),
+  // Uploading, queued, reading and retrying were four boxes of their own.
+  // They all mean "the machine is busy, come back in a moment": a
+  // shopkeeper can act on none of them and has no reason to tell them
+  // apart, while nine boxes took three rows of a phone screen and pushed
+  // the bills below the fold. One box — and each card's own badge still
+  // says which of the four it is in.
+  StatusFilter('working', 'Working', {
+    BatchItemStatus.preparing,
+    BatchItemStatus.ready,
+    BatchItemStatus.processing,
+  }),
   StatusFilter('check', 'Check & save', {BatchItemStatus.pendingConfirm}),
   StatusFilter('review', 'Needs review', {BatchItemStatus.needsReview}),
   StatusFilter('saved', 'Saved', {BatchItemStatus.saved}),
@@ -37,14 +44,12 @@ const List<StatusFilter> kStatusFilters = [
 /// Whether one card belongs in [key].
 ///
 /// A bill sitting out a backoff carries [BatchItem.retryAt] on top of
-/// whatever status it had, so it is matched by that rather than by
-/// status — and must NOT also answer its underlying one, or someone
-/// filtering for what is actively being read would be shown work that
-/// is stalled.
+/// whatever status it had, so it is recognised by that rather than by
+/// status. It belongs to "working" with the rest of the in-flight
+/// states, and must NOT also answer the status underneath it.
 bool matchesStatusFilter(BatchItem item, String key) {
   final retrying = item.retryAt != null;
-  if (key == 'retrying') return retrying;
-  if (retrying) return false;
+  if (retrying) return key == 'working';
   for (final f in kStatusFilters) {
     if (f.key == key) return f.statuses.contains(item.status);
   }

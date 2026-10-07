@@ -33,12 +33,11 @@ void main() {
 
   test('the categories and labels match the web app exactly', () {
     expect(kStatusFilters.map((f) => f.key).toList(), [
-      'tocrop', 'uploading', 'queued', 'reading', 'retrying', 'check', 'review',
+      'tocrop', 'working', 'check', 'review',
       'saved', 'failed',
     ]);
     expect(kStatusFilters.map((f) => f.label).toList(), [
-      'To crop', 'Uploading', 'Queued', 'Reading', 'Retrying', 'Check & save',
-      'Needs review', 'Saved', 'Failed',
+      'To crop', 'Working', 'Check & save', 'Needs review', 'Saved', 'Failed',
     ]);
   });
 
@@ -58,15 +57,15 @@ void main() {
         [BatchItemStatus.saved, BatchItemStatus.failed]);
   });
 
-  test('a card sitting out a backoff is retrying, and only that', () {
+  test('a card sitting out a backoff is working, and only that', () {
     /* It still carries the status it had, so without this it would also
        show under "Reading" — and someone filtering for what is actively
        being read would be shown work that is stalled. */
     final backoff = _item(BatchItemStatus.processing, retryAt: DateTime.now());
-    expect(matchesStatusFilter(backoff, 'retrying'), isTrue);
-    expect(matchesStatusFilter(backoff, 'reading'), isFalse);
-    expect(filterByStatus([backoff], {'reading'}), isEmpty);
-    expect(filterByStatus([backoff], {'retrying'}), hasLength(1));
+    expect(matchesStatusFilter(backoff, 'working'), isTrue);
+    expect(matchesStatusFilter(backoff, 'check'), isFalse);
+    expect(filterByStatus([backoff], {'check'}), isEmpty);
+    expect(filterByStatus([backoff], {'working'}), hasLength(1));
   });
 
   test('counts say how many each box would show', () {
@@ -78,7 +77,7 @@ void main() {
     final counts = statusCounts(items);
     expect(counts['saved'], 2);
     expect(counts['failed'], 1);
-    expect(counts['reading'], isNull);
+    expect(counts['working'], isNull);
     // What a count claims must be what ticking it shows.
     for (final entry in counts.entries) {
       expect(filterByStatus(items, {entry.key}), hasLength(entry.value));
