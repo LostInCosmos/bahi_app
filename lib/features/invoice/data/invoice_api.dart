@@ -101,6 +101,19 @@ extension InvoiceApi on ApiClient {
     return JobStatusBatch.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// Every bill this SHOP has uploaded, newest first — not just the ones
+  /// this device is holding. Without it a reinstall or a second phone
+  /// shows an empty capture screen however long the shop's history is.
+  ///
+  /// Keyset paging on [beforeId], replayed from the previous page's
+  /// `nextBeforeId`; the server caps [limit] at 200.
+  Future<UploadPage> listUploads({int limit = 50, int? beforeId}) async {
+    final query = {'limit': '$limit', if (beforeId != null) 'before_id': '$beforeId'};
+    final res = await http.get(_uri('/invoices/extract', query), headers: _authHeader);
+    _checkOk(res);
+    return UploadPage.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
   Future<ExtractionJob> getExtractionJob(int jobId) async {
     final res = await http.get(_uri('/invoices/extract/$jobId'), headers: _authHeader);
     _checkOk(res);

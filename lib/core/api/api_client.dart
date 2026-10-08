@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/models/account.dart';
+import '../../features/capture/models/upload_summary.dart';
 import '../../features/folders/models/folder.dart';
 import '../../features/invoice/models/invoice.dart';
 import '../../features/inventory/models/product.dart';

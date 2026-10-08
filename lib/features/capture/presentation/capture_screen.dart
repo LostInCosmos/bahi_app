@@ -17,12 +17,14 @@ import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../../invoice/presentation/review_screen.dart';
 import '../data/batch_store.dart';
 import '../models/batch_item.dart';
+import '../models/upload_summary.dart';
 import '../widgets/batch_item_card.dart';
 import '../widgets/capture_bottom_bar.dart';
 import '../widgets/status_filter_bar.dart';
 import '../models/status_filter.dart';
 import '../models/pdf_pages.dart';
 import '../widgets/capture_empty_state.dart';
+import '../widgets/upload_history.dart';
 import '../widgets/confirm_bill_dialog.dart';
 import 'crop_screen.dart';
 
@@ -982,20 +984,14 @@ class CaptureScreenState extends State<CaptureScreen> {
               onChanged: (next) => setState(() => _statusFilter = next),
             ),
           Expanded(
-            child: here.isEmpty && subfolders.isEmpty
-                ? (filtering
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text('Nothing here matches those statuses'),
-                        ),
-                      )
-                    : CaptureEmptyState(
-                        onTakePhoto: () => _addPhoto(ImageSource.camera),
-                        onPickFromGallery: _pickManyFromGallery,
-                        onPickPdf: _pickPdf,
-                      ))
-                : _buildGrid(here, subfolders),
+            // Always the scroll view: the shop's bills live inside it, so
+            // short-circuiting to an empty state would hide them.
+            child: _buildGrid(
+              here,
+              subfolders,
+              empty: here.isEmpty && subfolders.isEmpty && _shopBillsShown == 0,
+              filtering: filtering,
+            ),
           ),
           CaptureBottomBar(
             hasItems: _items.isNotEmpty,
@@ -1011,11 +1007,94 @@ class CaptureScreenState extends State<CaptureScreen> {
     );
   }
 
+  /// Take a bill the SHOP has but this DEVICE does not, and make it one of
+  /// ours — then open it exactly as any other card.
+  ///
+  /// Adopting rather than building a second review path is the whole
+  /// trick: once it is a BatchItem, confirm, review, save, move and the
+  /// status loop all work on it unchanged. It also stops the bill being
+  /// drawn twice, because the uploads list leaves out anything already
+  /// held here.
+  final GlobalKey<UploadHistoryState> _uploadHistory = GlobalKey<UploadHistoryState>();
+
+  /// How many of the shop's own bills are listed below the grid. Nothing
+  /// on this device plus nothing here is the only real "no bills yet".
+  int _shopBillsShown = 0;
+
+  Future<void> _adoptAndOpen(UploadSummary upload) async {
+    final existing = _items.where((i) => i.sourceImages.contains(upload.sourceImage));
+    if (existing.isNotEmpty) {
+      await _openItem(existing.first);
+      return;
+    }
+
+    final item = BatchItem(label: 'Bill', pages: [])
+      ..sourceImages = [upload.sourceImage]
+      ..jobId = upload.jobId
+      ..folderId = upload.folderId
+      ..savedInvoiceId = upload.invoiceId
+      ..status = BatchItemStatus.processing;   // until the result is in
+
+    try {
+      // The result is fetched for this one bill only — the list itself
+      // deliberately carries none of them.
+      final job = await ApiClient.instance.getExtractionJob(upload.jobId);
+      final result = job.result;
+      if (result == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('That bill has not finished being read yet.')),
+        );
+        return;
+      }
+      item
+        ..result = result
+        ..jobId = null                          // it is finished; nothing to poll
+        ..status = upload.invoiceId != null
+            ? BatchItemStatus.saved
+            : (result.issues.isEmpty
+                ? BatchItemStatus.pendingConfirm
+                : BatchItemStatus.needsReview);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Couldn't open that bill: $e")),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _items.add(item));
+    await _persistBatch();
+    await _openItem(item);
+    _uploadHistory.currentState?.reload();
+  }
+
   /// Three across, so more bills fit than the old two-up grid; folder tiles sit
   /// above them.
-  Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders) {
+  Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders, {required bool empty, required bool filtering}) {
     return CustomScrollView(
       slivers: [
+        // Shown only when the screen is empty of EVERYTHING — this
+        // device's bills and the shop's alike. It used to depend on the
+        // local grid alone, so a new phone greeted a shop of 214 bills
+        // with an advert for the feature it was already using.
+        if (empty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: filtering
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('Nothing here matches those statuses'),
+                    ),
+                  )
+                : CaptureEmptyState(
+                    onTakePhoto: () => _addPhoto(ImageSource.camera),
+                    onPickFromGallery: _pickManyFromGallery,
+                    onPickPdf: _pickPdf,
+                  ),
+          ),
         if (subfolders.isNotEmpty)
           folderTileGrid(folders: subfolders, onOpen: (f) => _folders.open(f.id), onMenu: _openFolderMenu),
         SliverPadding(
@@ -1052,6 +1131,18 @@ class CaptureScreenState extends State<CaptureScreen> {
               childCount: items.length,
             ),
           ),
+        ),
+        // The shop's own bills, under this device's. Without it the phone
+        // showed nothing at all on a new handset or after a reinstall.
+        UploadHistory(
+          key: _uploadHistory,
+          localItems: _items,
+          folderId: _folders.currentId,
+          selected: _statusFilter,
+          onOpen: _adoptAndOpen,
+          onCount: (n) {
+            if (n != _shopBillsShown) setState(() => _shopBillsShown = n);
+          },
         ),
       ],
     );
