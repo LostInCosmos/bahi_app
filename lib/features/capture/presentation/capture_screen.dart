@@ -478,13 +478,37 @@ class CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
-  void _removeItem(BatchItem item) {
+  /// Throw a bill away.
+  ///
+  /// This used to drop it from THIS device only, which was invisible
+  /// while the phone showed nothing but its own bills. Now that the
+  /// shop's uploads are listed underneath, a local-only removal would be
+  /// a cross that does nothing: the bill reappears from the server a
+  /// moment later. So anything the server knows about is discarded
+  /// there, and the row stays for our team with a "discarded" mark.
+  Future<void> _removeItem(BatchItem item) async {
+    final jobId = item.jobId ?? item.lastJobId;
+    if (jobId != null && item.savedInvoiceId == null) {
+      try {
+        await ApiClient.instance.discardUpload(jobId);
+      } catch (e) {
+        if (!mounted) return;
+        // Left on screen deliberately: a bill that is still on the server
+        // must keep its card, or the shopkeeper thinks it is gone.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't remove that bill: $e")),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
     setState(() => _items.remove(item));
     _persistBatch();
     for (final page in item.pages) {
       final id = page.photoId;
       if (id != null) unawaited(PendingPhotoStore.delete(id));
     }
+    _uploadHistory.currentState?.reload();
   }
 
   // ==================== extraction ====================

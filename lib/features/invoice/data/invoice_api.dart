@@ -114,6 +114,18 @@ extension InvoiceApi on ApiClient {
     return UploadPage.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// Take an upload out of this shop's list, everywhere.
+  ///
+  /// Not a local hide: the server marks the row, so the bill is gone from
+  /// every phone and browser this shop signs in from. Our team can still
+  /// see it. Refused (409) for a bill that has been SAVED — that reverses
+  /// stock and goes through deleteInvoice — and while it is still being
+  /// read.
+  Future<void> discardUpload(int jobId) async {
+    final res = await http.delete(_uri('/invoices/extract/$jobId'), headers: _authHeader);
+    _checkOk(res);
+  }
+
   Future<ExtractionJob> getExtractionJob(int jobId) async {
     final res = await http.get(_uri('/invoices/extract/$jobId'), headers: _authHeader);
     _checkOk(res);
