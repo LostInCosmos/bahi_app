@@ -15,13 +15,14 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 9 |
 | [`lib/core/api`](#libcoreapi) | `Offset2D`, `ApiClient`, `ApiException` | 2 | 13 |
 | [`lib/core/utils`](#libcoreutils) | `BillImageCache`, `PendingPhotoStore`, `recordingErrorMessage` | 4 | 6 |
+| [`lib/core/widgets`](#libcorewidgets) | `DastavezLogo`, `DastavezLogoTile` | 1 | 3 |
 | [`lib/features/auth/data`](#libfeaturesauthdata) | `AuthApi` | 1 | 1 |
 | [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo` | 1 | 2 |
 | [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LoginScreen` | 2 | 2 |
 | [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore` | 1 | 1 |
-| [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem` | 1 | 3 |
+| [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `isPdfPath`, `RenderedPage` +6 | 3 | 3 |
 | [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult` | 2 | 1 |
-| [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction` +3 | 7 | 1 |
+| [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction` +4 | 8 | 1 |
 | [`lib/features/folders/data`](#libfeaturesfoldersdata) | `FolderApi`, `FolderController` | 2 | 4 |
 | [`lib/features/folders/models`](#libfeaturesfoldersmodels) | `Folder`, `FolderTree` | 1 | 4 |
 | [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +4 | 1 | 2 |
@@ -39,7 +40,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/models`](#libfeaturesvoicemodels) | `VoiceLineCandidate`, `BatchAllocation`, `VoiceOrderLine`, `VoiceOrder`, `VoiceOrderJob` +1 | 1 | 3 |
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 
-**Coverage:** 0 of 28 modules state their purpose; 25 of 52 files have a purpose line (1 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 29 modules state their purpose; 28 of 56 files have a purpose line (1 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -113,6 +114,18 @@ Find the module whose names fit what you are adding, then read its section.
 
 ---
 
+### `lib/core/widgets`
+
+| file | lines | purpose |
+|---|---|---|
+| `dastavez_logo.dart` | 98 | The bare mark. It is navy, so it needs a light surface behind it — use  *[DastavezLogo]* |
+
+**Public:** `DastavezLogo`, `DastavezLogoTile`
+
+**Used by:** `lib/features/auth/presentation`, `lib/features/capture/widgets`, `lib/features/home/presentation`
+
+---
+
 ## lib/features/auth
 
 ### `lib/features/auth/data`
@@ -140,11 +153,11 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `account_screen.dart` | 177 | Shop details — the mobile counterpart of the web app's Account page.  *[AccountScreen]* |
-| `login_screen.dart` | 329 | — |
+| `login_screen.dart` | 323 | — |
 
 **Public:** `AccountScreen`, `LoginScreen`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/auth/models`, `lib/features/home/presentation`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/widgets`, `lib/features/auth/models`, `lib/features/home/presentation`
 
 **Used by:** `lib/app`, `lib/features/home/presentation`
 
@@ -156,7 +169,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_store.dart` | 71 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
+| `batch_store.dart` | 76 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
 
 **Public:** `BatchStore`
 
@@ -168,9 +181,11 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item.dart` | 181 | — |
+| `batch_item.dart` | 191 | — |
+| `pdf_pages.dart` | 105 | — |
+| `status_filter.dart` | 75 | The categories a shopkeeper filters the capture grid by (DAS-26).  *[StatusFilter]* |
 
-**Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`
+**Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `isPdfPath`, `RenderedPage`, `TooManyPdfPages`, `renderPdf`, `StatusFilter`, `matchesStatusFilter`, `filterByStatus`, `statusCounts`
 
 **Depends on:** `lib/core/api`, `lib/core/utils`, `lib/features/invoice/models`
 
@@ -180,7 +195,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `capture_screen.dart` | 828 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
+| `capture_screen.dart` | 1060 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
 | `crop_screen.dart` | 115 | One page of a batch capture: drag the four corners onto this bill, pick a  *[CropScreen]* |
 
 **Public:** `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult`
@@ -193,17 +208,18 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item_card.dart` | 218 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
+| `batch_item_card.dart` | 223 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
 | `bill_thumbnail.dart` | 131 | One bill's picture, loaded when the card is actually on screen.  *[BillThumbnail]* |
-| `capture_bottom_bar.dart` | 93 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
-| `capture_empty_state.dart` | 83 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
+| `capture_bottom_bar.dart` | 103 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
+| `capture_empty_state.dart` | 103 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
 | `confirm_bill_dialog.dart` | 43 | — |
 | `crop_canvas.dart` | 198 | Lets the user drag four corner handles onto a photographed bill's edges.  *[CropCanvas]* |
 | `retry_label.dart` | 62 | Shown over a bill the server is retrying. Counts down to the next attempt  *[RetryLabel]* |
+| `status_filter_bar.dart` | 65 | Tickboxes for the statuses a shopkeeper wants to see (DAS-26).  *[StatusFilterBar]* |
 
-**Public:** `BatchItemCard`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog`, `CropCanvas`, `RetryLabel`
+**Public:** `BatchItemCard`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog`, `CropCanvas`, `RetryLabel`, `StatusFilterBar`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/features/capture/models`, `lib/features/invoice/models`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/widgets`, `lib/features/capture/models`, `lib/features/invoice/models`
 
 **Used by:** `lib/features/capture/presentation`
 
@@ -254,11 +270,11 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `home_screen.dart` | 103 | — |
+| `home_screen.dart` | 111 | — |
 
 **Public:** `HomeScreen`
 
-**Depends on:** `lib/core/api`, `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
+**Depends on:** `lib/core/api`, `lib/core/widgets`, `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
 
 **Used by:** `lib/app`, `lib/features/auth/presentation`
 
