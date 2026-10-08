@@ -508,7 +508,7 @@ class CaptureScreenState extends State<CaptureScreen> {
       final id = page.photoId;
       if (id != null) unawaited(PendingPhotoStore.delete(id));
     }
-    _uploadHistory.currentState?.reload();
+    unawaited(_uploadHistory.currentState?.refresh());
   }
 
   // ==================== extraction ====================
@@ -1031,20 +1031,21 @@ class CaptureScreenState extends State<CaptureScreen> {
     );
   }
 
-  /// Take a bill the SHOP has but this DEVICE does not, and make it one of
-  /// ours — then open it exactly as any other card.
-  ///
-  /// Adopting rather than building a second review path is the whole
-  /// trick: once it is a BatchItem, confirm, review, save, move and the
-  /// status loop all work on it unchanged. It also stops the bill being
-  /// drawn twice, because the uploads list leaves out anything already
-  /// held here.
   final GlobalKey<UploadHistoryState> _uploadHistory = GlobalKey<UploadHistoryState>();
 
   /// How many of the shop's own bills are listed below the grid. Nothing
   /// on this device plus nothing here is the only real "no bills yet".
   int _shopBillsShown = 0;
 
+  /// Open a bill the SHOP has but this DEVICE does not, through the same
+  /// confirm / review / save flow as any other card.
+  ///
+  /// It is wrapped in a BatchItem so that flow works on it unchanged — but
+  /// the item is NOT added to the grid. It used to be, and that was the
+  /// bug: the device's own bills draw above the shop's list, so every bill
+  /// you tapped jumped to the top and stayed there, and the list stopped
+  /// being in upload order. A bill's place is where it was uploaded, and
+  /// looking at it must not move it.
   Future<void> _adoptAndOpen(UploadSummary upload) async {
     final existing = _items.where((i) => i.sourceImages.contains(upload.sourceImage));
     if (existing.isNotEmpty) {
@@ -1088,10 +1089,12 @@ class CaptureScreenState extends State<CaptureScreen> {
     }
 
     if (!mounted) return;
-    setState(() => _items.add(item));
-    await _persistBatch();
     await _openItem(item);
-    _uploadHistory.currentState?.reload();
+    if (!mounted) return;
+    // Quietly, not reload(): that empties the list and refetches, which
+    // would throw away the scroll position you are coming back to. A bill
+    // saved in there shows as Saved; nothing moves.
+    unawaited(_uploadHistory.currentState?.refresh());
   }
 
   /// Three across, so more bills fit than the old two-up grid; folder tiles sit

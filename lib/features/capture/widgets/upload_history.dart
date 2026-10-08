@@ -87,6 +87,41 @@ class UploadHistoryState extends State<UploadHistory> {
     await _loadMore();
   }
 
+  /// Fold the newest page into what is already held, WITHOUT emptying the
+  /// list. [reload] clears first, which sends the scroll position back to
+  /// the top — fine for a pull-to-refresh, wrong for "I looked at a bill
+  /// and came back", which is meant to leave you exactly where you were.
+  ///
+  /// Held rows are updated in place (a bill may have been read, saved or
+  /// filed), new uploads arrive at the top, and a held row that falls
+  /// inside the page's range but is missing from it has gone — discarded,
+  /// or moved out — so it is dropped rather than left to linger.
+  Future<void> refresh() async {
+    try {
+      final fetch = widget.fetch ?? ApiClient.instance.listUploads;
+      final page = await fetch(limit: _pageSize, beforeId: null);
+      if (!mounted) return;
+      setState(() {
+        final fresh = {for (final u in page.uploads) u.jobId: u};
+        // The oldest row this page reaches. Past the end of the list the
+        // whole shop is in view, so nothing absent can still exist.
+        final reach = page.nextBeforeId == null || page.uploads.isEmpty
+            ? -1
+            : page.uploads.map((u) => u.jobId).reduce((a, b) => a < b ? a : b);
+
+        _uploads.removeWhere((u) => u.jobId >= reach && !fresh.containsKey(u.jobId));
+        for (var i = 0; i < _uploads.length; i++) {
+          final updated = fresh.remove(_uploads[i].jobId);
+          if (updated != null) _uploads[i] = updated;
+        }
+        _uploads.insertAll(0, fresh.values);
+      });
+    } catch (_) {
+      // Best effort: what is on screen is still correct enough, and the
+      // next scroll or visit will try again.
+    }
+  }
+
   Future<void> _loadMore() async {
     if (_loading) return;
     if (_loadedOnce && _nextBeforeId == null) return;   // the last page is in
@@ -122,7 +157,11 @@ class UploadHistoryState extends State<UploadHistory> {
     };
     final here = _uploads.where((u) =>
         !localPaths.contains(u.sourceImage) && u.folderId == widget.folderId);
-    return filterUploads(here.toList(), widget.selected);
+    // Upload order, stated rather than inherited from however the pages
+    // happened to arrive — a refresh inserts at the top and an update
+    // replaces in place, and neither may reorder what is on screen.
+    final ordered = here.toList()..sort((a, b) => b.jobId.compareTo(a.jobId));
+    return filterUploads(ordered, widget.selected);
   }
 
   int _reported = -1;
@@ -194,7 +233,17 @@ class UploadHistoryState extends State<UploadHistory> {
               (context, i) {
                 // One row from the end, ask for the next page — so the
                 // list keeps up with a scroll rather than stopping at it.
-                if (i >= shown.length - 1 && _nextBeforeId != null) _loadMore();
+                //
+                // After the frame, never during it: _loadMore calls
+                // setState, and a builder that does that throws "setState
+                // called during build". It only shows with MORE THAN ONE
+                // PAGE of bills, which is exactly the shop this exists
+                // for — a shop with fifty or fewer never reaches it.
+                if (i >= shown.length - 1 && _nextBeforeId != null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _loadMore();
+                  });
+                }
                 return _UploadCard(upload: shown[i], onTap: () => widget.onOpen(shown[i]));
               },
               childCount: shown.length,
