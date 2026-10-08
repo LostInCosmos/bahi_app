@@ -17,6 +17,8 @@ import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../../invoice/presentation/review_screen.dart';
 import '../data/batch_store.dart';
 import '../models/batch_item.dart';
+import '../models/bulk.dart';
+import '../models/list_entry.dart';
 import '../models/upload_summary.dart';
 import '../widgets/batch_item_card.dart';
 import '../widgets/capture_bottom_bar.dart';
@@ -24,6 +26,7 @@ import '../widgets/status_filter_bar.dart';
 import '../models/status_filter.dart';
 import '../models/pdf_pages.dart';
 import '../widgets/capture_empty_state.dart';
+import '../widgets/selection_bar.dart';
 import '../widgets/upload_history.dart';
 import '../widgets/confirm_bill_dialog.dart';
 import 'crop_screen.dart';
@@ -486,6 +489,14 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// a cross that does nothing: the bill reappears from the server a
   /// moment later. So anything the server knows about is discarded
   /// there, and the row stays for our team with a "discarded" mark.
+  /// Throw a bill away.
+  ///
+  /// This used to drop it from THIS device only, which was invisible while
+  /// the phone showed nothing but its own bills. Now that the shop's uploads
+  /// are listed too, a local-only removal would be a cross that does
+  /// nothing: the bill reappears from the server a moment later. So anything
+  /// the server knows about is discarded there, and the row stays for our
+  /// team with a "discarded" mark.
   Future<void> _removeItem(BatchItem item) async {
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId != null && item.savedInvoiceId == null) {
@@ -495,20 +506,30 @@ class CaptureScreenState extends State<CaptureScreen> {
         if (!mounted) return;
         // Left on screen deliberately: a bill that is still on the server
         // must keep its card, or the shopkeeper thinks it is gone.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Couldn't remove that bill: $e")),
-        );
+        _say("Couldn't remove that bill: $e");
         return;
       }
     }
     if (!mounted) return;
+    _dropLocal(item);
+    unawaited(_uploadHistory.currentState?.refresh());
+  }
+
+  /// Forget a bill on THIS device: its card, its saved state and its photos.
+  /// Nothing about the server — callers settle that first.
+  void _dropLocal(BatchItem item) {
     setState(() => _items.remove(item));
     _persistBatch();
     for (final page in item.pages) {
       final id = page.photoId;
       if (id != null) unawaited(PendingPhotoStore.delete(id));
     }
-    unawaited(_uploadHistory.currentState?.refresh());
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ==================== extraction ====================
@@ -949,14 +970,21 @@ class CaptureScreenState extends State<CaptureScreen> {
     );
     if (choice == null || choice.folderId == item.folderId || !mounted) return;
     final savedId = item.savedInvoiceId;
-    if (item.status == BatchItemStatus.saved && savedId != null) {
-      try {
+    final jobId = item.jobId ?? item.lastJobId;
+    try {
+      if (item.status == BatchItemStatus.saved && savedId != null) {
         await ApiClient.instance.moveInvoice(savedId, folderId: choice.folderId);
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
-        return;
+      } else if (jobId != null) {
+        // A bill that has been read but not saved is filed on the server
+        // too. Before it could only be filed on this phone, so the shop's
+        // other devices never saw the move, and saving elsewhere dropped
+        // the bill back at home.
+        await ApiClient.instance.moveUpload(jobId, folderId: choice.folderId);
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
+      return;
     }
     if (!mounted) return;
     setState(() => item.folderId = choice.folderId);
@@ -1001,11 +1029,26 @@ class CaptureScreenState extends State<CaptureScreen> {
               padding: const EdgeInsets.symmetric(horizontal: Spacing.m, vertical: Spacing.s),
               child: Align(alignment: Alignment.centerLeft, child: Text(_pdfProgress!)),
             ),
-          if (_items.isNotEmpty || filtering)
-            StatusFilterBar(
-              items: inFolder,
-              selected: _statusFilter,
-              onChanged: (next) => setState(() => _statusFilter = next),
+          // Shown whenever there is anything to filter — which on a freshly
+          // signed-in phone means the shop's bills, not this device's. It
+          // used to be gated on this device's bills alone, so exactly the
+          // phone with the longest history had no way to filter it.
+          if (_items.isNotEmpty || filtering || _visible.isNotEmpty || _choosing)
+            Row(
+              children: [
+                Expanded(
+                  child: StatusFilterBar(
+                    items: inFolder,
+                    counts: _countsAcrossList(inFolder),
+                    selected: _statusFilter,
+                    onChanged: (next) => setState(() => _statusFilter = next),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _choosing ? _stopChoosing : () => setState(() => _choosing = true),
+                  child: Text(_choosing ? 'Done' : 'Select'),
+                ),
+              ],
             ),
           Expanded(
             // Always the scroll view: the shop's bills live inside it, so
@@ -1013,29 +1056,181 @@ class CaptureScreenState extends State<CaptureScreen> {
             child: _buildGrid(
               here,
               subfolders,
-              empty: here.isEmpty && subfolders.isEmpty && _shopBillsShown == 0,
+              empty: here.isEmpty && subfolders.isEmpty && _visible.isEmpty && _listSettled,
               filtering: filtering,
             ),
           ),
-          CaptureBottomBar(
-            hasItems: _items.isNotEmpty,
-            allResolved: _allResolved,
-            hasUnresolved: _hasUnresolved,
-            onTakePhoto: () => _addPhoto(ImageSource.camera),
-            onPickFromGallery: _pickManyFromGallery,
-            onPickPdf: _pickPdf,
-            onFinish: _finish,
-          ),
+          if (_choosing)
+            SelectionBar(
+              count: _chosenEntries().length,
+              more: _visibleMore,
+              busy: _bulkBusy,
+              onSelectAll: _selectAll,
+              onMove: _moveChosen,
+              onDiscard: _discardChosen,
+            )
+          else
+            CaptureBottomBar(
+              hasItems: _items.isNotEmpty,
+              allResolved: _allResolved,
+              hasUnresolved: _hasUnresolved,
+              onTakePhoto: () => _addPhoto(ImageSource.camera),
+              onPickFromGallery: _pickManyFromGallery,
+              onPickPdf: _pickPdf,
+              onFinish: _finish,
+            ),
         ],
       ),
     );
   }
 
+  /// What each box would show if ticked: this device's bills in the folder
+  /// plus the shop's, so the number on a box means the same as the list.
+  Map<String, int> _countsAcrossList(List<BatchItem> inFolder) {
+    final counts = {...statusCounts(inFolder)};
+    _serverCounts.forEach((key, n) => counts[key] = (counts[key] ?? 0) + n);
+    return counts;
+  }
+
   final GlobalKey<UploadHistoryState> _uploadHistory = GlobalKey<UploadHistoryState>();
 
-  /// How many of the shop's own bills are listed below the grid. Nothing
-  /// on this device plus nothing here is the only real "no bills yet".
-  int _shopBillsShown = 0;
+  // ---- choosing several bills ----
+  //
+  // `_visible` is what the list last reported it is drawing, and it is the
+  // ONLY thing the actions are measured against: ticking a bill and then
+  // filtering it out of view must not leave it armed for a Discard the
+  // shopkeeper can no longer see.
+  bool _choosing = false;
+  final Set<String> _chosen = {};
+  List<ListEntry> _visible = const [];
+  bool _visibleMore = false;
+  bool _listSettled = false;
+  Map<String, int> _serverCounts = const {};
+  bool _bulkBusy = false;
+
+  // A bill on this device has no id of its own; this gives each card one for
+  // the life of the screen so a selection can name it.
+  final Expando<String> _entryIds = Expando<String>();
+  int _nextEntryId = 0;
+  String _idOf(BatchItem item) => _entryIds[item] ??= 'l:${_nextEntryId++}';
+
+  void _onEntries(
+    List<ListEntry> entries, {
+    required bool more,
+    required bool settled,
+    required Map<String, int> counts,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _visible = entries;
+      _visibleMore = more;
+      _listSettled = settled;
+      _serverCounts = counts;
+    });
+  }
+
+  void _toggleChosen(String id) {
+    setState(() {
+      if (!_chosen.remove(id)) _chosen.add(id);
+    });
+  }
+
+  void _stopChoosing() {
+    setState(() {
+      _choosing = false;
+      _chosen.clear();
+    });
+  }
+
+  void _selectAll() => setState(() => _chosen.addAll(_visible.map((e) => e.id)));
+
+  List<ListEntry> _chosenEntries() => _visible.where((e) => _chosen.contains(e.id)).toList();
+
+  Future<void> _discardChosen() async {
+    final plan = planDiscard(_chosenEntries());
+    if (plan.take.isEmpty) {
+      _say(summarise('Discarded', const BulkResult(0, []),
+          savedLeft: plan.savedLeft, readingLeft: plan.readingLeft));
+      return;
+    }
+    final n = plan.take.length;
+    // The one confirmation in the flow: it cannot be undone from here, and
+    // it reaches every device the shop signs in from.
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Discard $n bill${n == 1 ? '' : 's'}?'),
+        content: Text('${n == 1 ? 'It' : 'They'} will disappear from this shop on every device.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Discard')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _bulkBusy = true);
+    final result = await runBulk(plan.take, (e) async {
+      final job = jobIdOf(e);
+      // The server first: a bill the server refused must keep its card, or
+      // the shopkeeper believes it is gone when it is not.
+      if (job != null) await ApiClient.instance.discardUpload(job);
+      final item = e.item;
+      if (item != null) _dropLocal(item);
+    });
+    final failed = {for (final f in result.failed) f.entry.id};
+    final gone = [for (final e in plan.take) if (!failed.contains(e.id)) jobIdOf(e)].whereType<int>();
+    _uploadHistory.currentState?.forget(gone);
+    if (!mounted) return;
+    setState(() {
+      _chosen.clear();
+      _bulkBusy = false;
+    });
+    _say(summarise('Discarded', result, savedLeft: plan.savedLeft, readingLeft: plan.readingLeft));
+    unawaited(_folders.load());
+  }
+
+  Future<void> _moveChosen() async {
+    final entries = _chosenEntries();
+    if (entries.isEmpty) return;
+    final n = entries.length;
+    final choice = await showFolderPicker(
+      context,
+      tree: _folders.tree,
+      title: 'Move $n bill${n == 1 ? '' : 's'} to…',
+      currentId: _folders.currentId,
+    );
+    if (choice == null || !mounted) return;
+
+    setState(() => _bulkBusy = true);
+    final refile = <int, int?>{};
+    final result = await runBulk(entries, (e) async {
+      final step = moveStep(e);
+      switch (step.via) {
+        case MoveVia.invoice:
+          await ApiClient.instance.moveInvoice(step.id!, folderId: choice.folderId);
+        case MoveVia.job:
+          await ApiClient.instance.moveUpload(step.id!, folderId: choice.folderId);
+        case MoveVia.local:
+          break;
+      }
+      final item = e.item;
+      if (item != null) {
+        item.folderId = choice.folderId;
+      } else {
+        refile[e.upload!.jobId] = choice.folderId;
+      }
+    });
+    _uploadHistory.currentState?.refile(refile);
+    if (!mounted) return;
+    setState(() {
+      _chosen.clear();
+      _bulkBusy = false;
+    });
+    await _persistBatch();
+    _say(summarise('Moved', result));
+    unawaited(_folders.load());   // the tiles count what is inside them
+  }
 
   /// Open a bill the SHOP has but this DEVICE does not, through the same
   /// confirm / review / save flow as any other card.
@@ -1097,15 +1292,56 @@ class CaptureScreenState extends State<CaptureScreen> {
     unawaited(_uploadHistory.currentState?.refresh());
   }
 
-  /// Three across, so more bills fit than the old two-up grid; folder tiles sit
-  /// above them.
+  /// ONE list: this device's bills and the shop's, three across, in the order
+  /// they were uploaded. Folder tiles sit above them.
   Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders, {required bool empty, required bool filtering}) {
+    // This device's bills as cards on the shared list. Each carries the place
+    // it sits — its upload order — so it lands among the shop's bills
+    // rather than above them all.
+    final localEntries = [
+      for (var i = 0; i < items.length; i++)
+        () {
+          final item = items[i];
+          final id = _idOf(item);
+          return ListEntry(
+            id: id,
+            sortKey: localSortKey(item, _items.indexOf(item)),
+            item: item,
+            card: BatchItemCard(
+              key: ValueKey(item),
+              item: item,
+              choosing: _choosing,
+              chosen: _chosen.contains(id),
+              onTap: () => _choosing ? _toggleChosen(id) : _openItem(item),
+              // While choosing, the per-bill controls go: acting on one bill
+              // by its own button and on a selection at once would be two
+              // ways to do the same thing on one screen.
+              onDelete: !_choosing && item.status != BatchItemStatus.processing && item.status != BatchItemStatus.saved
+                  ? () => _removeItem(item)
+                  : null,
+              onReprocess: !_choosing &&
+                      item.isUploaded &&
+                      item.status != BatchItemStatus.preparing &&
+                      item.status != BatchItemStatus.processing
+                  ? () => _reprocessItem(item)
+                  : null,
+              // Not while an upload or extraction is in flight; its folder
+              // is read when it is saved, so it can be moved any time after.
+              onMove: !_choosing && item.status != BatchItemStatus.preparing && item.status != BatchItemStatus.processing
+                  ? () => _moveItem(item)
+                  : null,
+            ),
+          );
+        }(),
+    ];
+
     return CustomScrollView(
       slivers: [
         // Shown only when the screen is empty of EVERYTHING — this
-        // device's bills and the shop's alike. It used to depend on the
-        // local grid alone, so a new phone greeted a shop of 214 bills
-        // with an advert for the feature it was already using.
+        // device's bills and the shop's alike, and only once the shop's
+        // list has actually answered. It used to depend on the local grid
+        // alone, so a new phone greeted a shop of 214 bills with an advert
+        // for the feature it was already using.
         if (empty)
           SliverFillRemaining(
             hasScrollBody: false,
@@ -1124,52 +1360,17 @@ class CaptureScreenState extends State<CaptureScreen> {
           ),
         if (subfolders.isNotEmpty)
           folderTileGrid(folders: subfolders, onOpen: (f) => _folders.open(f.id), onMenu: _openFolderMenu),
-        SliverPadding(
-          padding: const EdgeInsets.all(Spacing.m),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: Spacing.s,
-              crossAxisSpacing: Spacing.s,
-              childAspectRatio: 0.75,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, i) {
-                final item = items[i];
-                return BatchItemCard(
-                  key: ValueKey(item),
-                  item: item,
-                  onTap: () => _openItem(item),
-                  onDelete: item.status != BatchItemStatus.processing && item.status != BatchItemStatus.saved
-                      ? () => _removeItem(item)
-                      : null,
-                  onReprocess: item.isUploaded &&
-                          item.status != BatchItemStatus.preparing &&
-                          item.status != BatchItemStatus.processing
-                      ? () => _reprocessItem(item)
-                      : null,
-                  // Not while an upload or extraction is in flight; its folder
-                  // is read when it is saved, so it can be moved any time after.
-                  onMove: item.status != BatchItemStatus.preparing && item.status != BatchItemStatus.processing
-                      ? () => _moveItem(item)
-                      : null,
-                );
-              },
-              childCount: items.length,
-            ),
-          ),
-        ),
-        // The shop's own bills, under this device's. Without it the phone
-        // showed nothing at all on a new handset or after a reinstall.
         UploadHistory(
           key: _uploadHistory,
           localItems: _items,
+          localEntries: localEntries,
           folderId: _folders.currentId,
           selected: _statusFilter,
+          choosing: _choosing,
+          chosen: _chosen,
+          onToggle: _toggleChosen,
           onOpen: _adoptAndOpen,
-          onCount: (n) {
-            if (n != _shopBillsShown) setState(() => _shopBillsShown = n);
-          },
+          onEntries: _onEntries,
         ),
       ],
     );

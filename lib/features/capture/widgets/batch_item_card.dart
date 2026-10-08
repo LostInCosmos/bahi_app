@@ -5,6 +5,7 @@ import '../../../app/theme/app_theme.dart';
 import '../models/batch_item.dart';
 import 'bill_thumbnail.dart';
 import 'retry_label.dart';
+import 'selection_mark.dart';
 
 /// One bill in the capture grid: its corrected photo, a status badge, and
 /// delete / reprocess controls overlaid on top.
@@ -15,6 +16,14 @@ class BatchItemCard extends StatelessWidget {
   final VoidCallback? onReprocess;
   final VoidCallback? onMove;
 
+  /// Bills are being chosen: a tap picks this one, and the card wears a ring
+  /// and a tick when [chosen]. The screen passes null for the delete, move
+  /// and reprocess controls while this is on — acting on one bill by its own
+  /// button and on a selection at once would be two ways to do the same
+  /// thing on the same screen.
+  final bool choosing;
+  final bool chosen;
+
   const BatchItemCard({
     super.key,
     required this.item,
@@ -22,6 +31,8 @@ class BatchItemCard extends StatelessWidget {
     required this.onDelete,
     required this.onReprocess,
     this.onMove,
+    this.choosing = false,
+    this.chosen = false,
   });
 
   @override
@@ -35,7 +46,9 @@ class BatchItemCard extends StatelessWidget {
       elevation: 1,
       shadowColor: Colors.black.withValues(alpha: 0.15),
       child: InkWell(
-        onTap: busy
+        // A bill still being read cannot be opened, but it can be CHOSEN:
+        // the selection decides later what may be done to it.
+        onTap: busy && !choosing
             ? null
             : () {
                 HapticFeedback.selectionClick();
@@ -131,6 +144,7 @@ class BatchItemCard extends StatelessWidget {
                   tooltip: 'Move to folder…',
                 ),
               ),
+            ...selectionOverlay(context, choosing: choosing, chosen: chosen),
             Positioned(
               left: Spacing.xs,
               right: Spacing.xs,

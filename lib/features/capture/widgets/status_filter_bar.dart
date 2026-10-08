@@ -10,23 +10,28 @@ import '../models/status_filter.dart';
 /// control that says exactly that, and it already announces its selected
 /// state to a screen reader.
 ///
-/// Counts come from the cards on this device, which on mobile is all
-/// there is — the phone does not read the shop-wide uploads list.
+/// Counts cover everything on the list — this device's bills AND the
+/// shop's — when the screen supplies [counts]; without them the bar counts
+/// only [items], as it did when the phone could see nothing else.
 class StatusFilterBar extends StatelessWidget {
   final List<BatchItem> items;
+
+  /// What each box would show if ticked, across the whole list.
+  final Map<String, int>? counts;
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
 
   const StatusFilterBar({
     super.key,
     required this.items,
+    this.counts,
     required this.selected,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final counts = statusCounts(items);
+    final counts = this.counts ?? statusCounts(items);
     return SizedBox(
       height: 44,
       child: ListView(

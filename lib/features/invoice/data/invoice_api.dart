@@ -114,6 +114,20 @@ extension InvoiceApi on ApiClient {
     return UploadPage.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// File a bill that has been read but not yet saved. `null` is home.
+  ///
+  /// A folder used to live only on a saved invoice, so most of the capture
+  /// screen could not be filed at all. A saved bill is refused (409) — it is
+  /// moved through [moveInvoice], so the two places cannot disagree.
+  Future<void> moveUpload(int jobId, {required int? folderId}) async {
+    final res = await http.patch(
+      _uri('/invoices/extract/$jobId/folder'),
+      headers: {..._authHeader, 'Content-Type': 'application/json'},
+      body: jsonEncode({'folder_id': folderId}),
+    );
+    _checkOk(res);
+  }
+
   /// Take an upload out of this shop's list, everywhere.
   ///
   /// Not a local hide: the server marks the row, so the bill is gone from

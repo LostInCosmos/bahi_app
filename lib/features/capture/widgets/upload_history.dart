@@ -4,21 +4,28 @@ import 'package:flutter/services.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../models/batch_item.dart';
+import '../models/list_entry.dart';
 import '../models/status_filter.dart';
 import '../models/upload_summary.dart';
 import 'bill_thumbnail.dart';
+import 'selection_mark.dart';
 
-/// The shop's own bills, under the ones this device is holding.
+/// Every bill, in ONE list: the ones this device holds and the shop's own.
 ///
-/// The capture grid above shows what was photographed on THIS phone. That
-/// is all the phone could ever show: a reinstall, a second handset, or a
-/// shopkeeper signing in somewhere new saw an empty screen however much
-/// history the shop had — one shop had 214 uploads and saw none of them.
-/// The web app grew this list first (`UploadHistory.jsx`); this is its
-/// counterpart, down to the same categories and wording.
+/// This device could only ever show what was photographed on it, so a
+/// reinstall, a second handset, or a new login saw an empty screen however
+/// much history the shop had — one shop had 214 uploads and saw none of
+/// them. Then the shop's bills were listed too, but UNDER the device's own
+/// in a separate group, and a bill moved between the two the moment it was
+/// opened.
 ///
-/// A bill already on this device is left out rather than drawn twice —
-/// matched on its photo path, the one thing both sides agree on.
+/// Now both are cards in the same grid, sorted by upload order and nothing
+/// else, so there is no "which copy is this" to notice — and no jumping.
+/// The web app's `UploadHistory.jsx` does the same.
+///
+/// A bill already on this device is left out of the shop's half rather
+/// than drawn twice — matched on its photo path, the one thing both sides
+/// agree on.
 class UploadHistory extends StatefulWidget {
   /// Bills held on this device, so theirs are not listed twice.
   final List<BatchItem> localItems;
@@ -30,16 +37,38 @@ class UploadHistory extends StatefulWidget {
   /// The status boxes currently ticked. Empty means everything.
   final Set<String> selected;
 
-  /// Take a server bill onto this device and open it. The screen adopts
-  /// it as a BatchItem, so every existing flow — confirm, review, save,
-  /// move — works on it without being reimplemented here.
+  /// Open a bill from the shop's list through the normal confirm / review /
+  /// save flow, without adding it to this device's own bills.
   final Future<void> Function(UploadSummary upload) onOpen;
 
-  /// How many of the shop's bills this list is showing. The screen needs
-  /// it to decide whether it is REALLY empty: without it, a phone with no
-  /// bills of its own drew "Photograph a supplier bill" over a shop with
-  /// 214 of them, because the only thing it could see was its own grid.
-  final void Function(int shown)? onCount;
+  /// This device's own bills as cards, ready to draw. Built by the screen,
+  /// which owns what tapping, retrying and removing them does.
+  final List<ListEntry> localEntries;
+
+  /// Whether a tap picks a bill instead of opening it, and which are
+  /// picked. Opening and picking are different intents; one gesture cannot
+  /// mean both.
+  final bool choosing;
+  final Set<String> chosen;
+  final void Function(String id)? onToggle;
+
+  /// What is on screen, in order. The screen needs it for "Select all" and
+  /// for acting on exactly what the shopkeeper can see — and to decide
+  /// whether it is REALLY empty: a phone with no bills of its own drew
+  /// "Photograph a supplier bill" over a shop with 214 of them.
+  ///
+  /// [settled] is false until the first page has arrived (or failed), so an
+  /// empty list that is merely still loading is not mistaken for no bills.
+  ///
+  /// [counts] tallies the shop's bills in this folder by category, NOT yet
+  /// narrowed by the ticked boxes — what a box would show if ticked, which
+  /// is what the number on it means.
+  final void Function(
+    List<ListEntry> entries, {
+    required bool more,
+    required bool settled,
+    required Map<String, int> counts,
+  })? onEntries;
 
   /// How to fetch a page. Defaults to the real client; injectable so the
   /// list can be driven in a test without a network, the same way
@@ -52,7 +81,11 @@ class UploadHistory extends StatefulWidget {
     required this.folderId,
     required this.selected,
     required this.onOpen,
-    this.onCount,
+    this.localEntries = const [],
+    this.choosing = false,
+    this.chosen = const {},
+    this.onToggle,
+    this.onEntries,
     this.fetch,
   });
 
@@ -122,6 +155,27 @@ class UploadHistoryState extends State<UploadHistory> {
     }
   }
 
+  /// A bill the shopkeeper discarded: gone from the list at once, rather
+  /// than waiting for the next refresh — which only reaches the newest page
+  /// and so would leave an older discarded bill on screen.
+  void forget(Iterable<int> jobIds) {
+    final gone = jobIds.toSet();
+    if (gone.isEmpty) return;
+    setState(() => _uploads.removeWhere((u) => gone.contains(u.jobId)));
+  }
+
+  /// Bills filed into another folder: they leave this view, or arrive in
+  /// it, at once. `null` is home.
+  void refile(Map<int, int?> folderByJob) {
+    if (folderByJob.isEmpty) return;
+    setState(() {
+      for (var i = 0; i < _uploads.length; i++) {
+        final id = _uploads[i].jobId;
+        if (folderByJob.containsKey(id)) _uploads[i] = _uploads[i].withFolder(folderByJob[id]);
+      }
+    });
+  }
+
   Future<void> _loadMore() async {
     if (_loading) return;
     if (_loadedOnce && _nextBeforeId == null) return;   // the last page is in
@@ -149,63 +203,93 @@ class UploadHistoryState extends State<UploadHistory> {
     }
   }
 
-  /// What to draw: the shop's bills, minus the ones already on this
-  /// device, in the folder being looked at, matching the ticked boxes.
-  List<UploadSummary> get _shown {
+  /// The shop's bills in the folder being looked at, minus the ones already
+  /// on this device — before any status box narrows them.
+  List<UploadSummary> get _inFolder {
     final localPaths = <String>{
       for (final item in widget.localItems) ...item.sourceImages,
     };
-    final here = _uploads.where((u) =>
-        !localPaths.contains(u.sourceImage) && u.folderId == widget.folderId);
+    return _uploads
+        .where((u) => !localPaths.contains(u.sourceImage) && u.folderId == widget.folderId)
+        .toList();
+  }
+
+  /// What to draw: [_inFolder] in upload order, matching the ticked boxes.
+  List<UploadSummary> get _shown {
     // Upload order, stated rather than inherited from however the pages
     // happened to arrive — a refresh inserts at the top and an update
     // replaces in place, and neither may reorder what is on screen.
-    final ordered = here.toList()..sort((a, b) => b.jobId.compareTo(a.jobId));
+    final ordered = _inFolder..sort((a, b) => b.jobId.compareTo(a.jobId));
     return filterUploads(ordered, widget.selected);
   }
 
-  int _reported = -1;
+  Map<String, int> get _counts {
+    final tally = <String, int>{};
+    for (final u in _inFolder) {
+      final key = uploadCategory(u);
+      tally[key] = (tally[key] ?? 0) + 1;
+    }
+    return tally;
+  }
+
+  String _reportedKey = '';
 
   /// Told to the screen after the frame, never during it — a parent that
-  /// rebuilds mid-build is an error, and this is only ever read to choose
-  /// between an empty state and a list.
-  void _report(int count) {
-    if (count == _reported) return;
-    _reported = count;
-    final tell = widget.onCount;
+  /// rebuilds mid-build is an error. Keyed on the ids, so a card changing
+  /// its status does not re-announce an unchanged set.
+  void _report(List<ListEntry> entries) {
+    final tell = widget.onEntries;
     if (tell == null) return;
+    final settled = _loadedOnce || _error != null;
+    final counts = _counts;
+    final key = '${entries.map((e) => e.id).join(',')}|${_nextBeforeId != null}|$settled|'
+        '${(counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key))).join(',')}';
+    if (key == _reportedKey) return;
+    _reportedKey = key;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) tell(count);
+      if (mounted) tell(entries, more: _nextBeforeId != null, settled: settled, counts: counts);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!wantsUploads(widget.selected)) {
-      _report(0);
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
+    // The shop's rows are optional; this device's own cards are not. A
+    // failed fetch, or "To crop" being the only box ticked, must each still
+    // leave the device's own bills on screen — they used to take the whole
+    // list with them.
+    final showServer = wantsUploads(widget.selected);
+    final serverEntries = showServer
+        ? _shown.map((u) {
+            final id = 'j:${u.jobId}';
+            return ListEntry(
+              id: id,
+              sortKey: u.jobId,
+              upload: u,
+              card: _UploadCard(
+                key: ValueKey(id),
+                upload: u,
+                choosing: widget.choosing,
+                chosen: widget.chosen.contains(id),
+                onTap: () => widget.choosing ? widget.onToggle?.call(id) : widget.onOpen(u),
+              ),
+            );
+          }).toList()
+        : <ListEntry>[];
 
-    final shown = _shown;
-    _report(shown.length);
-    if (shown.isEmpty && !_loading && _error == null) {
+    // Strictly by upload order, whichever half a card came from.
+    final entries = [...widget.localEntries, ...serverEntries]
+      ..sort((a, b) => b.sortKey.compareTo(a.sortKey));
+    _report(entries);
+
+    if (entries.isEmpty && !_loading && _error == null) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
     return SliverMainAxisGroup(
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(Spacing.m, Spacing.l, Spacing.m, Spacing.s),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              widget.folderId == null ? 'Earlier uploads' : 'Bills in this folder',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-        ),
-        if (_error != null)
+        if (_error != null && showServer)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
+            padding: const EdgeInsets.fromLTRB(Spacing.m, Spacing.m, Spacing.m, 0),
             sliver: SliverToBoxAdapter(
               child: Row(
                 children: [
@@ -220,8 +304,10 @@ class UploadHistoryState extends State<UploadHistory> {
               ),
             ),
           ),
+        // One grid and no heading: a file manager is a list of files, not a
+        // "recent" group stacked over an "earlier" one.
         SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
+          padding: const EdgeInsets.all(Spacing.m),
           sliver: SliverGrid(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
@@ -239,14 +325,14 @@ class UploadHistoryState extends State<UploadHistory> {
                 // called during build". It only shows with MORE THAN ONE
                 // PAGE of bills, which is exactly the shop this exists
                 // for — a shop with fifty or fewer never reaches it.
-                if (i >= shown.length - 1 && _nextBeforeId != null) {
+                if (i >= entries.length - 1 && _nextBeforeId != null && showServer) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) _loadMore();
                   });
                 }
-                return _UploadCard(upload: shown[i], onTap: () => widget.onOpen(shown[i]));
+                return entries[i].card;
               },
-              childCount: shown.length,
+              childCount: entries.length,
             ),
           ),
         ),
@@ -266,8 +352,16 @@ class UploadHistoryState extends State<UploadHistory> {
 class _UploadCard extends StatelessWidget {
   final UploadSummary upload;
   final VoidCallback onTap;
+  final bool choosing;
+  final bool chosen;
 
-  const _UploadCard({required this.upload, required this.onTap});
+  const _UploadCard({
+    super.key,
+    required this.upload,
+    required this.onTap,
+    this.choosing = false,
+    this.chosen = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +411,7 @@ class _UploadCard extends StatelessWidget {
               ),
             ),
             Positioned(top: Spacing.xs, left: Spacing.xs, child: _badge(context, category)),
+            ...selectionOverlay(context, choosing: choosing, chosen: chosen),
           ],
         ),
       ),

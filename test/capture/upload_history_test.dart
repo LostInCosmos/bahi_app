@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
+import 'package:gst_bill_app/features/capture/models/list_entry.dart';
 import 'package:gst_bill_app/features/capture/models/status_filter.dart';
 import 'package:gst_bill_app/features/capture/models/upload_summary.dart';
 import 'package:gst_bill_app/features/capture/widgets/upload_history.dart';
@@ -149,7 +150,9 @@ void main() {
       ])));
       await tester.pump();
 
-      expect(find.text('Earlier uploads'), findsOneWidget);
+      // One list, no headings: a file manager is a list of files, not a
+      // "recent" group stacked over an "earlier" one.
+      expect(find.text('Earlier uploads'), findsNothing);
       expect(find.text('Check 3'), findsOneWidget);
       expect(find.text('Check & save'), findsOneWidget);
       expect(find.text('Saved'), findsOneWidget);
@@ -181,8 +184,12 @@ void main() {
       )));
       await tester.pump();
 
-      expect(find.text('Bills in this folder'), findsOneWidget);
+      expect(find.text('Bills in this folder'), findsNothing);
       expect(find.text('Saved'), findsOneWidget);
+      // Only this folder's bill. The fixture also holds an unfiled bill
+      // (which would read "Check & save") and one filed elsewhere (a second
+      // "Saved"); neither may be in the way.
+      expect(find.text('Check & save'), findsNothing);
     });
 
     testWidgets('tells the screen how many it is showing', (tester) async {
@@ -405,6 +412,282 @@ void main() {
       expect(find.text('Check 1'), findsOneWidget);
     });
   });
+
+
+  group('one list for both halves', () {
+    ListEntry local(String label, int sortKey) => ListEntry(
+          id: 'l:$label',
+          sortKey: sortKey,
+          item: BatchItem(label: label, pages: [])..lastJobId = sortKey,
+          card: SizedBox(key: ValueKey('local-$label'), width: 40, height: 40, child: Text(label)),
+        );
+
+    testWidgets('a device bill sits BETWEEN shop bills, in upload order', (tester) async {
+      // 30 and 10 are the shop's; 20 is held on this phone. Before, the
+      // phone's bill drew above ALL of the shop's, whatever its age.
+      await tester.pumpWidget(_host(_list(
+        localEntries: [local('LOCAL20', 20)],
+        uploads: [
+          _upload(jobId: 30, sourceImage: '8/30.jpg', issueCount: 3),
+          _upload(jobId: 10, sourceImage: '8/10.jpg', issueCount: 1),
+        ],
+      )));
+      await tester.pump();
+
+      double x(Finder f) => tester.getTopLeft(f).dx;
+      expect(x(find.text('Check 3')) < x(find.text('LOCAL20')), isTrue);
+      expect(x(find.text('LOCAL20')) < x(find.text('Check 1')), isTrue);
+    });
+
+    testWidgets('a bill held on this phone never moves when it is opened or filed', (tester) async {
+      // Its place is its job id. Re-sorting after a status change or a
+      // folder change must put it back exactly where it was.
+      final a = local('A', 20);
+      await tester.pumpWidget(_host(_list(
+        localEntries: [a],
+        uploads: [_upload(jobId: 30, sourceImage: '8/30.jpg', issueCount: 3)],
+      )));
+      await tester.pump();
+      final before = tester.getTopLeft(find.text('A'));
+
+      a.item!
+        ..status = BatchItemStatus.saved
+        ..folderId = null;
+      await tester.pumpWidget(_host(_list(
+        localEntries: [a],
+        uploads: [_upload(jobId: 30, sourceImage: '8/30.jpg', issueCount: 3)],
+      )));
+      await tester.pump();
+
+      expect(tester.getTopLeft(find.text('A')), before);
+    });
+
+    testWidgets('reports every card, device and shop alike, in order', (tester) async {
+      List<ListEntry> seen = const [];
+      await tester.pumpWidget(_host(_list(
+        localEntries: [local('A', 20)],
+        uploads: [_upload(jobId: 30, sourceImage: '8/30.jpg'), _upload(jobId: 10, sourceImage: '8/10.jpg')],
+        onEntries: (e) => seen = e,
+      )));
+      await tester.pumpAndSettle();
+
+      expect(seen.map((e) => e.id), ['j:30', 'l:A', 'j:10']);
+    });
+
+    testWidgets("the phone's own bills survive the shop's list failing", (tester) async {
+      // A failed fetch used to take the whole list with it, including
+      // bills that live on this device and need no network at all.
+      await tester.pumpWidget(_host(UploadHistory(
+        localItems: const [],
+        localEntries: [local('A', 20)],
+        folderId: null,
+        selected: const {},
+        onOpen: (_) async {},
+        fetch: ({int limit = 50, int? beforeId}) async => throw Exception('offline'),
+      )));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+    });
+
+    testWidgets('only "To crop" ticked hides the shop\'s half but not the phone\'s', (tester) async {
+      await tester.pumpWidget(_host(_list(
+        selected: const {'tocrop'},
+        localEntries: [local('A', 20)],
+        uploads: [_upload(jobId: 30, sourceImage: '8/30.jpg', issueCount: 3)],
+      )));
+      await tester.pump();
+
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('Check 3'), findsNothing);
+    });
+
+    testWidgets('reports what each box would show, before any box narrows it', (tester) async {
+      // A box is TICKED ("saved"), yet the number on every box must still
+      // be what ticking it would show — a count that shrinks as other boxes
+      // are ticked is a count nobody can read.
+      Map<String, int> seen = const {};
+      await tester.pumpWidget(_host(UploadHistory(
+        localItems: const [],
+        folderId: null,
+        selected: const {'saved'},
+        onOpen: (_) async {},
+        onEntries: (entries, {required more, required settled, required counts}) => seen = counts,
+        fetch: ({int limit = 50, int? beforeId}) async => UploadPage(uploads: [
+              _upload(jobId: 3, sourceImage: '8/3.jpg', issueCount: 2),
+              _upload(jobId: 2, sourceImage: '8/2.jpg'),
+              _upload(jobId: 1, sourceImage: '8/1.jpg', invoiceId: 4),
+            ]),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(seen, {'review': 1, 'check': 1, 'saved': 1});
+    });
+
+    testWidgets("is not \"settled\" until the shop's list has answered", (tester) async {
+      // An empty list that is merely still loading must not read as "no
+      // bills" — that drew "Photograph a supplier bill" over a shop of 214.
+      final answer = Completer<UploadPage>();
+      final seen = <bool>[];
+      await tester.pumpWidget(_host(UploadHistory(
+        localItems: const [],
+        folderId: null,
+        selected: const {},
+        onOpen: (_) async {},
+        onEntries: (entries, {required more, required settled, required counts}) => seen.add(settled),
+        fetch: ({int limit = 50, int? beforeId}) => answer.future,
+      )));
+      await tester.pump();
+      await tester.pump();
+
+      expect(seen, isNotEmpty, reason: 'it must report even while it has nothing to show');
+      expect(seen.every((settled) => !settled), isTrue, reason: 'it said it was settled before any answer');
+
+      answer.complete(const UploadPage(uploads: []));
+      await tester.pumpAndSettle();
+      expect(seen.last, isTrue, reason: 'an empty ANSWER is settled — that is a shop with no bills');
+    });
+  });
+
+
+  group('choosing bills', () {
+    final three = [
+      _upload(jobId: 30, sourceImage: '8/30.jpg', issueCount: 3),
+      _upload(jobId: 20, sourceImage: '8/20.jpg', issueCount: 2),
+      _upload(jobId: 10, sourceImage: '8/10.jpg', issueCount: 1),
+    ];
+
+    testWidgets('a tap picks the bill instead of opening it', (tester) async {
+      final toggled = <String>[];
+      UploadSummary? opened;
+      await tester.pumpWidget(_host(_list(
+        uploads: three,
+        choosing: true,
+        onToggle: toggled.add,
+        onOpen: (u) => opened = u,
+      )));
+      await tester.pump();
+      await tester.tap(find.text('Check 2'));
+      await tester.pump();
+
+      expect(toggled, ['j:20']);
+      expect(opened, isNull, reason: 'opening and picking are different intents');
+    });
+
+    testWidgets('outside choosing, a tap still opens the bill', (tester) async {
+      final toggled = <String>[];
+      UploadSummary? opened;
+      await tester.pumpWidget(_host(_list(
+        uploads: three,
+        onToggle: toggled.add,
+        onOpen: (u) => opened = u,
+      )));
+      await tester.pump();
+      await tester.tap(find.text('Check 2'));
+      await tester.pump();
+
+      expect(opened?.jobId, 20);
+      expect(toggled, isEmpty);
+    });
+
+    testWidgets('every card shows a mark while choosing, and a tick only when chosen', (tester) async {
+      await tester.pumpWidget(_host(_list(
+        uploads: three,
+        choosing: true,
+        chosen: const {'j:30', 'j:10'},
+      )));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('selection-mark')), findsNWidgets(3));
+      expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
+    });
+
+    testWidgets('no marks at all when nothing is being chosen', (tester) async {
+      await tester.pumpWidget(_host(_list(uploads: three)));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('selection-mark')), findsNothing);
+      expect(find.byIcon(Icons.check_rounded), findsNothing);
+    });
+  });
+
+  group('what the bulk actions do to the list', () {
+    // A real list held by a key, so forget() and refile() can be called as
+    // the screen calls them once the server has agreed.
+    final key = GlobalKey<UploadHistoryState>();
+    late List<UploadSummary> server;
+
+    Widget build({int? folderId}) => _host(UploadHistory(
+          key: key,
+          localItems: const [],
+          folderId: folderId,
+          selected: const {},
+          onOpen: (_) async {},
+          fetch: ({int limit = 50, int? beforeId}) async =>
+              UploadPage(uploads: List.of(server), nextBeforeId: null),
+        ));
+
+    setUp(() {
+      server = [
+        _upload(jobId: 30, sourceImage: '8/30.jpg', issueCount: 3),
+        _upload(jobId: 20, sourceImage: '8/20.jpg', issueCount: 2),
+        _upload(jobId: 10, sourceImage: '8/10.jpg', issueCount: 1),
+      ];
+    });
+
+    testWidgets('forgetting a bill takes it off at once', (tester) async {
+      await tester.pumpWidget(build());
+      await tester.pump();
+      expect(find.text('Check 2'), findsOneWidget);
+
+      key.currentState!.forget([20]);
+      await tester.pump();
+
+      expect(find.text('Check 2'), findsNothing);
+      expect(find.text('Check 3'), findsOneWidget);
+      expect(find.text('Check 1'), findsOneWidget);
+    });
+
+    testWidgets('forgetting several, including ones that are not there, is harmless', (tester) async {
+      await tester.pumpWidget(build());
+      await tester.pump();
+
+      key.currentState!.forget([30, 10, 999]);
+      key.currentState!.forget(const []);
+      await tester.pump();
+
+      expect(find.text('Check 2'), findsOneWidget);
+      expect(find.text('Check 3'), findsNothing);
+    });
+
+    testWidgets('a bill filed elsewhere leaves this folder at once', (tester) async {
+      await tester.pumpWidget(build());          // home
+      await tester.pump();
+
+      key.currentState!.refile({20: 7});
+      await tester.pump();
+
+      expect(find.text('Check 2'), findsNothing, reason: 'it is in folder 7 now');
+      expect(find.text('Check 3'), findsOneWidget);
+    });
+
+    testWidgets('a bill sent home arrives in the home list', (tester) async {
+      server = [
+        _upload(jobId: 20, sourceImage: '8/20.jpg', issueCount: 2, folderId: 7),
+        _upload(jobId: 10, sourceImage: '8/10.jpg', issueCount: 1),
+      ];
+      await tester.pumpWidget(build());          // home
+      await tester.pump();
+      expect(find.text('Check 2'), findsNothing, reason: 'filed in 7, so not at home yet');
+
+      key.currentState!.refile({20: null});      // null is home
+      await tester.pump();
+
+      expect(find.text('Check 2'), findsOneWidget);
+    });
+  });
 }
 
 // ---- the list itself, driven without a network ----
@@ -416,18 +699,31 @@ Widget _host(UploadHistory list) => MaterialApp(
 UploadHistory _list({
   required List<UploadSummary> uploads,
   List<BatchItem> local = const [],
+  List<ListEntry> localEntries = const [],
   int? folderId,
   Set<String> selected = const {},
   void Function(int)? onCount,
+  void Function(List<ListEntry>)? onEntries,
+  bool choosing = false,
+  Set<String> chosen = const {},
+  void Function(String)? onToggle,
   List<UploadSummary>? secondPage,
   void Function(UploadSummary)? onOpen,
 }) {
   var served = 0;
   return UploadHistory(
     localItems: local,
+    localEntries: localEntries,
     folderId: folderId,
     selected: selected,
-    onCount: onCount,
+    choosing: choosing,
+    chosen: chosen,
+    onToggle: onToggle,
+    // `onCount` survives as a shorthand for the number of cards shown.
+    onEntries: (entries, {required more, required settled, required counts}) {
+      onCount?.call(entries.length);
+      onEntries?.call(entries);
+    },
     onOpen: (u) async => onOpen?.call(u),
     fetch: ({int limit = 50, int? beforeId}) async {
       served++;

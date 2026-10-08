@@ -62,6 +62,20 @@ class UploadSummary {
       );
 
   bool get isSaved => invoiceId != null;
+
+  /// The same bill, filed somewhere else. A separate method rather than a
+  /// general copyWith because the folder is NULLABLE — null means home — and
+  /// a copyWith cannot tell "set it to null" from "leave it alone".
+  UploadSummary withFolder(int? folder) => UploadSummary(
+        jobId: jobId,
+        status: status,
+        sourceImage: sourceImage,
+        createdAt: createdAt,
+        invoiceId: invoiceId,
+        folderId: folder,
+        issueCount: issueCount,
+        retryAt: retryAt,
+      );
 }
 
 /// A page of them. Keyset, not an offset: uploads arrive while someone is
