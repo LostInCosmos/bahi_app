@@ -688,6 +688,166 @@ void main() {
       expect(find.text('Check 2'), findsOneWidget);
     });
   });
+
+
+  group('coming back from a bill', () {
+    // The real sequence, on a list long enough to scroll: scroll down, open
+    // a bill (a screen pushed over this one), close it, and let the list
+    // refresh. Reported: "when I open a bill and close, I am scrolled back
+    // to the top."
+    List<UploadSummary> shop(int n) => [
+          for (var id = n; id >= 1; id--)
+            _upload(jobId: id, sourceImage: '8/$id.jpg', issueCount: id % 3),
+        ];
+
+    testWidgets('the position survives opening a bill and closing it', (tester) async {
+      final controller = ScrollController();
+      final key = GlobalKey<UploadHistoryState>();
+      final navigator = GlobalKey<NavigatorState>();
+      var server = shop(60);
+      // Held open DURING the refresh, so the frame between "asked" and
+      // "answered" is actually laid out. Without it a refresh that emptied
+      // the list first would pass — the empty frame never exists.
+      var hold = false;
+      final release = Completer<void>();
+
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: navigator,
+        home: Scaffold(
+          body: CustomScrollView(
+            controller: controller,
+            slivers: [
+              UploadHistory(
+                key: key,
+                localItems: const [],
+                folderId: null,
+                selected: const {},
+                onOpen: (_) async {},
+                fetch: ({int limit = 50, int? beforeId}) async {
+                  if (hold) await release.future;
+                  return UploadPage(uploads: List.of(server), nextBeforeId: null);
+                },
+              ),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(controller.position.maxScrollExtent, greaterThan(1500), reason: 'the list must scroll to mean anything');
+
+      controller.jumpTo(1500);
+      await tester.pump();
+      final before = controller.offset;
+
+      // Open a bill: another screen over this one.
+      navigator.currentState!.push(MaterialPageRoute(builder: (_) => const Scaffold(body: Text('review'))));
+      await tester.pumpAndSettle();
+      expect(find.text('review'), findsOneWidget);
+
+      // The bill got saved while it was open.
+      server = [
+        for (final u in server)
+          u.jobId == 30 ? _upload(jobId: 30, sourceImage: '8/30.jpg', invoiceId: 5) : u,
+      ];
+      navigator.currentState!.pop();
+      await tester.pumpAndSettle();
+
+      hold = true;
+      final pending = key.currentState!.refresh();
+      await tester.pump();                          // mid-refresh, answer not in yet
+      expect(controller.offset, before, reason: 'the list was emptied while it refreshed');
+
+      release.complete();
+      await pending;
+      await tester.pumpAndSettle();
+
+      expect(controller.offset, before, reason: 'closing a bill scrolled the list');
+    });
+
+    testWidgets('reload() DOES lose the position once the network takes real time', (tester) async {
+      // This is what an older build did on return from a bill, and why it
+      // reported "scrolled back to the top": reload() empties the list, the
+      // request takes real time, so an EMPTY list is laid out — the offset
+      // is clamped to 0 and never handed back. (With an instant fake
+      // response the empty frame never happens, which is how a first
+      // version of this test proved nothing.)
+      final controller = ScrollController();
+      final key = GlobalKey<UploadHistoryState>();
+      var hold = false;
+      final release = Completer<void>();
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: CustomScrollView(
+            controller: controller,
+            slivers: [
+              UploadHistory(
+                key: key,
+                localItems: const [],
+                folderId: null,
+                selected: const {},
+                onOpen: (_) async {},
+                fetch: ({int limit = 50, int? beforeId}) async {
+                  if (hold) await release.future;
+                  return UploadPage(uploads: shop(60), nextBeforeId: null);
+                },
+              ),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      controller.jumpTo(1500);
+      await tester.pump();
+      expect(controller.offset, 1500);
+
+      hold = true;
+      final pending = key.currentState!.reload();
+      await tester.pump();                      // the empty list is laid out
+      release.complete();
+      await pending;
+      await tester.pumpAndSettle();
+
+      // Documents the hazard rather than endorsing it: reload() is for a
+      // deliberate pull-to-refresh, and the screen must never call it on
+      // return from a bill — it calls refresh() instead.
+      expect(controller.offset, lessThan(1500), reason: 'if this stops dropping, reload() got safer');
+    });
+
+    testWidgets("the screen re-rendering as the list reports its cards does not move it", (tester) async {
+      // CaptureScreen rebuilds every time the list reports (to learn what
+      // is on screen for Select all, and the counts), and hands it fresh
+      // card objects each time. None of that may nudge the position.
+      final controller = ScrollController();
+      var rebuilds = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(builder: (context, setState) {
+            return CustomScrollView(
+              controller: controller,
+              slivers: [
+                UploadHistory(
+                  localItems: const [],
+                  folderId: null,
+                  selected: const {},
+                  onOpen: (_) async {},
+                  onEntries: (entries, {required more, required settled, required counts}) =>
+                      setState(() => rebuilds++),
+                  fetch: ({int limit = 50, int? beforeId}) async =>
+                      UploadPage(uploads: shop(60), nextBeforeId: null),
+                ),
+              ],
+            );
+          }),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      controller.jumpTo(1500);
+      await tester.pumpAndSettle();
+
+      expect(rebuilds, greaterThan(0), reason: 'the parent must actually have rebuilt');
+      expect(controller.offset, 1500);
+    });
+  });
 }
 
 // ---- the list itself, driven without a network ----
