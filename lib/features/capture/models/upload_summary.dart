@@ -86,12 +86,24 @@ class UploadPage {
   /// Pass back as `beforeId` for the next page. Null means this is the last.
   final int? nextBeforeId;
 
-  const UploadPage({required this.uploads, this.nextBeforeId});
+  /// How many of the shop's bills are in each category, per folder
+  /// (`root` for none) — over EVERY bill, not just this page. Sent with the
+  /// first page only; null on later pages, and on a server that predates
+  /// it, in which case the list tallies what it has loaded.
+  final Map<String, Map<String, int>>? counts;
+
+  const UploadPage({required this.uploads, this.nextBeforeId, this.counts});
 
   factory UploadPage.fromJson(Map<String, dynamic> json) => UploadPage(
         uploads: (json['jobs'] as List<dynamic>? ?? const [])
             .map((e) => UploadSummary.fromJson(e as Map<String, dynamic>))
             .toList(),
         nextBeforeId: json['next_before_id'] as int?,
+        counts: (json['counts'] as Map<String, dynamic>?)?.map(
+          (folder, byCategory) => MapEntry(
+            folder,
+            (byCategory as Map<String, dynamic>).map((k, v) => MapEntry(k, (v as num).toInt())),
+          ),
+        ),
       );
 }

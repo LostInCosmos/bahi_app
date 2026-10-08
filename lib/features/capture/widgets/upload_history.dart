@@ -102,6 +102,32 @@ class UploadHistoryState extends State<UploadHistory> {
   bool _loadedOnce = false;
   String? _error;
 
+  /// The server's tally of the whole shop, taken with the newest page — what
+  /// lets a box say 74 before 74 bills have been scrolled to. Kept in step
+  /// with discards and moves done here; null until a server that sends it
+  /// has answered, when the loaded bills are tallied instead.
+  Map<String, Map<String, int>>? _tally;
+
+  static String _folderKey(int? id) => id == null ? 'root' : '$id';
+
+  void _takeTally(Map<String, Map<String, int>>? counts) {
+    if (counts == null) return;
+    _tally = {for (final e in counts.entries) e.key: {...e.value}};
+  }
+
+  /// Move one bill between boxes in the held tally.
+  void _shift(UploadSummary u, {int? toFolder, bool gone = false}) {
+    final tally = _tally;
+    if (tally == null) return;
+    final category = uploadCategory(u);
+    final from = tally[_folderKey(u.folderId)];
+    if (from != null && (from[category] ?? 0) > 0) from[category] = from[category]! - 1;
+    if (!gone) {
+      final to = tally.putIfAbsent(_folderKey(toFolder), () => {});
+      to[category] = (to[category] ?? 0) + 1;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -115,6 +141,7 @@ class UploadHistoryState extends State<UploadHistory> {
       _uploads.clear();
       _nextBeforeId = null;
       _loadedOnce = false;
+      _tally = null;
       _error = null;
     });
     await _loadMore();
@@ -135,6 +162,7 @@ class UploadHistoryState extends State<UploadHistory> {
       final page = await fetch(limit: _pageSize, beforeId: null);
       if (!mounted) return;
       setState(() {
+        _takeTally(page.counts);
         final fresh = {for (final u in page.uploads) u.jobId: u};
         // The oldest row this page reaches. Past the end of the list the
         // whole shop is in view, so nothing absent can still exist.
@@ -161,7 +189,12 @@ class UploadHistoryState extends State<UploadHistory> {
   void forget(Iterable<int> jobIds) {
     final gone = jobIds.toSet();
     if (gone.isEmpty) return;
-    setState(() => _uploads.removeWhere((u) => gone.contains(u.jobId)));
+    setState(() {
+      for (final u in _uploads.where((u) => gone.contains(u.jobId))) {
+        _shift(u, gone: true);
+      }
+      _uploads.removeWhere((u) => gone.contains(u.jobId));
+    });
   }
 
   /// Bills filed into another folder: they leave this view, or arrive in
@@ -171,7 +204,10 @@ class UploadHistoryState extends State<UploadHistory> {
     setState(() {
       for (var i = 0; i < _uploads.length; i++) {
         final id = _uploads[i].jobId;
-        if (folderByJob.containsKey(id)) _uploads[i] = _uploads[i].withFolder(folderByJob[id]);
+        if (folderByJob.containsKey(id)) {
+          _shift(_uploads[i], toFolder: folderByJob[id]);
+          _uploads[i] = _uploads[i].withFolder(folderByJob[id]);
+        }
       }
     });
   }
@@ -188,6 +224,7 @@ class UploadHistoryState extends State<UploadHistory> {
       final page = await fetch(limit: _pageSize, beforeId: _nextBeforeId);
       if (!mounted) return;
       setState(() {
+        _takeTally(page.counts);
         _uploads.addAll(page.uploads);
         _nextBeforeId = page.nextBeforeId;
         _loadedOnce = true;
@@ -224,12 +261,31 @@ class UploadHistoryState extends State<UploadHistory> {
   }
 
   Map<String, int> get _counts {
+    final localPaths = <String>{
+      for (final item in widget.localItems) ...item.sourceImages,
+    };
     final tally = <String, int>{};
     for (final u in _inFolder) {
       final key = uploadCategory(u);
       tally[key] = (tally[key] ?? 0) + 1;
     }
-    return tally;
+    // Everything is loaded, or the server did not say: what is held is
+    // exact, and live as cards change status.
+    final whole = _tally?[_folderKey(widget.folderId)];
+    if ((_loadedOnce && _nextBeforeId == null) || _tally == null) return tally;
+
+    // More bills exist than are loaded. Use the server's count of the whole
+    // shop, less this device's own bills, which the grid above counts and
+    // the server counts too.
+    final counts = {...?whole};
+    for (final u in _uploads) {
+      if (u.folderId == widget.folderId && localPaths.contains(u.sourceImage)) {
+        final key = uploadCategory(u);
+        if ((counts[key] ?? 0) > 0) counts[key] = counts[key]! - 1;
+      }
+    }
+    counts.removeWhere((_, n) => n <= 0);
+    return counts;
   }
 
   String _reportedKey = '';
