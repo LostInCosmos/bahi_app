@@ -414,8 +414,30 @@ class UploadHistoryState extends State<UploadHistory> {
   /// rows. A card with no job yet has no row to match; it falls back to its
   /// photo.
   List<UploadSummary> get _inFolder => _rowsNotCoveredBy(
-        [for (final entry in widget.localEntries) if (entry.item != null) entry.item!],
+        [for (final entry in _drawnCards) if (entry.item != null) entry.item!],
       );
+
+  /// The phone's own cards that are actually drawn.
+  ///
+  /// While a status box is ticked the SERVER decides what is in it — it counts
+  /// the bills and it sends the rows. A phone card whose own status says
+  /// "needs review" but whose bill the server now has elsewhere (it was read
+  /// again and came back clean, say) must not be drawn in that box: the box
+  /// said 34 and drew 39. So a card for a bill with a server job is drawn only
+  /// if the server's rows for the box include that job — once every row has
+  /// arrived, since until then it may simply be on a page not fetched. A card
+  /// with no job yet is the phone's alone and follows its own status.
+  List<ListEntry> get _drawnCards {
+    if (!_narrowed || !_loadedOnce || _nextBeforeId != null || _held != null) return widget.localEntries;
+    final onServer = {for (final u in _uploads) u.jobId};
+    return [
+      for (final entry in widget.localEntries)
+        if (entry.item == null ||
+            (entry.item!.lastJobId ?? entry.item!.jobId) == null ||
+            onServer.contains(entry.item!.lastJobId ?? entry.item!.jobId))
+          entry,
+    ];
+  }
 
   /// The shop's bills in the folder minus EVERY bill the phone holds, drawn or
   /// not — what the object-mode counts need, since the screen counts the
@@ -553,7 +575,7 @@ class UploadHistoryState extends State<UploadHistory> {
         : <ListEntry>[];
 
     // Strictly by upload order, whichever half a card came from.
-    final entries = [...widget.localEntries, ...serverEntries]
+    final entries = [..._drawnCards, ...serverEntries]
       ..sort((a, b) => b.sortKey.compareTo(a.sortKey));
     _report(entries);
 
