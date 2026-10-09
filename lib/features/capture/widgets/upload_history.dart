@@ -83,6 +83,11 @@ class UploadHistory extends StatefulWidget {
   /// bills are being chosen.
   final void Function(UploadSummary upload)? onRetry;
 
+  /// The ✕ on a bill. Every PROCESSED bill wears one — clean, needing review,
+  /// saved or failed — and none that is still being read. The screen decides
+  /// what tapping it does (a saved bill is deleted from the bill itself).
+  final void Function(UploadSummary upload)? onDelete;
+
   /// How to fetch a page. Defaults to the real client; injectable so the
   /// list can be driven in a test without a network, the same way
   /// BillThumbnail takes its loader.
@@ -110,6 +115,7 @@ class UploadHistory extends StatefulWidget {
     this.onEntries,
     this.onFolderTotals,
     this.onRetry,
+    this.onDelete,
     this.fetch,
     this.fetchFiltered,
   });
@@ -462,6 +468,7 @@ class UploadHistoryState extends State<UploadHistory> {
                 chosen: widget.chosen.contains(id),
                 onTap: () => widget.choosing ? widget.onToggle?.call(id) : widget.onOpen(u),
                 onRetry: widget.onRetry == null ? null : () => widget.onRetry!(u),
+                onDelete: widget.onDelete == null ? null : () => widget.onDelete!(u),
               ),
             );
           }).toList()
@@ -546,6 +553,7 @@ class _UploadCard extends StatelessWidget {
   final bool choosing;
   final bool chosen;
   final VoidCallback? onRetry;
+  final VoidCallback? onDelete;
 
   const _UploadCard({
     super.key,
@@ -554,6 +562,7 @@ class _UploadCard extends StatelessWidget {
     this.choosing = false,
     this.chosen = false,
     this.onRetry,
+    this.onDelete,
   });
 
   @override
@@ -603,7 +612,24 @@ class _UploadCard extends StatelessWidget {
                 style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ),
-            Positioned(top: Spacing.xs, left: Spacing.xs, child: _badge(context, category)),
+            // The badge on the right and the ✕ on the left, as on this phone's
+            // own cards, so a bill looks the same whichever it is.
+            Positioned(top: Spacing.xs, right: Spacing.xs, child: _badge(context, category)),
+            // Not on a bill still being read — only on processed ones, failed
+            // included: a worker is holding that bill.
+            if (onDelete != null && !choosing && category != 'working')
+              Positioned(
+                top: 4,
+                left: 4,
+                child: ChromeButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onDelete!();
+                  },
+                  icon: Icons.close_rounded,
+                  tooltip: 'Remove this bill',
+                ),
+              ),
             // Read it again — for the bills that want a second look. Above
             // the date, where this phone's own cards wear theirs.
             if (onRetry != null && !choosing && (category == 'failed' || category == 'review'))

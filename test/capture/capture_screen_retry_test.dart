@@ -25,7 +25,7 @@ http.Response _json(Object body, [int status = 200, String? category]) {
     final keep = {
       'failed': (Map j) => j['status'] == 'failed',
       'review': (Map j) => j['status'] == 'done' && (j['issue_count'] as int) > 0,
-      'check': (Map j) => j['status'] == 'done' && (j['issue_count'] as int) == 0,
+      'check': (Map j) => j['status'] == 'done' && (j['issue_count'] as int) == 0 && j['invoice_id'] == null,
     };
     final wanted = category.split(',');
     body = {
@@ -56,6 +56,10 @@ class _Server {
   /// four-call read is when a retried bill comes back.
   final bool finishes;
 
+  /// Job ids the screen asked to discard, and whether the server refuses.
+  final discarded = <int>[];
+  bool refuseDiscard = false;
+
   /// Where bill 8 is in its retry: `idle`, `retrying` (queued at the server),
   /// or `finished`. The server's counts and list follow it.
   String phase = 'idle';
@@ -79,6 +83,8 @@ class _Server {
           Map<String, dynamic> job(Map<String, dynamic> j) => filed ? {...j, 'folder_id': 3} : j;
           return _json({
             'jobs': [for (final j in [
+              {'job_id': 11, 'status': 'processing', 'source_image': '8/11.jpg', 'created_at': '2026-10-08T14:00:00Z', 'issue_count': 0},
+              {'job_id': 10, 'status': 'done', 'source_image': '8/10.jpg', 'created_at': '2026-10-08T13:00:00Z', 'issue_count': 0, 'invoice_id': 55},
               {'job_id': 9, 'status': 'done', 'source_image': '8/9.jpg', 'created_at': '2026-10-08T12:00:00Z', 'issue_count': 0},
               {'job_id': 8, 'status': phase == 'retrying' ? 'queued' : 'done', 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': 2},
               {
@@ -96,6 +102,11 @@ class _Server {
                   : {'failed': 1, 'review': 1, 'check': 1},
             },
           }, 200, asked);
+        }
+        if (req.method == 'POST' && path == '/invoices/bulk-discard') {
+          final ids = [for (final id in (jsonDecode(req.body) as Map)['job_ids'] as List) id as int];
+          discarded.addAll(ids);
+          return _json({'discarded': refuseDiscard ? [] : ids, 'skipped': []});
         }
         if (req.method == 'GET' && path == '/invoices/extract/7') {
           return _json({
@@ -407,5 +418,112 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));
     }, () => server.client);
+  });
+
+  group('the ✕ on a bill', () {
+    Future<void> open(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1400));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+    }
+
+    Finder cross(String id) =>
+        find.descendant(of: find.byKey(ValueKey(id)), matching: find.byIcon(Icons.close_rounded));
+
+    testWidgets('every processed bill wears one — failed included — and none that is being read', (tester) async {
+      _ignoreOverflow();
+      final server = _Server();
+      await http.runWithClient(() async {
+        await open(tester);
+        // failed, needs review, clean, saved
+        for (final id in ['j:7', 'j:8', 'j:9', 'j:10']) {
+          expect(cross(id), findsOneWidget, reason: id);
+        }
+        // still being read: a worker is holding it
+        expect(cross('j:11'), findsNothing);
+        // Not while choosing: tapping a card chooses it then.
+        await tester.tap(find.text('Select'));
+        await _settle(tester);
+        expect(cross('j:9'), findsNothing);
+      }, () => server.client);
+    });
+
+    testWidgets('on a clean bill it removes it at once, in one request', (tester) async {
+      _ignoreOverflow();
+      final server = _Server();
+      await http.runWithClient(() async {
+        await open(tester);
+        await tester.tap(cross('j:9'));
+        await _settle(tester);
+        expect(server.discarded, [9]);
+        expect(find.byKey(const ValueKey('j:9')), findsNothing);
+      }, () => server.client);
+    });
+
+    testWidgets('a bill the server refuses comes back, with a reason', (tester) async {
+      _ignoreOverflow();
+      final server = _Server()..refuseDiscard = true;
+      await http.runWithClient(() async {
+        await open(tester);
+        await tester.tap(cross('j:9'));
+        await _settle(tester);
+        expect(find.byKey(const ValueKey('j:9')), findsOneWidget);
+        expect(find.textContaining("Couldn't remove that bill"), findsOneWidget);
+      }, () => server.client);
+    });
+
+    testWidgets('on a saved bill it explains instead of deleting', (tester) async {
+      _ignoreOverflow();
+      final server = _Server();
+      await http.runWithClient(() async {
+        await open(tester);
+        await tester.tap(cross('j:10'));
+        await _settle(tester);
+        expect(server.discarded, isEmpty);
+        expect(find.textContaining('This bill is saved'), findsOneWidget);
+        expect(find.byKey(const ValueKey('j:10')), findsOneWidget);
+      }, () => server.client);
+    });
+
+    testWidgets('on a failed bill it removes it, like any processed one', (tester) async {
+      _ignoreOverflow();
+      final server = _Server();
+      await http.runWithClient(() async {
+        await open(tester);
+        await tester.tap(cross('j:7'));
+        await _settle(tester);
+        expect(server.discarded, [7]);
+        expect(find.byKey(const ValueKey('j:7')), findsNothing);
+      }, () => server.client);
+    });
+  });
+
+  group('what a bill saved from last session needs at startup', () {
+    // The old 120 s limit marked bills failed while the server went on to
+    // finish them; those red cards were stored on the phone and stayed, over a
+    // server with one failed bill, not four.
+    test('a bill the phone gave up on is checked with the server, not re-read', () {
+      final item = _item(BatchItemStatus.failed)
+        ..errorMessage = BatchItem.timedOutMessage
+        ..lastJobId = 8;
+      expect(item.startupAction, StartupAction.askServer);
+    });
+
+    test('a bill that failed for a real reason is left for the shopkeeper', () {
+      final item = _item(BatchItemStatus.failed)
+        ..errorMessage = 'Qwen 400'
+        ..lastJobId = 8;
+      expect(item.startupAction, StartupAction.none);
+    });
+
+    test('a bill that was being read has its job watched, not resubmitted', () {
+      final item = _item(BatchItemStatus.processing)..jobId = 8;
+      expect(item.startupAction, StartupAction.resumeJob);
+    });
+
+    test('a bill never submitted is submitted; a photo never uploaded is uploaded', () {
+      expect(_item(BatchItemStatus.ready).startupAction, StartupAction.process);
+      expect(_item(BatchItemStatus.preparing, uploaded: false).startupAction, StartupAction.uploadAgain);
+    });
   });
 }

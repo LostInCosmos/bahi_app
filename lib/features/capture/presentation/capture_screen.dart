@@ -184,18 +184,22 @@ class CaptureScreenState extends State<CaptureScreen> {
     setState(() => _items.addAll(restored));
     _reconcileItemFolders();
 
-    final uploaded = restored.where((i) => i.isUploaded).toList();
-    for (final item in uploaded) {
-      // "ready" means a job was never submitted last session — start it.
-      // "processing" with a jobId means one WAS submitted and may already be
-      // done server-side — resume polling it rather than paying for another.
-      if (item.status == BatchItemStatus.ready) {
-        unawaited(_processOne(item));
-      } else if (item.status == BatchItemStatus.processing && item.jobId != null) {
-        unawaited(_processOne(item, resumeJobId: item.jobId));
+    final toUpload = <BatchItem>[];
+    for (final item in restored) {
+      switch (item.startupAction) {
+        case StartupAction.process:
+          unawaited(_processOne(item));
+        case StartupAction.resumeJob:
+          unawaited(_processOne(item, resumeJobId: item.jobId));
+        case StartupAction.askServer:
+          unawaited(_retryFailed(item));
+        case StartupAction.uploadAgain:
+          toUpload.add(item);
+        case StartupAction.none:
+          break;
       }
     }
-    unawaited(_resumeUploads(restored.where((i) => !i.isUploaded).toList()));
+    unawaited(_resumeUploads(toUpload));
   }
 
   /// Photos saved on the device last session that never finished uploading.
@@ -523,6 +527,7 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// the server knows about is discarded there, and the row stays for our
   /// team with a "discarded" mark.
   Future<void> _removeItem(BatchItem item) async {
+    if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) return _say(_savedCannotDiscard);
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId != null && item.savedInvoiceId == null) {
       try {
@@ -540,6 +545,30 @@ class CaptureScreenState extends State<CaptureScreen> {
     if (!mounted) return;
     _dropLocal(item);
     unawaited(_uploadHistory.currentState?.refresh());
+  }
+
+  static const _savedCannotDiscard =
+      'This bill is saved. Open it to delete it — that also puts its stock back.';
+
+  /// The ✕ on a processed bill from the shop's list (failed ones included;
+  /// bills still being read have none). A saved bill is not thrown away from
+  /// here — deleting one reverses its stock, which is a decision, not a
+  /// tidy-up — and says so. Otherwise it goes at once and comes back if the
+  /// server refuses, exactly as a bulk discard does.
+  Future<void> _discardUpload(UploadSummary upload) async {
+    final category = uploadCategory(upload);
+    if (category == 'saved') return _say(_savedCannotDiscard);
+    final history = _uploadHistory.currentState;
+    history?.forget([upload.jobId]);
+    try {
+      final reply = await ApiClient.instance.bulkDiscard([upload.jobId]);
+      if (!reply.discarded.contains(upload.jobId)) throw 'the server would not discard it';
+    } catch (e) {
+      history?.restore([upload]);
+      if (mounted) _say("Couldn't remove that bill: $e");
+      return;
+    }
+    if (mounted) unawaited(_folders.load());
   }
 
   /// Forget a bill on THIS device: its card, its saved state and its photos.
@@ -1547,9 +1576,9 @@ class CaptureScreenState extends State<CaptureScreen> {
               // While choosing, the per-bill controls go: acting on one bill
               // by its own button and on a selection at once would be two
               // ways to do the same thing on one screen.
-              onDelete: !_choosing && item.status != BatchItemStatus.processing && item.status != BatchItemStatus.saved
-                  ? () => _removeItem(item)
-                  : null,
+              // Processed bills only — failed ones included, none still being
+              // read.
+              onDelete: !_choosing && !matchesStatusFilter(item, 'working') ? () => _removeItem(item) : null,
               onReprocess: item.canReprocess(choosing: _choosing) ? () => _reprocessItem(item) : null,
               // Not while an upload or extraction is in flight; its folder
               // is read when it is saved, so it can be moved any time after.
@@ -1595,6 +1624,7 @@ class CaptureScreenState extends State<CaptureScreen> {
           key: _uploadHistory,
           onFolderTotals: _onFolderTotals,
           onRetry: _retryUpload,
+          onDelete: _discardUpload,
           localItems: _items,
           localEntries: localEntries,
           folderId: _folders.currentId,

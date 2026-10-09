@@ -141,6 +141,22 @@ class BatchItem {
   /// queued behind a cap on the provider) while the card had already said
   /// "failed". Trying again should look at that job first, not read the bill
   /// all over again and spend four more calls.
+  /// What to do with this bill when the screen starts and finds it saved from
+  /// last session.
+  StartupAction get startupAction {
+    if (!isUploaded) return StartupAction.uploadAgain;
+    // "ready" means a job was never submitted last session — start it.
+    if (status == BatchItemStatus.ready) return StartupAction.process;
+    // "processing" with a job means one WAS submitted and may already be done
+    // server-side — resume polling it rather than paying for another.
+    if (status == BatchItemStatus.processing && jobId != null) return StartupAction.resumeJob;
+    // The phone gave up on it last session, usually while the server was still
+    // reading — and the server will have finished by now. Ask it, rather than
+    // leave a red card over a bill that is done.
+    if (failedByTimeout) return StartupAction.askServer;
+    return StartupAction.none;
+  }
+
   bool get failedByTimeout =>
       status == BatchItemStatus.failed && errorMessage == timedOutMessage && lastJobId != null;
 
@@ -214,3 +230,6 @@ class BatchItem {
     return item;
   }
 }
+
+/// What a bill restored at startup needs, decided in one place.
+enum StartupAction { uploadAgain, process, resumeJob, askServer, none }
