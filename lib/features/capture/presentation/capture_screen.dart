@@ -1122,7 +1122,14 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// What each box would show if ticked: this device's bills in the folder
   /// plus the shop's, so the number on a box means the same as the list.
   Map<String, int> _countsAcrossList(List<BatchItem> inFolder) {
-    final counts = {...statusCounts(inFolder)};
+    // When the list's numbers are the server's whole-shop tally, they already
+    // include every bill this phone has sent, so only the ones that have not
+    // reached the server are added; otherwise the phone's bills are added to
+    // the shop's bills that are not on it.
+    final covered = _uploadHistory.currentState?.countsCoverDeviceBills ?? false;
+    final counts = {
+      ...statusCounts(covered ? inFolder.where((i) => (i.jobId ?? i.lastJobId) == null).toList() : inFolder),
+    };
     _serverCounts.forEach((key, n) => counts[key] = (counts[key] ?? 0) + n);
     return counts;
   }

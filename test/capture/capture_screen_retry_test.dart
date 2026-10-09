@@ -74,7 +74,7 @@ class _Server {
               },
             ]) job(j)],
             'next_before_id': null,
-            'counts': {'root': {'failed': 1, 'review': 1, 'check': 1}},
+            'counts': {filed ? '3' : 'root': {'failed': 1, 'review': 1, 'check': 1}},
           }, 200, asked);
         }
         if (req.method == 'GET' && path == '/invoices/extract/7') {
@@ -283,6 +283,41 @@ void main() {
       expect(find.byKey(const ValueKey('j:7')), findsOneWidget, reason: 'the failed bill must be shown');
       expect(find.byKey(const ValueKey('j:9')), findsNothing);
       expect(find.textContaining('Nothing here'), findsNothing);
+    }, () => server.client);
+  });
+
+  testWidgets("retrying a needs-review bill does not change the box counts the server reports", (tester) async {
+    // "Needs review 25" over 41: the screen added every bill the phone held
+    // on top of a tally that already contained them, and took the retried
+    // bill off twice. A bill the phone sent to the server is in the tally;
+    // only bills that have not reached it are added.
+    _ignoreOverflow();
+    final server = _Server(filed: true);
+    await http.runWithClient(() async {
+      // Wide enough that every status box is built; the row builds lazily.
+      await tester.binding.setSurfaceSize(const Size(1000, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+      // Tick the box: the list now holds only what the server sent for it,
+      // so its numbers are the server's tally of the whole shop.
+      await tester.tap(find.textContaining('Needs review 1'));
+      await _settle(tester);
+      expect(find.textContaining('Needs review 1'), findsOneWidget);
+
+      final review = find.byKey(const ValueKey('j:8'));
+      await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
+      await _settle(tester);
+
+      // The fake server's tally has not moved, so the count must not either:
+      // not 0 (taken off twice), not 'Working 1' (the phone's copy added to a
+      // tally that already holds it).
+      expect(find.textContaining('Needs review 1'), findsOneWidget);
+      expect(find.textContaining('Working 1'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
     }, () => server.client);
   });
 }

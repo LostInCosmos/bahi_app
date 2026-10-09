@@ -149,15 +149,31 @@ void main() {
     expect(seen, {'check': 10});
   });
 
-  testWidgets("a bill this phone holds is not counted twice", (tester) async {
-    // The grid above counts the phone's own bills, and the server counts
-    // them too. Bill 2 is on this phone.
+  testWidgets("the server's tally already holds this phone's bills, and says so", (tester) async {
+    // The tally counts every bill that has reached the server, this phone's
+    // included — so nothing held here may be added to it again. The screen
+    // reads the flag to add only the bills that have not reached the server.
+    final key = GlobalKey<UploadHistoryState>();
     final local = BatchItem(label: 'Bill', pages: [])..sourceImages = ['8/2.jpg'];
-    await tester.pumpWidget(list(GlobalKey<UploadHistoryState>(), local: [local]));
+    await tester.pumpWidget(list(key, local: [local]));
     await tester.pump();
     await tester.pump();
 
-    expect(seen, {'check': 73, 'failed': 2});
+    expect(seen, {'check': 74, 'failed': 2}, reason: 'the whole-shop tally, untouched');
+    expect(key.currentState!.countsCoverDeviceBills, isTrue);
+  });
+
+  testWidgets('once every bill is loaded the list counts them itself, and does not claim to cover the phone',
+      (tester) async {
+    final key = GlobalKey<UploadHistoryState>();
+    await tester.pumpWidget(list(key));
+    await tester.pump();
+    await tester.pump();
+    secondPage.complete(UploadPage(uploads: [_bill(0, status: 'failed')], nextBeforeId: null));
+    await tester.pump();
+    await tester.pump();
+
+    expect(key.currentState!.countsCoverDeviceBills, isFalse);
   });
 
   testWidgets('a server that sends no counts still gets the loaded tally', (tester) async {

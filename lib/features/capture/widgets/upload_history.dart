@@ -350,32 +350,30 @@ class UploadHistoryState extends State<UploadHistory> {
     return filterUploads(ordered, widget.selected);
   }
 
+  /// Whether the numbers come from the server's tally of the WHOLE shop, as
+  /// opposed to counting the bills held here. The tally already includes
+  /// every bill this phone has sent to the server, so nothing held here may
+  /// be added to it a second time — see [countsCoverDeviceBills].
+  bool get _tallyMode => !((!_narrowed && _loadedOnce && _nextBeforeId == null) || _tally == null);
+
+  /// True when the counts this list reports already include this phone's
+  /// bills that have reached the server (their `jobId`). The screen adds only
+  /// the bills that have NOT — still being cropped or uploaded — and counts
+  /// no other. Before, it added every bill the phone held on top of a total
+  /// that already had them, so "Needs review" read 25 over 41.
+  bool get countsCoverDeviceBills => _tallyMode;
+
   Map<String, int> get _counts {
-    final localPaths = <String>{
-      for (final item in widget.localItems) ...item.sourceImages,
-    };
+    if (_tallyMode) {
+      final whole = _tally?[_folderKey(widget.folderId)];
+      return {...?whole}..removeWhere((_, n) => n <= 0);
+    }
     final tally = <String, int>{};
     for (final u in _inFolder) {
       final key = uploadCategory(u);
       tally[key] = (tally[key] ?? 0) + 1;
     }
-    // Everything is loaded, or the server did not say: what is held is
-    // exact, and live as cards change status.
-    final whole = _tally?[_folderKey(widget.folderId)];
-    if ((!_narrowed && _loadedOnce && _nextBeforeId == null) || _tally == null) return tally;
-
-    // More bills exist than are loaded. Use the server's count of the whole
-    // shop, less this device's own bills, which the grid above counts and
-    // the server counts too.
-    final counts = {...?whole};
-    for (final u in _uploads) {
-      if (u.folderId == widget.folderId && localPaths.contains(u.sourceImage)) {
-        final key = uploadCategory(u);
-        if ((counts[key] ?? 0) > 0) counts[key] = counts[key]! - 1;
-      }
-    }
-    counts.removeWhere((_, n) => n <= 0);
-    return counts;
+    return tally;
   }
 
   /// Bills per folder: the held bills counted one by one once every page is
