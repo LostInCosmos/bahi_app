@@ -254,6 +254,22 @@ class UploadHistoryState extends State<UploadHistory> {
     });
   }
 
+  /// A bill the server already counts changed box — one finished reading, or
+  /// was sent to be read again. Moves one from [from] to [to] in the held
+  /// tally at once, so the numbers on the boxes change as it happens instead
+  /// of when the server is next asked (which is soon after, and replaces
+  /// this with the truth). Either may be a box the server does not keep
+  /// (`tocrop`), which is then simply not touched.
+  void shiftCategory(int? folderId, String? from, String? to) {
+    final tally = _tally;
+    if (tally == null || from == to) return;
+    setState(() {
+      final bucket = tally.putIfAbsent(_folderKey(folderId), () => {});
+      if (from != null && (bucket[from] ?? 0) > 0) bucket[from] = bucket[from]! - 1;
+      if (to != null && _serverBoxes.contains(to)) bucket[to] = (bucket[to] ?? 0) + 1;
+    });
+  }
+
   /// Bills put back after [forget] took them away too soon — the server
   /// refused to discard them. Added to the list and to the held tally again.
   void restore(Iterable<UploadSummary> uploads) {

@@ -117,6 +117,16 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   Timer? _listRefresh;
 
+  /// A bill the server already counts changed box: move the number now.
+  /// Bills with no job yet are not in the server's tally — the screen counts
+  /// those itself — so they are not moved here.
+  void _noteMove(BatchItem item, String? before) {
+    if ((item.lastJobId ?? item.jobId) == null) return;
+    final after = categoryOfItem(item);
+    if (before == after) return;
+    _uploadHistory.currentState?.shiftCategory(item.folderId, before, after);
+  }
+
   /// Ask the list for fresh numbers, once for a burst of finishing bills
   /// rather than once per bill.
   void _scheduleListRefresh() {
@@ -554,10 +564,12 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// Submits a bill for extraction, or adopts an id already in flight. Does
   /// not wait — [_statusLoop] watches every in-flight bill together.
   Future<void> _processOne(BatchItem item, {int? resumeJobId}) async {
+    final before = categoryOfItem(item);
     setState(() {
       item.status = BatchItemStatus.processing;
       item.processingSince = null;
     });
+    _noteMove(item, before);
     try {
       int jobId;
       if (resumeJobId != null) {
@@ -583,6 +595,9 @@ class CaptureScreenState extends State<CaptureScreen> {
         );
         item.jobId = jobId;
         item.lastJobId = jobId;
+        // It has a job now, so the server counts it; ask for the numbers that
+        // include it rather than leave it uncounted until something else does.
+        _scheduleListRefresh();
       }
       await _persistBatch();
       _ensureStatusLoop();
@@ -660,7 +675,9 @@ class CaptureScreenState extends State<CaptureScreen> {
       for (final brief in batch.jobs) {
         final item = watching[brief.jobId];
         if (item != null) {
+          final before = categoryOfItem(item);
           await _applyStatus(item, brief);
+          _noteMove(item, before);
           if (brief.isTerminal) finished = true;
         }
       }
@@ -827,12 +844,14 @@ class CaptureScreenState extends State<CaptureScreen> {
     // became of the job before paying for another read. If it finished, the
     // watch loop folds the result in; if it truly failed, it says so.
     if (item.failedByTimeout) {
+      final before = categoryOfItem(item);
       setState(() {
         item.jobId = item.lastJobId;
         item.status = BatchItemStatus.processing;
         item.processingSince = null;
         item.errorMessage = null;
       });
+      _noteMove(item, before);
       await _persistBatch();
       _ensureStatusLoop();
       return;
@@ -1490,11 +1509,14 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// Works on any bill that is not being read: one that failed, or one whose
   /// result needs a second look.
   Future<void> _retryUpload(UploadSummary upload, {String? why}) async {
+    // The server counts this bill in the box it is in now; it is about to be
+    // read again, so one moves from that box to Working at once.
+    _uploadHistory.currentState?.shiftCategory(upload.folderId, uploadCategory(upload), 'working');
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..lastJobId = upload.jobId
       ..folderId = upload.folderId
-      ..status = BatchItemStatus.failed
+      ..status = BatchItemStatus.processing
       ..errorMessage = why;
     setState(() => _items.add(item));
     await _processOne(item);

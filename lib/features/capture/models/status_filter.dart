@@ -57,6 +57,14 @@ bool matchesStatusFilter(BatchItem item, String key) {
   return false;
 }
 
+/// Which status box a bill held on this phone is in right now, if any.
+String? categoryOfItem(BatchItem item) {
+  for (final f in kStatusFilters) {
+    if (matchesStatusFilter(item, f.key)) return f.key;
+  }
+  return null;
+}
+
 /// The cards to show. An empty selection means everything — the
 /// tickboxes are a filter, not a required choice.
 List<BatchItem> filterByStatus(List<BatchItem> items, Set<String> selected) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -54,6 +55,17 @@ class _Server {
   /// Job 8 is finished by the time the screen asks about it, as the server's
   /// four-call read is when a retried bill comes back.
   final bool finishes;
+
+  /// Where bill 8 is in its retry: `idle`, `retrying` (queued at the server),
+  /// or `finished`. The server's counts and list follow it.
+  String phase = 'idle';
+
+  /// Held so a test can look at the screen before the server's status answer.
+  Completer<void>? statusGate;
+
+  /// Holds the answer to the retry request, so a test can look at the screen
+  /// before the server has said anything about it.
+  Completer<void>? retryGate;
   final requests = <String>[];
 
   MockClient get client => MockClient((req) async {
@@ -68,7 +80,7 @@ class _Server {
           return _json({
             'jobs': [for (final j in [
               {'job_id': 9, 'status': 'done', 'source_image': '8/9.jpg', 'created_at': '2026-10-08T12:00:00Z', 'issue_count': 0},
-              {'job_id': 8, 'status': 'done', 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': 2},
+              {'job_id': 8, 'status': phase == 'retrying' ? 'queued' : 'done', 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': 2},
               {
                 'job_id': 7,
                 'status': 'failed',
@@ -78,7 +90,11 @@ class _Server {
               },
             ]) job(j)],
             'next_before_id': null,
-            'counts': {filed ? '3' : 'root': {'failed': 1, 'review': 1, 'check': 1}},
+            'counts': {
+              filed ? '3' : 'root': phase == 'retrying'
+                  ? {'failed': 1, 'working': 1, 'check': 1}
+                  : {'failed': 1, 'review': 1, 'check': 1},
+            },
           }, 200, asked);
         }
         if (req.method == 'GET' && path == '/invoices/extract/7') {
@@ -89,7 +105,11 @@ class _Server {
           });
         }
         if (req.method == 'POST' && path == '/invoices/extract/7/retry') return _json({'job_id': 7});
-        if (req.method == 'POST' && path == '/invoices/extract/8/retry') return _json({'job_id': 8});
+        if (req.method == 'POST' && path == '/invoices/extract/8/retry') {
+          if (retryGate != null) await retryGate!.future;
+          phase = 'retrying';
+          return _json({'job_id': 8});
+        }
         if (finishes && req.method == 'GET' && path == '/invoices/extract/8') {
           return _json({
             'job_id': 8,
@@ -107,6 +127,8 @@ class _Server {
           });
         }
         if (finishes && req.method == 'POST' && path == '/invoices/extract/status') {
+          if (statusGate != null) await statusGate!.future;
+          phase = 'finished';
           return _json({
             'jobs': [{'job_id': 8, 'status': 'done', 'attempt': 1, 'max_attempts': 3}],
             'changed': true,
@@ -312,41 +334,6 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets("retrying a needs-review bill does not change the box counts the server reports", (tester) async {
-    // "Needs review 25" over 41: the screen added every bill the phone held
-    // on top of a tally that already contained them, and took the retried
-    // bill off twice. A bill the phone sent to the server is in the tally;
-    // only bills that have not reached it are added.
-    _ignoreOverflow();
-    final server = _Server(filed: true);
-    await http.runWithClient(() async {
-      // Wide enough that every status box is built; the row builds lazily.
-      await tester.binding.setSurfaceSize(const Size(1000, 800));
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
-      await _settle(tester);
-      await tester.tap(find.text('Testing2'));
-      await _settle(tester);
-      // Tick the box: the list now holds only what the server sent for it,
-      // so its numbers are the server's tally of the whole shop.
-      await tester.tap(find.textContaining('Needs review 1'));
-      await _settle(tester);
-      expect(find.textContaining('Needs review 1'), findsOneWidget);
-
-      final review = find.byKey(const ValueKey('j:8'));
-      await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
-      await _settle(tester);
-
-      // The fake server's tally has not moved, so the count must not either:
-      // not 0 (taken off twice), not 'Working 1' (the phone's copy added to a
-      // tally that already holds it).
-      expect(find.textContaining('Needs review 1'), findsOneWidget);
-      expect(find.textContaining('Working 1'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 40));
-    }, () => server.client);
-  });
-
   testWidgets('when a retried bill finishes the screen asks for fresh numbers', (tester) async {
     // Ten bills retried together left "Working 10" over an empty list long
     // after the server had finished them: the boxes show the server's tally,
@@ -370,6 +357,52 @@ void main() {
       expect(server.requests, contains('POST /invoices/extract/8/retry'));
       // One refresh straight after the retry, one more when it finished.
       expect(lists() - before, greaterThanOrEqualTo(2), reason: server.requests.toString());
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
+    }, () => server.client);
+  });
+
+  testWidgets('the box numbers move live as a bill is re-read: Needs review -1 Working +1, then back', (tester) async {
+    // "When a bill moves from Working to Needs review, Working goes down by
+    // one and Needs review up by one" — as it happens, not on the next fetch.
+    _ignoreOverflow();
+    final server = _Server(filed: true, finishes: true)
+      ..statusGate = Completer<void>()
+      ..retryGate = Completer<void>();
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(1000, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+      await tester.tap(find.textContaining('Needs review 1'));   // the server's tally now
+      await _settle(tester);
+      expect(find.textContaining('Needs review 1'), findsOneWidget);
+      expect(find.textContaining('Working 1'), findsNothing);
+
+      final review = find.byKey(const ValueKey('j:8'));
+      await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
+      await tester.pump();
+      await tester.pump();                                       // the server has not answered the retry
+      expect(find.textContaining('Working 1'), findsOneWidget, reason: 'sent to be read: Working +1 at once');
+      expect(find.textContaining('Needs review 1'), findsNothing, reason: 'and Needs review -1');
+      expect(find.textContaining('Working 2'), findsNothing);
+
+      server.retryGate!.complete();                              // the server agrees (queued)
+      await _settle(tester);
+      expect(find.textContaining('Working 1'), findsOneWidget);
+
+      server.statusGate!.complete();                             // the read finishes
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));       // well inside the 800 ms before any refetch
+      expect(find.textContaining('Needs review 1'), findsOneWidget, reason: 'finished: Needs review +1');
+      expect(find.textContaining('Working 1'), findsNothing, reason: 'and Working -1');
+
+      await _settle(tester);                                     // the refetch confirms it
+      expect(find.textContaining('Needs review 1'), findsOneWidget);
+      expect(find.textContaining('Working 1'), findsNothing);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));
