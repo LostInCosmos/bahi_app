@@ -60,6 +60,27 @@ void main() {
       }
     }
 
+    testWidgets("two phone cards for one job are drawn once, so the box and the list agree", (tester) async {
+      var ids = <String>{};
+      final twin = ListEntry(
+        id: 'l:1b',
+        sortKey: 1,
+        item: BatchItem(label: 'Bill', pages: [])
+          ..sourceImages = ['8/1.jpg']
+          ..lastJobId = 1,
+        card: const SizedBox(key: ValueKey('local-1b'), width: 40, height: 40),
+      );
+      await tester.pumpWidget(box(
+        cards: [card(1), twin],
+        page: UploadPage(uploads: [_bill(1, issues: 2), _bill(2, issues: 2)]),
+        ids: (v) => ids = v,
+      ));
+      await settle(tester);
+
+      expect(ids, {'l:1', 'j:2'}, reason: 'job 1 once, however many cards the phone holds for it');
+      expect(find.byKey(const ValueKey('local-1b')), findsNothing);
+    });
+
     testWidgets("a phone card for a bill the server has elsewhere is not drawn in the box", (tester) async {
       var ids = <String>{};
       await tester.pumpWidget(box(

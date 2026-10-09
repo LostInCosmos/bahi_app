@@ -439,11 +439,16 @@ class UploadHistoryState extends State<UploadHistory> {
   List<ListEntry> get _drawnCards {
     if (!_narrowed || !_loadedOnce || _nextBeforeId != null || _held != null) return widget.localEntries;
     final onServer = {for (final u in _uploads) u.jobId};
+    // One card per job. The phone can hold two cards that now point at the same
+    // job (a card for a copy that was discarded, retried, and handed the
+    // original's job back) — drawn twice, a box said 17 and listed 18.
+    final drawn = <int>{};
     return [
       for (final entry in widget.localEntries)
         if (entry.item == null ||
             (entry.item!.lastJobId ?? entry.item!.jobId) == null ||
-            onServer.contains(entry.item!.lastJobId ?? entry.item!.jobId))
+            (onServer.contains(entry.item!.lastJobId ?? entry.item!.jobId) &&
+                drawn.add((entry.item!.lastJobId ?? entry.item!.jobId)!)))
           entry,
     ];
   }
