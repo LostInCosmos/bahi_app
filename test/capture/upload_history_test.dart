@@ -181,6 +181,27 @@ void main() {
       expect(find.text('Check & save'), findsOneWidget);
     });
 
+    testWidgets('two reads of one photo are two bills: a card hides only its own job', (tester) async {
+      // The same photo read more than once is several jobs, each its own entry in
+      // the box count. Matching a card to a row by PHOTO let twenty cards hide
+      // thirty rows ("Needs review 34", 24 listed).
+      final local = BatchItem(label: 'Bill', pages: [])
+        ..sourceImages = ['8/a.jpg']
+        ..lastJobId = 1;
+      await tester.pumpWidget(_host(_list(
+        local: [local],
+        localEntries: [drawn(local)],
+        uploads: [
+          _upload(jobId: 1, sourceImage: '8/a.jpg', issueCount: 3),   // the card's own job
+          _upload(jobId: 2, sourceImage: '8/a.jpg', issueCount: 4),   // the same photo, read again
+        ],
+      )));
+      await tester.pump();
+
+      expect(find.text('Check 3'), findsNothing, reason: 'job 1 is drawn by the phone\'s card');
+      expect(find.text('Check 4'), findsOneWidget, reason: 'job 2 is a different bill and must be drawn');
+    });
+
     testWidgets("shows the shop's row for a bill the device holds but is NOT drawing", (tester) async {
       // "Needs review 34", 24 listed: the phone held a card for the bill (its own
       // status said failed, so the box filtered that card out) and the shop's row

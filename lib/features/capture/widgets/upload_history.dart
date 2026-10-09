@@ -407,24 +407,37 @@ class UploadHistoryState extends State<UploadHistory> {
   /// here AND by its card's status, so it was counted in a box and drawn in
   /// none ("Needs review 34", 24 listed). Now the server's row stands in
   /// whenever the phone's card is not on screen, so every bill is drawn once.
-  List<UploadSummary> get _inFolder {
-    final drawn = <String>{
-      for (final entry in widget.localEntries) ...?entry.item?.sourceImages,
-    };
-    return _uploads
-        .where((u) => !drawn.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
-        .toList();
-  }
+  ///
+  /// A card and a row are the same bill when they share a JOB, not a photo:
+  /// the same photo can be read more than once, each read its own job and its
+  /// own entry in the count. Matching by photo let twenty cards hide thirty
+  /// rows. A card with no job yet has no row to match; it falls back to its
+  /// photo.
+  List<UploadSummary> get _inFolder => _rowsNotCoveredBy(
+        [for (final entry in widget.localEntries) if (entry.item != null) entry.item!],
+      );
 
   /// The shop's bills in the folder minus EVERY bill the phone holds, drawn or
   /// not — what the object-mode counts need, since the screen counts the
   /// phone's own bills itself and a bill must not be counted by both.
-  List<UploadSummary> get _notHeldHere {
-    final held = <String>{
-      for (final item in widget.localItems) ...item.sourceImages,
-    };
+  List<UploadSummary> get _notHeldHere => _rowsNotCoveredBy(widget.localItems);
+
+  List<UploadSummary> _rowsNotCoveredBy(Iterable<BatchItem> cards) {
+    final jobs = <int>{};
+    final photos = <String>{};
+    for (final item in cards) {
+      final job = item.lastJobId ?? item.jobId;
+      if (job != null) {
+        jobs.add(job);
+      } else {
+        photos.addAll(item.sourceImages);
+      }
+    }
     return _uploads
-        .where((u) => !held.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
+        .where((u) =>
+            !jobs.contains(u.jobId) &&
+            !photos.contains(u.sourceImage) &&
+            u.folderId == (_held?.folder ?? widget.folderId))
         .toList();
   }
 
