@@ -85,4 +85,33 @@ void main() {
       expect(ids, containsAll({'l:1', 'l:9'}), reason: 'not hidden on a guess');
     });
   });
+
+  group('a bill being retried leaves the box it was in at once', () {
+    testWidgets('its row is hidden although the server still lists it there', (tester) async {
+      // Tapping retry: the phone's card for it is now processing (so it is not drawn
+      // under Needs review) while the server's list still has it as needing review
+      // until the answer comes back. It must not reappear in the meantime.
+      final retrying = BatchItem(label: 'Bill', pages: [])
+        ..sourceImages = ['8/1.jpg']
+        ..lastJobId = 1
+        ..status = BatchItemStatus.processing;
+      var ids = <String>{};
+      await tester.pumpWidget(_host(UploadHistory(
+        localItems: [retrying],
+        localEntries: const [],                           // processing: not in the review box
+        folderId: null,
+        selected: const {'review'},
+        onOpen: (_) async {},
+        onEntries: (entries, {required more, required settled, required counts}) =>
+            ids = {for (final e in entries) e.id},
+        fetchFiltered: ({int limit = 50, int? beforeId, Set<String> categories = const {}, String? folder}) =>
+            Future.value(UploadPage(uploads: [_bill(1, issues: 2), _bill(2, issues: 2)])),
+      )));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump();
+      }
+
+      expect(ids, {'j:2'}, reason: 'job 1 is being retried: gone from the box; job 2 stays');
+    });
+  });
 }

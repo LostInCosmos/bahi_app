@@ -415,6 +415,7 @@ class UploadHistoryState extends State<UploadHistory> {
   /// photo.
   List<UploadSummary> get _inFolder => _rowsNotCoveredBy(
         [for (final entry in _drawnCards) if (entry.item != null) entry.item!],
+        alsoHidingInFlight: true,
       );
 
   /// The phone's own cards that are actually drawn.
@@ -444,9 +445,19 @@ class UploadHistoryState extends State<UploadHistory> {
   /// phone's own bills itself and a bill must not be counted by both.
   List<UploadSummary> get _notHeldHere => _rowsNotCoveredBy(widget.localItems);
 
-  List<UploadSummary> _rowsNotCoveredBy(Iterable<BatchItem> cards) {
+  List<UploadSummary> _rowsNotCoveredBy(Iterable<BatchItem> cards, {bool alsoHidingInFlight = false}) {
     final jobs = <int>{};
     final photos = <String>{};
+    // A bill the phone is reading RIGHT NOW (a retry just tapped) must leave
+    // every box it was in at once, though the server still lists it there until
+    // its answer comes back: its row stays hidden in all boxes, and the
+    // phone's own card stands in under Working.
+    if (alsoHidingInFlight) {
+      for (final item in widget.localItems) {
+        final job = item.lastJobId ?? item.jobId;
+        if (job != null && matchesStatusFilter(item, 'working')) jobs.add(job);
+      }
+    }
     for (final item in cards) {
       final job = item.lastJobId ?? item.jobId;
       if (job != null) {
