@@ -132,8 +132,9 @@ class BatchItem {
 
   bool get isUploaded => sourceImages.isNotEmpty;
 
-  /// The words on a card the PHONE gave up on while the server was still
-  /// working — see [failedByTimeout].
+  /// The words on a card an older version of this app gave up on while the
+  /// server was still working — see [failedByTimeout]. This version never
+  /// gives up on a bill itself, but those cards are still stored on phones.
   static const timedOutMessage = 'This bill is taking longer than expected — please try again.';
 
   /// Failed only because this phone stopped waiting. The server may well have

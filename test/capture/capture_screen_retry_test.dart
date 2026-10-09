@@ -48,7 +48,14 @@ BatchItem _item(BatchItemStatus status, {bool uploaded = true}) {
 class _Server {
   /// Bills filed in folder 3 ("Testing2"), as on the phone, so the status
   /// boxes — which only show inside a folder — are reachable.
-  _Server({this.filed = false, this.finishes = false});
+  _Server({this.filed = false, this.finishes = false, this.neverFinishes = false});
+
+  /// The server keeps answering "still processing" for bill 8, as a held
+  /// long-poll would, for as long as the test lets time run.
+  final bool neverFinishes;
+
+  /// How many times the screen asked about the bills in flight.
+  int statusPolls = 0;
 
   final bool filed;
 
@@ -120,6 +127,14 @@ class _Server {
           if (retryGate != null) await retryGate!.future;
           phase = 'retrying';
           return _json({'job_id': 8});
+        }
+        if (neverFinishes && req.method == 'POST' && path == '/invoices/extract/status') {
+          statusPolls++;
+          await Future<void>.delayed(const Duration(seconds: 25));
+          return _json({
+            'jobs': [{'job_id': 8, 'status': 'processing', 'attempt': 1, 'max_attempts': 3}],
+            'changed': false,
+          });
         }
         if (finishes && req.method == 'GET' && path == '/invoices/extract/8') {
           return _json({
@@ -374,9 +389,11 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('the box numbers move live as a bill is re-read: Needs review -1 Working +1, then back', (tester) async {
-    // "When a bill moves from Working to Needs review, Working goes down by
-    // one and Needs review up by one" — as it happens, not on the next fetch.
+  testWidgets('the box numbers move live both ways: a retry starts (Working +1) and it finishes (Working -1)', (tester) async {
+    // "When a bill moves from Working to Needs review, Working goes down by one
+    // and Needs review up by one — and when a retry starts, the reverse." As it
+    // happens, not on the next fetch. Changes that do not involve Working wait
+    // for the server.
     _ignoreOverflow();
     final server = _Server(filed: true, finishes: true)
       ..statusGate = Completer<void>()
@@ -390,13 +407,12 @@ void main() {
       await tester.tap(find.textContaining('Needs review 1'));   // the server's tally now
       await _settle(tester);
       expect(find.textContaining('Needs review 1'), findsOneWidget);
-      expect(find.textContaining('Working 1'), findsNothing);
 
       final review = find.byKey(const ValueKey('j:8'));
       await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
       await tester.pump();
       await tester.pump();                                       // the server has not answered the retry
-      expect(find.textContaining('Working 1'), findsOneWidget, reason: 'sent to be read: Working +1 at once');
+      expect(find.textContaining('Working 1'), findsOneWidget, reason: 'a retry began: Working +1 at once');
       expect(find.textContaining('Needs review 1'), findsNothing, reason: 'and Needs review -1');
       expect(find.textContaining('Working 2'), findsNothing);
 
@@ -525,5 +541,48 @@ void main() {
       expect(_item(BatchItemStatus.ready).startupAction, StartupAction.process);
       expect(_item(BatchItemStatus.preparing, uploaded: false).startupAction, StartupAction.uploadAgain);
     });
+  });
+
+  testWidgets('the phone keeps watching a bill the server is still reading, with no cutoff', (tester) async {
+    // It used to stop after a fixed time — 120 s, then 15 min — and mark the
+    // bill failed while the server went on to finish it. There is no limit now:
+    // the card shows what the server says, however long that takes.
+    //
+    // What this can and cannot show: fake time moves the holds and timers but
+    // not DateTime.now(), so it cannot prove a clock-based cutoff is absent —
+    // that is the code (no such check exists). It does show the watch never
+    // stops, and the card is never turned into a failure by anything but the
+    // server.
+    _ignoreOverflow();
+    final server = _Server(filed: true, neverFinishes: true);
+    await http.runWithClient(() async {
+      // Wide enough that every status box is built; the row builds lazily.
+      await tester.binding.setSurfaceSize(const Size(1400, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+      expect(find.textContaining('Failed 1'), findsOneWidget);          // bill 7, a real failure
+
+      final retry = find.descendant(
+          of: find.byKey(const ValueKey('j:8')), matching: find.byIcon(Icons.refresh_rounded));
+      await tester.ensureVisible(retry);
+      await tester.pump();
+      await tester.tap(retry);
+      await _settle(tester);
+      expect(server.requests, contains('POST /invoices/extract/8/retry'), reason: 'the retry must have started');
+
+      for (var i = 0; i < 400; i++) {
+        await tester.pump(const Duration(seconds: 27));
+      }
+
+      expect(server.statusPolls, greaterThan(300), reason: 'the watch must not have stopped');
+      expect(find.textContaining('Failed 1'), findsOneWidget, reason: 'still just the one real failure');
+      expect(find.textContaining('Failed 2'), findsNothing);
+      expect(find.textContaining('taking longer'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
+    }, () => server.client);
   });
 }

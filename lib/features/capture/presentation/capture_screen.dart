@@ -78,15 +78,13 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// finishes after a logout can't be saved under the next shop's batch.
   final BatchStore? _store = BatchStore.forCurrentUser();
 
-  // How long the server may be working on ONE bill before this card stops
-  // waiting. Queue time is excluded — see _timeOutStuckBills. It only stops
-  // the spinner: the server reclaims and retries a stuck job on its own.
-  //
-  // A bill is up to FOUR model calls (read, row retry, read, row retry) and
-  // the provider is capped at a few at a time, so ten bills at once queue
-  // behind one another. 120 seconds was set when a bill was one call; it
-  // failed bills the server went on to finish.
-  static const _attemptTimeout = Duration(minutes: 15);
+  // There is NO client-side limit on how long a bill may be read. The phone
+  // used to give up after a fixed time and mark the bill failed, and the
+  // server went on to finish it: first at 120 s (set when a bill was one model
+  // call), then every limit is wrong again as soon as a bill takes more calls
+  // or the provider is busy. The server is the one that knows — it reclaims a
+  // job nobody is working on and fails it after its attempts — so the card
+  // shows what the server says, however long that takes.
   // The server's reconciler re-queues a due retry on a 60s sweep, so pickup
   // can lag `retryAt` by up to that much.
   static const _retrySweepMargin = Duration(seconds: 60);
@@ -117,13 +115,16 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   Timer? _listRefresh;
 
-  /// A bill the server already counts changed box: move the number now.
+  /// A bill has just entered or left Working — a retry began, or a read
+  /// finished or failed: move the numbers now (one box down, the other up),
+  /// rather than when the server is next asked. Only changes involving
+  /// Working are made live; everything else waits for the server's own count.
   /// Bills with no job yet are not in the server's tally — the screen counts
   /// those itself — so they are not moved here.
   void _noteMove(BatchItem item, String? before) {
     if ((item.lastJobId ?? item.jobId) == null) return;
     final after = categoryOfItem(item);
-    if (before == after) return;
+    if (before == after || (before != 'working' && after != 'working')) return;
     _uploadHistory.currentState?.shiftCategory(item.folderId, before, after);
   }
 
@@ -715,7 +716,6 @@ class CaptureScreenState extends State<CaptureScreen> {
       // bills retried together left "Working 10" over an empty list after the
       // server had finished all of them.
       if (finished) _scheduleListRefresh();
-      _timeOutStuckBills();
       await _persistBatch();
     }
   }
@@ -735,12 +735,9 @@ class CaptureScreenState extends State<CaptureScreen> {
       setState(() {
         item.retryAt = null;
         if (brief.isProcessing) {
-          // The clock starts when the server picks it up, not when the bill
-          // was queued — see _timeOutStuckBills.
           item.processingSince ??= DateTime.now().toUtc();
         } else {
-          // Back to queued: whatever the last attempt had done is void, and
-          // a stale clock would time out a bill waiting its turn again.
+          // Back to queued: whatever the last attempt had done is void.
           item.processingSince = null;
         }
       });
@@ -782,27 +779,6 @@ class CaptureScreenState extends State<CaptureScreen> {
       // Fetching the result failed, but the bill itself is finished. Leave it
       // in flight so the next round picks it up rather than calling a read
       // bill failed over one dropped request.
-    }
-  }
-
-  /// A bill the server has actually been working on for too long.
-  ///
-  /// The clock runs from `processingSince`, NOT from submission. Queue time
-  /// does not count: at three bills at a time, a bill twenty deep waits
-  /// minutes before anyone looks at it, and the old timer called that failed
-  /// — then Retry spent a fresh model call reproducing a result the server
-  /// was already about to deliver.
-  void _timeOutStuckBills() {
-    final now = DateTime.now().toUtc();
-    for (final item in _items) {
-      final since = item.processingSince;
-      if (since == null || now.difference(since) < _attemptTimeout) continue;
-      setState(() {
-        item.jobId = null;
-        item.processingSince = null;
-        item.status = BatchItemStatus.failed;
-        item.errorMessage = BatchItem.timedOutMessage;
-      });
     }
   }
 

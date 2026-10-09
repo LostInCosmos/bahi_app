@@ -397,6 +397,46 @@ void main() {
       expect(asked, ['all', 'failed@5', 'failed@9']);
     });
 
+    testWidgets('the numbers hold still while a ticked box is being fetched', (tester) async {
+      // Ticking "Needs review" made the boxes show 13 for as long as the
+      // request took: the tally was thrown away, so they counted the few
+      // bills loaded so far. The server's count of the shop does not change
+      // with the filter, so neither may the numbers.
+      final slow = Completer<UploadPage>();
+      await tester.pumpWidget(host(filteredAnswer: () => slow.future));
+      await settle(tester);
+      expect(shownCounts, {'check': 70, 'failed': 1});
+
+      selected.value = {'failed'};          // the request is now in flight
+      await settle(tester);
+      expect(shownCounts, {'check': 70, 'failed': 1}, reason: 'not counted from the bills loaded so far');
+
+      selected.value = {};                   // and unticking, while it is still in flight
+      await settle(tester);
+      expect(shownCounts, {'check': 70, 'failed': 1});
+
+      slow.complete(UploadPage(uploads: [_bill(0, status: 'failed')]));
+      await settle(tester);
+    });
+
+    testWidgets('the grid does not blank while a ticked box is being fetched', (tester) async {
+      // Ticking a box cleared the grid until the server answered, then filled
+      // it — a flash of empty on every tick. The view that was there stays
+      // until the new rows replace it in one step.
+      final slow = Completer<UploadPage>();
+      await tester.pumpWidget(host(filteredAnswer: () => slow.future));
+      await settle(tester);
+      expect(shown, [3, 2, 1]);
+
+      selected.value = {'failed'};          // the request is in flight
+      await settle(tester);
+      expect(shown, [3, 2, 1], reason: 'not blank, and not the held rows re-filtered to nothing');
+
+      slow.complete(UploadPage(uploads: [_bill(0, status: 'failed')]));
+      await settle(tester);
+      expect(shown, [0], reason: 'then the new view, in one step');
+    });
+
     testWidgets("an answer to the old box is not added to the new one", (tester) async {
       final slow = Completer<UploadPage>();
       await tester.pumpWidget(host(filteredAnswer: () => slow.future));

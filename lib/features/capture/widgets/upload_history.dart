@@ -146,6 +146,14 @@ class UploadHistoryState extends State<UploadHistory> {
   /// it, so what it holds is NOT the shop — counts must come from the tally.
   bool get _narrowed => _categories.isNotEmpty;
 
+  /// The view still on screen while the answer to a NEW one is awaited: the
+  /// boxes and folder it was drawn for. Without it, ticking a box blanked the
+  /// grid (the rows held were filtered by the new boxes, usually to nothing,
+  /// or cleared outright) until the server answered, then filled it — a flash
+  /// of empty on every tick. Now the old view stays until the new rows arrive
+  /// and replace it in one step.
+  ({Set<String> boxes, int? folder})? _held;
+
   /// The server's tally of the whole shop, taken with the newest page — what
   /// lets a box say 74 before 74 bills have been scrolled to. Kept in step
   /// with discards and moves done here; null until a server that sends it
@@ -189,9 +197,43 @@ class UploadHistoryState extends State<UploadHistory> {
     final changed = before.length != after.length || !before.containsAll(after) ||
         (after.isNotEmpty && oldWidget.folderId != widget.folderId);
     if (changed) {
+      // Keep drawing what was drawn; remember the EARLIEST view if the shop
+      // keeps ticking before the first answer is back.
+      _held ??= (boxes: oldWidget.selected, folder: oldWidget.folderId);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) reload();
+        if (mounted) _swap();
       });
+    }
+  }
+
+  /// Ask for the first page of the new view and replace the rows in ONE step —
+  /// unlike [reload], which empties the list first.
+  Future<void> _swap() async {
+    final generation = ++_generation;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await _fetchPage(beforeId: null);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _takeTally(page.counts);
+        _uploads
+          ..clear()
+          ..addAll(page.uploads);
+        _nextBeforeId = page.nextBeforeId;
+        _loadedOnce = true;
+        _held = null;
+      });
+    } catch (e) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _error = e.toString();
+        _held = null;
+      });
+    } finally {
+      if (mounted && generation == _generation) setState(() => _loading = false);
     }
   }
 
@@ -204,7 +246,11 @@ class UploadHistoryState extends State<UploadHistory> {
       _uploads.clear();
       _nextBeforeId = null;
       _loadedOnce = false;
-      _tally = null;
+      // The tally is NOT cleared. The numbers on the boxes are the server's
+      // count of the whole shop, which a different filter does not change;
+      // clearing it made them fall back to counting the few bills loaded so
+      // far — so ticking "Needs review" showed 13 for as long as the request
+      // took. They stay as they were until the answer replaces them.
       _error = null;
     });
     await _loadMore();
@@ -359,7 +405,7 @@ class UploadHistoryState extends State<UploadHistory> {
       for (final item in widget.localItems) ...item.sourceImages,
     };
     return _uploads
-        .where((u) => !localPaths.contains(u.sourceImage) && u.folderId == widget.folderId)
+        .where((u) => !localPaths.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
         .toList();
   }
 
@@ -369,7 +415,7 @@ class UploadHistoryState extends State<UploadHistory> {
     // happened to arrive — a refresh inserts at the top and an update
     // replaces in place, and neither may reorder what is on screen.
     final ordered = _inFolder..sort((a, b) => b.jobId.compareTo(a.jobId));
-    return filterUploads(ordered, widget.selected);
+    return filterUploads(ordered, _held?.boxes ?? widget.selected);
   }
 
   /// Whether the numbers come from the server's tally of the WHOLE shop, as
