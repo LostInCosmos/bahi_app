@@ -115,6 +115,36 @@ void _ignoreOverflow() {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  group('a bill the phone gave up on', () {
+    // "Failed" over a bill the server had finished: the phone stopped waiting
+    // after 120 seconds, and a bill is now up to four model calls.
+    test('is recognised by the words it carries and the job it can still ask about', () {
+      final item = _item(BatchItemStatus.failed)
+        ..errorMessage = BatchItem.timedOutMessage
+        ..lastJobId = 7;
+      expect(item.failedByTimeout, isTrue);
+    });
+
+    test('a bill that failed for a real reason is not one of them', () {
+      final item = _item(BatchItemStatus.failed)
+        ..errorMessage = 'Qwen 400'
+        ..lastJobId = 7;
+      expect(item.failedByTimeout, isFalse);
+    });
+
+    test('nor is one with no job to ask about', () {
+      final item = _item(BatchItemStatus.failed)..errorMessage = BatchItem.timedOutMessage;
+      expect(item.failedByTimeout, isFalse);
+    });
+
+    test('nor one that is not failed', () {
+      final item = _item(BatchItemStatus.processing)
+        ..errorMessage = BatchItem.timedOutMessage
+        ..lastJobId = 7;
+      expect(item.failedByTimeout, isFalse);
+    });
+  });
+
   group('when a card offers its ↻ button', () {
     test('a failed bill always does, even if the upload itself is what failed', () {
       expect(_item(BatchItemStatus.failed, uploaded: false).canReprocess(choosing: false), isTrue);

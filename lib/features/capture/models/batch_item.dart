@@ -132,6 +132,18 @@ class BatchItem {
 
   bool get isUploaded => sourceImages.isNotEmpty;
 
+  /// The words on a card the PHONE gave up on while the server was still
+  /// working — see [failedByTimeout].
+  static const timedOutMessage = 'This bill is taking longer than expected — please try again.';
+
+  /// Failed only because this phone stopped waiting. The server may well have
+  /// finished: it ran the whole read-and-retry cycle (up to four model calls,
+  /// queued behind a cap on the provider) while the card had already said
+  /// "failed". Trying again should look at that job first, not read the bill
+  /// all over again and spend four more calls.
+  bool get failedByTimeout =>
+      status == BatchItemStatus.failed && errorMessage == timedOutMessage && lastJobId != null;
+
   /// Whether the card offers its ↻ button.
   ///
   /// Not while its photos are being uploaded or it is being read, and not

@@ -78,12 +78,15 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// finishes after a logout can't be saved under the next shop's batch.
   final BatchStore? _store = BatchStore.forCurrentUser();
 
-  // How long one bill may sit in pending/processing before this screen stops
-  // waiting — shorter than the worker's own stale-job reclaim. It only stops
-  // the spinner; the job is still reclaimed and retried server-side.
-  // How long the server may be actively working on ONE attempt before the
-  // card gives up. Queue time is excluded — see _timeOutStuckBills.
-  static const _attemptTimeout = Duration(seconds: 120);
+  // How long the server may be working on ONE bill before this card stops
+  // waiting. Queue time is excluded — see _timeOutStuckBills. It only stops
+  // the spinner: the server reclaims and retries a stuck job on its own.
+  //
+  // A bill is up to FOUR model calls (read, row retry, read, row retry) and
+  // the provider is capped at a few at a time, so ten bills at once queue
+  // behind one another. 120 seconds was set when a bill was one call; it
+  // failed bills the server went on to finish.
+  static const _attemptTimeout = Duration(minutes: 15);
   // The server's reconciler re-queues a due retry on a 60s sweep, so pickup
   // can lag `retryAt` by up to that much.
   static const _retrySweepMargin = Duration(seconds: 60);
@@ -731,7 +734,7 @@ class CaptureScreenState extends State<CaptureScreen> {
         item.jobId = null;
         item.processingSince = null;
         item.status = BatchItemStatus.failed;
-        item.errorMessage = 'This bill is taking longer than expected — please try again.';
+        item.errorMessage = BatchItem.timedOutMessage;
       });
     }
   }
@@ -799,6 +802,20 @@ class CaptureScreenState extends State<CaptureScreen> {
   }
 
   Future<void> _retryFailed(BatchItem item) async {
+    // This phone gave up while the server carried on: ask the server what
+    // became of the job before paying for another read. If it finished, the
+    // watch loop folds the result in; if it truly failed, it says so.
+    if (item.failedByTimeout) {
+      setState(() {
+        item.jobId = item.lastJobId;
+        item.status = BatchItemStatus.processing;
+        item.processingSince = null;
+        item.errorMessage = null;
+      });
+      await _persistBatch();
+      _ensureStatusLoop();
+      return;
+    }
     // A save that failed is retried as a save. Re-extracting would spend an
     // LLM call to reproduce the result that has just failed to save.
     final result = item.result;
