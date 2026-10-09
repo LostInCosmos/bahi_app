@@ -398,14 +398,33 @@ class UploadHistoryState extends State<UploadHistory> {
     }
   }
 
-  /// The shop's bills in the folder being looked at, minus the ones already
-  /// on this device — before any status box narrows them.
+  /// The shop's bills in the folder being looked at, minus the ones this phone
+  /// is DRAWING a card for — before any status box narrows them.
+  ///
+  /// Minus the cards actually drawn, not every bill the phone holds. A bill
+  /// the phone holds but is not drawing — its own card says failed, or still
+  /// processing, while the server counts it as Needs review — used to be hidden
+  /// here AND by its card's status, so it was counted in a box and drawn in
+  /// none ("Needs review 34", 24 listed). Now the server's row stands in
+  /// whenever the phone's card is not on screen, so every bill is drawn once.
   List<UploadSummary> get _inFolder {
-    final localPaths = <String>{
+    final drawn = <String>{
+      for (final entry in widget.localEntries) ...?entry.item?.sourceImages,
+    };
+    return _uploads
+        .where((u) => !drawn.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
+        .toList();
+  }
+
+  /// The shop's bills in the folder minus EVERY bill the phone holds, drawn or
+  /// not — what the object-mode counts need, since the screen counts the
+  /// phone's own bills itself and a bill must not be counted by both.
+  List<UploadSummary> get _notHeldHere {
+    final held = <String>{
       for (final item in widget.localItems) ...item.sourceImages,
     };
     return _uploads
-        .where((u) => !localPaths.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
+        .where((u) => !held.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
         .toList();
   }
 
@@ -437,7 +456,7 @@ class UploadHistoryState extends State<UploadHistory> {
       return {...?whole}..removeWhere((_, n) => n <= 0);
     }
     final tally = <String, int>{};
-    for (final u in _inFolder) {
+    for (final u in _notHeldHere) {
       final key = uploadCategory(u);
       tally[key] = (tally[key] ?? 0) + 1;
     }
