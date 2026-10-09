@@ -109,9 +109,21 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   @override
   void dispose() {
+    _listRefresh?.cancel();
     _folders.removeListener(_onFoldersChanged);
     _folders.dispose();
     super.dispose();
+  }
+
+  Timer? _listRefresh;
+
+  /// Ask the list for fresh numbers, once for a burst of finishing bills
+  /// rather than once per bill.
+  void _scheduleListRefresh() {
+    if (_listRefresh?.isActive ?? false) return;
+    _listRefresh = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) unawaited(_uploadHistory.currentState?.refresh());
+    });
   }
 
   void _onFoldersChanged() {
@@ -644,10 +656,19 @@ class CaptureScreenState extends State<CaptureScreen> {
       }
       if (!mounted) return;
 
+      var finished = false;
       for (final brief in batch.jobs) {
         final item = watching[brief.jobId];
-        if (item != null) await _applyStatus(item, brief);
+        if (item != null) {
+          await _applyStatus(item, brief);
+          if (brief.isTerminal) finished = true;
+        }
       }
+      // A bill finishing changes what the boxes should say, and the list's
+      // tally is the SERVER's — which only moves when it is asked again. Ten
+      // bills retried together left "Working 10" over an empty list after the
+      // server had finished all of them.
+      if (finished) _scheduleListRefresh();
       _timeOutStuckBills();
       await _persistBatch();
     }

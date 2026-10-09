@@ -47,9 +47,13 @@ BatchItem _item(BatchItemStatus status, {bool uploaded = true}) {
 class _Server {
   /// Bills filed in folder 3 ("Testing2"), as on the phone, so the status
   /// boxes — which only show inside a folder — are reachable.
-  _Server({this.filed = false});
+  _Server({this.filed = false, this.finishes = false});
 
   final bool filed;
+
+  /// Job 8 is finished by the time the screen asks about it, as the server's
+  /// four-call read is when a retried bill comes back.
+  final bool finishes;
   final requests = <String>[];
 
   MockClient get client => MockClient((req) async {
@@ -86,6 +90,28 @@ class _Server {
         }
         if (req.method == 'POST' && path == '/invoices/extract/7/retry') return _json({'job_id': 7});
         if (req.method == 'POST' && path == '/invoices/extract/8/retry') return _json({'job_id': 8});
+        if (finishes && req.method == 'GET' && path == '/invoices/extract/8') {
+          return _json({
+            'job_id': 8,
+            'status': 'done',
+            'result': {
+              'invoice': {
+                'seller_name': 'ACME', 'seller_gstin': '09AAGCP8428E1Z7', 'invoice_no': 'A-8',
+                'invoice_date': '2026-08-01', 'line_items': [], 'totals': {},
+              },
+              'extraction_meta': {'source_image': '8/8.jpg', 'method': 'llm'},
+              'issues': [
+                {'field': 'totals.grand_total', 'severity': 'error', 'message': 'totals do not add up'},
+              ],
+            },
+          });
+        }
+        if (finishes && req.method == 'POST' && path == '/invoices/extract/status') {
+          return _json({
+            'jobs': [{'job_id': 8, 'status': 'done', 'attempt': 1, 'max_attempts': 3}],
+            'changed': true,
+          });
+        }
         if (req.method == 'POST' && path == '/invoices/extract/status') {
           // The real server holds this request open until something changes.
           // Answering at once made the screen's watch loop spin without a
@@ -315,6 +341,35 @@ void main() {
       // tally that already holds it).
       expect(find.textContaining('Needs review 1'), findsOneWidget);
       expect(find.textContaining('Working 1'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
+    }, () => server.client);
+  });
+
+  testWidgets('when a retried bill finishes the screen asks for fresh numbers', (tester) async {
+    // Ten bills retried together left "Working 10" over an empty list long
+    // after the server had finished them: the boxes show the server's tally,
+    // which only moves when it is asked again.
+    _ignoreOverflow();
+    final server = _Server(filed: true, finishes: true);
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+      int lists() => server.requests.where((r) => r.startsWith('GET /invoices/extract?')).length;
+      final before = lists();
+
+      final review = find.byKey(const ValueKey('j:8'));
+      await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
+      await _settle(tester);
+      await _settle(tester);
+
+      expect(server.requests, contains('POST /invoices/extract/8/retry'));
+      // One refresh straight after the retry, one more when it finished.
+      expect(lists() - before, greaterThanOrEqualTo(2), reason: server.requests.toString());
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));
