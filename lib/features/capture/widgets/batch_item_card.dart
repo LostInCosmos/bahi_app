@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../models/batch_item.dart';
+import '../models/bill_search.dart';
 import 'bill_thumbnail.dart';
 import 'retry_label.dart';
 import 'selection_mark.dart';
@@ -150,7 +151,8 @@ class BatchItemCard extends StatelessWidget {
               right: Spacing.xs,
               bottom: Spacing.xs,
               child: Text(
-                pageCount > 1 ? '${item.label} ($pageCount pages)' : item.label,
+                // The shop once it has been read; the label until then.
+                pageCount > 1 ? '${item.shopName ?? item.label} ($pageCount pages)' : (item.shopName ?? item.label),
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,

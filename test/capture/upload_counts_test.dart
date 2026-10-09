@@ -452,4 +452,44 @@ void main() {
       expect(shown, [3, 2, 1], reason: 'the failed bill belongs to a question nobody is asking now');
     });
   });
+
+  group('searching a folder with more pages', () {
+    // Search is on the phone, so it can only see bills that are loaded. While
+    // someone is searching the list keeps loading the rest — the same pages a
+    // scroll would fetch — so the search covers the whole folder.
+    Widget list(String query, List<int?> asked) => _host(UploadHistory(
+          localItems: const [],
+          folderId: null,
+          selected: const {},
+          query: query,
+          onOpen: (_) async {},
+          fetch: ({int limit = 50, int? beforeId}) {
+            asked.add(beforeId);
+            if (beforeId != null) return Completer<UploadPage>().future;   // held open: only the ask matters
+            return Future.value(UploadPage(
+              uploads: [for (var i = 60; i > 30; i--) _bill(i)],           // thirty cards fill the screen
+              nextBeforeId: 31,
+            ));
+          },
+        ));
+
+    testWidgets('asks for the next page while a search is on', (tester) async {
+      final asked = <int?>[];
+      await tester.pumpWidget(list('zz', asked));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump();
+      }
+      expect(asked, [null, 31]);
+    });
+
+    testWidgets('does not, when nothing is being searched and the screen is full', (tester) async {
+      final asked = <int?>[];
+      await tester.pumpWidget(list('', asked));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump();
+      }
+      expect(asked, [null], reason: 'a scroll asks for more; nothing else should');
+    });
+  });
 }
+

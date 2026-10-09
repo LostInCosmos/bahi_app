@@ -23,6 +23,7 @@ import '../models/upload_summary.dart';
 import '../widgets/batch_item_card.dart';
 import '../widgets/capture_bottom_bar.dart';
 import '../widgets/status_filter_bar.dart';
+import '../models/bill_search.dart';
 import '../models/status_filter.dart';
 import '../models/pdf_pages.dart';
 import '../widgets/capture_empty_state.dart';
@@ -108,12 +109,18 @@ class CaptureScreenState extends State<CaptureScreen> {
   @override
   void dispose() {
     _listRefresh?.cancel();
+    _searchController.dispose();
     _folders.removeListener(_onFoldersChanged);
     _folders.dispose();
     super.dispose();
   }
 
   Timer? _listRefresh;
+
+  // The search box. Entirely on the phone: it filters the bills that are
+  // loaded as letters are typed, and the list loads the rest while it is used.
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';   // normalised: trimmed, lower-cased; empty is no search
 
   /// A bill has just entered or left Working — a retry began, or a read
   /// finished or failed: move the numbers now (one box down, the other up),
@@ -1083,9 +1090,10 @@ class CaptureScreenState extends State<CaptureScreen> {
     // Filtering composes with the folder rather than replacing it:
     // ticking a status narrows what is in this folder, it does not
     // leave it.
-    final here = filterByStatus(inFolder, _statusFilter);
+    final byStatus = filterByStatus(inFolder, _statusFilter);
+    final here = _query.isEmpty ? byStatus : byStatus.where((i) => i.matchesSearch(_query)).toList();
     final subfolders = _folders.children;
-    final filtering = _statusFilter.isNotEmpty;
+    final filtering = _statusFilter.isNotEmpty || _query.isNotEmpty;
     return SafeArea(
       child: Column(
         children: [
@@ -1105,6 +1113,35 @@ class CaptureScreenState extends State<CaptureScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.m, vertical: Spacing.s),
               child: Align(alignment: Alignment.centerLeft, child: Text(_pdfProgress!)),
+            ),
+          // Search by shop or invoice number. Shown with the status boxes, since
+          // both are about narrowing a list that is there.
+          if (_items.isNotEmpty || filtering || _visible.isNotEmpty || _choosing)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Spacing.m, Spacing.xs, Spacing.m, 0),
+              child: TextField(
+                key: const ValueKey('bill-search'),
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                onChanged: (typed) => setState(() => _query = normaliseSearch(typed)),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search by shop or invoice number',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          key: const ValueKey('bill-search-clear'),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
+                ),
+              ),
             ),
           // Shown whenever there is anything to filter — which on a freshly
           // signed-in phone means the shop's bills, not this device's. It
@@ -1577,10 +1614,12 @@ class CaptureScreenState extends State<CaptureScreen> {
           SliverFillRemaining(
             hasScrollBody: false,
             child: filtering
-                ? const Center(
+                ? Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text('Nothing here matches those statuses'),
+                      padding: const EdgeInsets.all(24),
+                      child: Text(_query.isNotEmpty
+                          ? 'No bill matches that search'
+                          : 'Nothing here matches those statuses'),
                     ),
                   )
                 : CaptureEmptyState(
@@ -1599,6 +1638,7 @@ class CaptureScreenState extends State<CaptureScreen> {
         UploadHistory(
           key: _uploadHistory,
           onFolderTotals: _onFolderTotals,
+          query: _query,
           onRetry: _retryUpload,
           onDelete: _discardUpload,
           localItems: _items,

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../models/batch_item.dart';
+import '../models/bill_search.dart';
 import '../models/list_entry.dart';
 import '../models/status_filter.dart';
 import '../models/upload_summary.dart';
@@ -83,6 +84,12 @@ class UploadHistory extends StatefulWidget {
   /// bills are being chosen.
   final void Function(UploadSummary upload)? onRetry;
 
+  /// What was typed in the search box (already trimmed and lower-cased; empty
+  /// is no search). Applied to the bills held here, on the phone only. While
+  /// it is non-empty the list keeps loading the remaining pages, so the search
+  /// covers the whole folder and not just the first screens.
+  final String query;
+
   /// The ✕ on a bill. Every PROCESSED bill wears one — clean, needing review,
   /// saved or failed — and none that is still being read. The screen decides
   /// what tapping it does (a saved bill is deleted from the bill itself).
@@ -114,6 +121,7 @@ class UploadHistory extends StatefulWidget {
     this.onToggle,
     this.onEntries,
     this.onFolderTotals,
+    this.query = '',
     this.onRetry,
     this.onDelete,
     this.fetch,
@@ -415,7 +423,8 @@ class UploadHistoryState extends State<UploadHistory> {
     // happened to arrive — a refresh inserts at the top and an update
     // replaces in place, and neither may reorder what is on screen.
     final ordered = _inFolder..sort((a, b) => b.jobId.compareTo(a.jobId));
-    return filterUploads(ordered, _held?.boxes ?? widget.selected);
+    final byBox = filterUploads(ordered, _held?.boxes ?? widget.selected);
+    return widget.query.isEmpty ? byBox : byBox.where((u) => u.matchesSearch(widget.query)).toList();
   }
 
   /// Whether the numbers come from the server's tally of the WHOLE shop, as
@@ -524,6 +533,15 @@ class UploadHistoryState extends State<UploadHistory> {
     final entries = [...widget.localEntries, ...serverEntries]
       ..sort((a, b) => b.sortKey.compareTo(a.sortKey));
     _report(entries);
+
+    // Searching only sees what is loaded, so keep loading until it has all of
+    // them. Not a request per keystroke — the pages are the same ones a
+    // scroll would fetch, and each is fetched once.
+    if (showServer && widget.query.isNotEmpty && _nextBeforeId != null && !_loading && _error == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadMore();
+      });
+    }
 
     if (entries.isEmpty && !_loading && _error == null) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -636,7 +654,7 @@ class _UploadCard extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 44,
+              height: 56,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -651,11 +669,27 @@ class _UploadCard extends StatelessWidget {
               left: Spacing.xs,
               bottom: Spacing.xs,
               right: Spacing.xs,
-              child: Text(
-                _shortDate(upload.createdAt),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Who the bill is from, so a grid of look-alike photos can be
+                  // told apart at a glance.
+                  if (upload.sellerName != null)
+                    Text(
+                      upload.sellerName!,
+                      key: const ValueKey('card-shop'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  Text(
+                    _shortDate(upload.createdAt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
             ),
             // The badge on the right and the ✕ on the left, as on this phone's
