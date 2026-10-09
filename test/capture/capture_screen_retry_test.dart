@@ -48,7 +48,12 @@ BatchItem _item(BatchItemStatus status, {bool uploaded = true}) {
 class _Server {
   /// Bills filed in folder 3 ("Testing2"), as on the phone, so the status
   /// boxes — which only show inside a folder — are reachable.
-  _Server({this.filed = false, this.finishes = false, this.neverFinishes = false});
+  _Server({this.filed = false, this.finishes = false, this.neverFinishes = false, this.phoneSeesFailure = false});
+
+  /// The phone is told bill 8 failed, while the shop's list still has it as
+  /// needing review — the two disagreeing, as they did for bills the phone
+  /// had given up on and the server went on to finish.
+  final bool phoneSeesFailure;
 
   /// The server keeps answering "still processing" for bill 8, as a held
   /// long-poll would, for as long as the test lets time run.
@@ -125,8 +130,23 @@ class _Server {
         if (req.method == 'POST' && path == '/invoices/extract/7/retry') return _json({'job_id': 7});
         if (req.method == 'POST' && path == '/invoices/extract/8/retry') {
           if (retryGate != null) await retryGate!.future;
-          phase = 'retrying';
+          // In the disagreement scenario the server never shows the bill as queued:
+          // it still has it as needing review while the phone is told it failed.
+          if (!phoneSeesFailure) phase = 'retrying';
           return _json({'job_id': 8});
+        }
+        if (phoneSeesFailure && req.method == 'POST' && path == '/invoices/extract/status') {
+          return _json({
+            'jobs': [{'job_id': 8, 'status': 'failed', 'attempt': 3, 'max_attempts': 3}],
+            'changed': true,
+          });
+        }
+        if (phoneSeesFailure && req.method == 'GET' && path == '/invoices/extract/8') {
+          return _json({
+            'job_id': 8,
+            'status': 'failed',
+            'error': {'kind': 'attempts_exhausted', 'message': 'gave up'},
+          });
         }
         if (neverFinishes && req.method == 'POST' && path == '/invoices/extract/status') {
           statusPolls++;
@@ -580,6 +600,37 @@ void main() {
       expect(find.textContaining('Failed 1'), findsOneWidget, reason: 'still just the one real failure');
       expect(find.textContaining('Failed 2'), findsNothing);
       expect(find.textContaining('taking longer'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
+    }, () => server.client);
+  });
+
+  testWidgets('a bill the server counts as Needs review is listed there, even when the phone holds it as failed', (tester) async {
+    // "Needs review 34, but 16 bills listed": the list hid every shop bill the
+    // phone also held a card for, and the phone's card was then filtered by its
+    // OWN status — so a bill the server counted as review but the phone held as
+    // failed was drawn in neither place. Counted, not drawn.
+    _ignoreOverflow();
+    final server = _Server(filed: true, phoneSeesFailure: true);
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(1000, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+      await tester.tap(find.textContaining('Needs review 1'));
+      await _settle(tester);
+      expect(find.byKey(const ValueKey('j:8')), findsOneWidget, reason: 'to start with, it is listed');
+
+      // Retry it; the phone is told it failed. The server's list still has it as review.
+      await tester.tap(find.descendant(of: find.byKey(const ValueKey('j:8')), matching: find.byIcon(Icons.refresh_rounded)));
+      await _settle(tester);
+      await _settle(tester);
+
+      expect(find.textContaining('Needs review 1'), findsOneWidget, reason: 'the box counts it, as the server does');
+      expect(find.byKey(const ValueKey('j:8')), findsOneWidget,
+          reason: 'so the list must show it — it must not vanish because the phone also holds a card for it');
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));

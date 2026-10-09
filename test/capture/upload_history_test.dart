@@ -158,10 +158,18 @@ void main() {
       expect(find.text('Saved'), findsOneWidget);
     });
 
-    testWidgets('leaves out a bill this device already holds', (tester) async {
+    ListEntry drawn(BatchItem item) => ListEntry(
+          id: 'l:drawn',
+          sortKey: 99,
+          item: item,
+          card: const SizedBox(key: ValueKey('local-card'), width: 40, height: 40),
+        );
+
+    testWidgets('leaves out a bill this device is drawing a card for', (tester) async {
       final local = BatchItem(label: 'Bill', pages: [])..sourceImages = ['8/a.jpg'];
       await tester.pumpWidget(_host(_list(
         local: [local],
+        localEntries: [drawn(local)],          // the phone's own card for it is on screen
         uploads: [
           _upload(jobId: 1, sourceImage: '8/a.jpg', issueCount: 3),   // already here
           _upload(jobId: 2, sourceImage: '8/b.jpg'),
@@ -171,6 +179,44 @@ void main() {
 
       expect(find.text('Check 3'), findsNothing, reason: 'drawn twice');
       expect(find.text('Check & save'), findsOneWidget);
+    });
+
+    testWidgets('two reads of one photo are two bills: a card hides only its own job', (tester) async {
+      // The same photo read more than once is several jobs, each its own entry in
+      // the box count. Matching a card to a row by PHOTO let twenty cards hide
+      // thirty rows ("Needs review 34", 24 listed).
+      final local = BatchItem(label: 'Bill', pages: [])
+        ..sourceImages = ['8/a.jpg']
+        ..lastJobId = 1;
+      await tester.pumpWidget(_host(_list(
+        local: [local],
+        localEntries: [drawn(local)],
+        uploads: [
+          _upload(jobId: 1, sourceImage: '8/a.jpg', issueCount: 3),   // the card's own job
+          _upload(jobId: 2, sourceImage: '8/a.jpg', issueCount: 4),   // the same photo, read again
+        ],
+      )));
+      await tester.pump();
+
+      expect(find.text('Check 3'), findsNothing, reason: 'job 1 is drawn by the phone\'s card');
+      expect(find.text('Check 4'), findsOneWidget, reason: 'job 2 is a different bill and must be drawn');
+    });
+
+    testWidgets("shows the shop's row for a bill the device holds but is NOT drawing", (tester) async {
+      // "Needs review 34", 24 listed: the phone held a card for the bill (its own
+      // status said failed, so the box filtered that card out) and the shop's row
+      // was hidden because the phone held it. Counted, drawn nowhere.
+      final local = BatchItem(label: 'Bill', pages: [])..sourceImages = ['8/a.jpg'];
+      await tester.pumpWidget(_host(_list(
+        local: [local],                         // held ...
+        localEntries: const [],                 // ... but its card is not on screen
+        uploads: [
+          _upload(jobId: 1, sourceImage: '8/a.jpg', issueCount: 3),
+        ],
+      )));
+      await tester.pump();
+
+      expect(find.text('Check 3'), findsOneWidget, reason: 'the bill must be drawn once, by the shop\'s row');
     });
 
     testWidgets('shows the folder you are standing in, not the whole shop', (tester) async {

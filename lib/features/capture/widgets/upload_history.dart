@@ -406,14 +406,79 @@ class UploadHistoryState extends State<UploadHistory> {
     }
   }
 
-  /// The shop's bills in the folder being looked at, minus the ones already
-  /// on this device — before any status box narrows them.
-  List<UploadSummary> get _inFolder {
-    final localPaths = <String>{
-      for (final item in widget.localItems) ...item.sourceImages,
-    };
+  /// The shop's bills in the folder being looked at, minus the ones this phone
+  /// is DRAWING a card for — before any status box narrows them.
+  ///
+  /// Minus the cards actually drawn, not every bill the phone holds. A bill
+  /// the phone holds but is not drawing — its own card says failed, or still
+  /// processing, while the server counts it as Needs review — used to be hidden
+  /// here AND by its card's status, so it was counted in a box and drawn in
+  /// none ("Needs review 34", 24 listed). Now the server's row stands in
+  /// whenever the phone's card is not on screen, so every bill is drawn once.
+  ///
+  /// A card and a row are the same bill when they share a JOB, not a photo:
+  /// the same photo can be read more than once, each read its own job and its
+  /// own entry in the count. Matching by photo let twenty cards hide thirty
+  /// rows. A card with no job yet has no row to match; it falls back to its
+  /// photo.
+  List<UploadSummary> get _inFolder => _rowsNotCoveredBy(
+        [for (final entry in _drawnCards) if (entry.item != null) entry.item!],
+        alsoHidingInFlight: true,
+      );
+
+  /// The phone's own cards that are actually drawn.
+  ///
+  /// While a status box is ticked the SERVER decides what is in it — it counts
+  /// the bills and it sends the rows. A phone card whose own status says
+  /// "needs review" but whose bill the server now has elsewhere (it was read
+  /// again and came back clean, say) must not be drawn in that box: the box
+  /// said 34 and drew 39. So a card for a bill with a server job is drawn only
+  /// if the server's rows for the box include that job — once every row has
+  /// arrived, since until then it may simply be on a page not fetched. A card
+  /// with no job yet is the phone's alone and follows its own status.
+  List<ListEntry> get _drawnCards {
+    if (!_narrowed || !_loadedOnce || _nextBeforeId != null || _held != null) return widget.localEntries;
+    final onServer = {for (final u in _uploads) u.jobId};
+    return [
+      for (final entry in widget.localEntries)
+        if (entry.item == null ||
+            (entry.item!.lastJobId ?? entry.item!.jobId) == null ||
+            onServer.contains(entry.item!.lastJobId ?? entry.item!.jobId))
+          entry,
+    ];
+  }
+
+  /// The shop's bills in the folder minus EVERY bill the phone holds, drawn or
+  /// not — what the object-mode counts need, since the screen counts the
+  /// phone's own bills itself and a bill must not be counted by both.
+  List<UploadSummary> get _notHeldHere => _rowsNotCoveredBy(widget.localItems);
+
+  List<UploadSummary> _rowsNotCoveredBy(Iterable<BatchItem> cards, {bool alsoHidingInFlight = false}) {
+    final jobs = <int>{};
+    final photos = <String>{};
+    // A bill the phone is reading RIGHT NOW (a retry just tapped) must leave
+    // every box it was in at once, though the server still lists it there until
+    // its answer comes back: its row stays hidden in all boxes, and the
+    // phone's own card stands in under Working.
+    if (alsoHidingInFlight) {
+      for (final item in widget.localItems) {
+        final job = item.lastJobId ?? item.jobId;
+        if (job != null && matchesStatusFilter(item, 'working')) jobs.add(job);
+      }
+    }
+    for (final item in cards) {
+      final job = item.lastJobId ?? item.jobId;
+      if (job != null) {
+        jobs.add(job);
+      } else {
+        photos.addAll(item.sourceImages);
+      }
+    }
     return _uploads
-        .where((u) => !localPaths.contains(u.sourceImage) && u.folderId == (_held?.folder ?? widget.folderId))
+        .where((u) =>
+            !jobs.contains(u.jobId) &&
+            !photos.contains(u.sourceImage) &&
+            u.folderId == (_held?.folder ?? widget.folderId))
         .toList();
   }
 
@@ -446,7 +511,7 @@ class UploadHistoryState extends State<UploadHistory> {
       return {...?whole}..removeWhere((_, n) => n <= 0);
     }
     final tally = <String, int>{};
-    for (final u in _inFolder) {
+    for (final u in _notHeldHere) {
       final key = uploadCategory(u);
       tally[key] = (tally[key] ?? 0) + 1;
     }
@@ -530,7 +595,7 @@ class UploadHistoryState extends State<UploadHistory> {
         : <ListEntry>[];
 
     // Strictly by upload order, whichever half a card came from.
-    final entries = [...widget.localEntries, ...serverEntries]
+    final entries = [..._drawnCards, ...serverEntries]
       ..sort((a, b) => b.sortKey.compareTo(a.sortKey));
     _report(entries);
 
