@@ -226,3 +226,55 @@ MovePlan planMove(Iterable<ListEntry> entries, {int chunk = kMoveChunk}) {
   }
   return MovePlan(local, batches);
 }
+
+/// What the server says about a batch of discards: only what was actually
+/// discarded is listed; anything asked for and absent was refused (saved,
+/// still being read, not this shop's).
+class BulkDiscardReply {
+  final Set<int> discarded;
+
+  const BulkDiscardReply({this.discarded = const {}});
+
+  factory BulkDiscardReply.fromJson(Map<String, dynamic> json) => BulkDiscardReply(
+        discarded: {for (final id in json['discarded'] as List<dynamic>? ?? const []) (id as num).toInt()},
+      );
+}
+
+/// One request's worth of a discard.
+class DiscardBatch {
+  final List<ListEntry> entries;
+  final List<int> jobIds;
+
+  const DiscardBatch(this.entries, this.jobIds);
+
+  /// The entries the server did NOT discard — these come back on screen.
+  List<ListEntry> refused(BulkDiscardReply reply) => [
+        for (final e in entries)
+          if (!reply.discarded.contains(jobIdOf(e))) e,
+      ];
+}
+
+class DiscardRequests {
+  /// Bills that never reached the server (still being cropped or uploaded):
+  /// there is nothing to ask, so discarding them is local.
+  final List<ListEntry> local;
+  final List<DiscardBatch> batches;
+
+  const DiscardRequests(this.local, this.batches);
+}
+
+/// Split the bills Discard can take into the ones with nothing on the server
+/// and the requests that carry the rest, [chunk] at a time.
+DiscardRequests planDiscardRequests(Iterable<ListEntry> take, {int chunk = kMoveChunk}) {
+  final local = <ListEntry>[];
+  final remote = <ListEntry>[];
+  for (final e in take) {
+    (jobIdOf(e) == null ? local : remote).add(e);
+  }
+  final batches = <DiscardBatch>[];
+  for (var i = 0; i < remote.length; i += chunk) {
+    final part = remote.sublist(i, i + chunk > remote.length ? remote.length : i + chunk);
+    batches.add(DiscardBatch(part, [for (final e in part) jobIdOf(e)!]));
+  }
+  return DiscardRequests(local, batches);
+}

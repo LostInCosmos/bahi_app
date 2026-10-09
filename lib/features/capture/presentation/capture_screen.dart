@@ -1208,24 +1208,55 @@ class CaptureScreenState extends State<CaptureScreen> {
     );
     if (ok != true || !mounted) return;
 
-    setState(() => _bulkBusy = true);
-    final result = await runBulk(plan.take, (e) async {
-      final job = jobIdOf(e);
-      // The server first: a bill the server refused must keep its card, or
-      // the shopkeeper believes it is gone when it is not.
-      if (job != null) await ApiClient.instance.discardUpload(job);
-      final item = e.item;
-      if (item != null) _dropLocal(item);
-    });
-    final failed = {for (final f in result.failed) f.entry.id};
-    final gone = [for (final e in plan.take) if (!failed.contains(e.id)) jobIdOf(e)].whereType<int>();
-    _uploadHistory.currentState?.forget(gone);
-    if (!mounted) return;
+    final requests = planDiscardRequests(plan.take);
+
+    // Show it gone first, as a move does. Bills that are only in the shop's
+    // list leave at once and come back if the server refuses; a bill held on
+    // this phone keeps its card until the server has said yes, because
+    // dropping it deletes its photos and that cannot be taken back.
+    final fromList = [for (final e in plan.take) if (e.upload != null) e.upload!];
+    _uploadHistory.currentState?.forget(fromList.map((u) => u.jobId));
+    for (final e in requests.local) {
+      if (e.item != null) _dropLocal(e.item!);
+    }
+    final total = plan.take.length;
     setState(() {
       _chosen.clear();
-      _bulkBusy = false;
+      _bulkBusy = true;
+      _moving = _MoveProgress('Discarding $total', total, requests.local.length, 'done');
     });
-    _say(summarise('Discarded', result, savedLeft: plan.savedLeft, readingLeft: plan.readingLeft));
+
+    var done = requests.local.length;
+    final refused = <ListEntry>[];
+    var firstError = '';
+    for (final batch in requests.batches) {
+      List<ListEntry> no;
+      try {
+        no = batch.refused(await ApiClient.instance.bulkDiscard(batch.jobIds));
+      } catch (e) {
+        no = batch.entries;
+        if (firstError.isEmpty) firstError = '$e';
+      }
+      refused.addAll(no);
+      final refusedIds = {for (final e in no) e.id};
+      for (final e in batch.entries) {
+        final item = e.item;
+        if (item != null && !refusedIds.contains(e.id)) _dropLocal(item);
+      }
+      done += batch.entries.length - no.length;
+      if (!mounted) return;
+      setState(() => _moving = _MoveProgress('Discarding $total', total, done + refused.length, 'done'));
+    }
+
+    _uploadHistory.currentState?.restore([for (final e in refused) if (e.upload != null) e.upload!]);
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      _moving = null;
+    });
+    final result = BulkResult(done, [for (final e in refused) BulkFailure(e, firstError.isEmpty ? 'refused' : firstError)]);
+    _say(summarise('Discarded', result, savedLeft: plan.savedLeft, readingLeft: plan.readingLeft) +
+        (firstError.isEmpty ? '' : ' ($firstError)'));
     unawaited(_folders.load());
   }
 
@@ -1269,7 +1300,7 @@ class CaptureScreenState extends State<CaptureScreen> {
     setState(() {
       _chosen.clear();
       _bulkBusy = true;
-      _moving = _MoveProgress(name, plan.total, plan.local.length);
+      _moving = _MoveProgress('Moving ${plan.total} to $name', plan.total, plan.local.length, 'saved');
     });
 
     var moved = plan.local.length;
@@ -1290,7 +1321,7 @@ class CaptureScreenState extends State<CaptureScreen> {
         if (firstError.isEmpty) firstError = '$e';
       }
       if (!mounted) return;
-      setState(() => _moving = _MoveProgress(name, plan.total, moved + refused.length));
+      setState(() => _moving = _MoveProgress('Moving ${plan.total} to $name', plan.total, moved + refused.length, 'saved'));
     }
 
     for (final e in refused) {
@@ -1467,11 +1498,16 @@ class CaptureScreenState extends State<CaptureScreen> {
 /// the bills have already moved on screen and the shopkeeper should know
 /// the server is still catching up — and when it is done.
 class _MoveProgress {
-  final String folder;
+  /// "Moving 332 to Testing2", "Discarding 332".
+  final String headline;
   final int total;
   final int done;
 
-  const _MoveProgress(this.folder, this.total, this.done);
+  /// What "done" means to the server: bills are `saved` to a folder, `done`
+  /// being discarded.
+  final String word;
+
+  const _MoveProgress(this.headline, this.total, this.done, this.word);
 }
 
 class _MoveStrip extends StatelessWidget {
@@ -1491,7 +1527,7 @@ class _MoveStrip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Moving ${progress.total} to ${progress.folder} · ${progress.done} of ${progress.total} saved',
+            Text('${progress.headline} · ${progress.done} of ${progress.total} ${progress.word}',
                 style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 6),
             LinearProgressIndicator(value: progress.total == 0 ? null : progress.done / progress.total),

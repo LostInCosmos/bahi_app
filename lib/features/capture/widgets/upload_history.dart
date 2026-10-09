@@ -205,6 +205,25 @@ class UploadHistoryState extends State<UploadHistory> {
     });
   }
 
+  /// Bills put back after [forget] took them away too soon — the server
+  /// refused to discard them. Added to the list and to the held tally again.
+  void restore(Iterable<UploadSummary> uploads) {
+    final held = _uploads.map((u) => u.jobId).toSet();
+    final back = [for (final u in uploads) if (!held.contains(u.jobId)) u];
+    if (back.isEmpty) return;
+    setState(() {
+      for (final u in back) {
+        _uploads.add(u);
+        final tally = _tally;
+        if (tally != null) {
+          final bucket = tally.putIfAbsent(_folderKey(u.folderId), () => {});
+          final category = uploadCategory(u);
+          bucket[category] = (bucket[category] ?? 0) + 1;
+        }
+      }
+    });
+  }
+
   /// Bills filed into another folder: they leave this view, or arrive in
   /// it, at once. `null` is home.
   void refile(Map<int, int?> folderByJob) {

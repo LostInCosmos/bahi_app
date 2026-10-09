@@ -132,6 +132,19 @@ extension InvoiceApi on ApiClient {
     return BulkMoveReply.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// Take many uploads out of this shop's list in one request. Bills the
+  /// server would not discard (saved, still being read) are missing from the
+  /// reply.
+  Future<BulkDiscardReply> bulkDiscard(List<int> jobIds) async {
+    final res = await http.post(
+      _uri('/invoices/bulk-discard'),
+      headers: {..._authHeader, 'Content-Type': 'application/json'},
+      body: jsonEncode({'job_ids': jobIds}),
+    );
+    _checkOk(res);
+    return BulkDiscardReply.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
   /// Take an upload out of this shop's list, everywhere.
   ///
   /// Not a local hide: the server marks the row, so the bill is gone from

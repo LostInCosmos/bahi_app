@@ -238,4 +238,28 @@ void main() {
       expect(BulkMoveReply.fromJson({}).movedJobs, isEmpty);
     });
   });
+
+  group('planning a discard', () {
+    test('300 bills are three requests, not 300', () {
+      final plan = planDiscardRequests([for (var id = 1; id <= 300; id++) _job(id: id)]);
+      expect(plan.batches.map((b) => b.entries.length), [100, 100, 100]);
+      expect(plan.batches.expand((b) => b.jobIds).toSet(), {for (var id = 1; id <= 300; id++) id});
+    });
+
+    test('a bill that never reached the server is discarded locally, not asked about', () {
+      final plan = planDiscardRequests([_job(id: 1), _local(), _local(jobId: 2)]);
+      expect(plan.local, hasLength(1));
+      expect(plan.batches.single.jobIds, [1, 2]);
+    });
+
+    test('what the server did not discard is handed back', () {
+      final batch = planDiscardRequests([_job(id: 1), _job(id: 2), _job(id: 3)]).batches.single;
+      expect(batch.refused(const BulkDiscardReply(discarded: {1})).map((e) => e.id), ['j:2', 'j:3']);
+    });
+
+    test('the reply reads its ids, and an empty one discards nothing', () {
+      expect(BulkDiscardReply.fromJson({'discarded': [1, 2], 'skipped': []}).discarded, {1, 2});
+      expect(BulkDiscardReply.fromJson({}).discarded, isEmpty);
+    });
+  });
 }

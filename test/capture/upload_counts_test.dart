@@ -218,6 +218,24 @@ void main() {
       expect(seenTotals, {null: 1, 5: 2});
     });
 
+    testWidgets('a discarded bill the server refused is counted again when it comes back', (tester) async {
+      var seenTotals = <int?, int>{};
+      final key = GlobalKey<UploadHistoryState>();
+      await tester.pumpWidget(totalsList((t) => seenTotals = t, key: key));
+      await tester.pump();
+      await tester.pump();
+
+      key.currentState!.forget([3]);
+      await tester.pump();
+      await tester.pump();
+      expect(seenTotals, {null: 69, 5: 204});
+
+      key.currentState!.restore([_bill(3)]);
+      await tester.pump();
+      await tester.pump();
+      expect(seenTotals, {null: 70, 5: 204});
+    });
+
     testWidgets('moving bills changes the totals at once', (tester) async {
       var seenTotals = <int?, int>{};
       final key = GlobalKey<UploadHistoryState>();
