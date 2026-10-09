@@ -31,9 +31,10 @@ final _pickerRow = find.descendant(of: find.byType(ListTile), matching: find.tex
 const _cards = ValueKey('selection-mark');   // one per bill drawn, while choosing
 
 class _Server {
-  _Server(this.bills);
+  _Server(this.bills, {this.folders});
 
   final int bills;
+  final List<Map<String, dynamic>>? folders;
   final requests = <Map<String, dynamic>>[];
   Completer<http.Response>? hold;
   http.Response Function(Map<String, dynamic> body)? answer;
@@ -41,7 +42,7 @@ class _Server {
   MockClient get client => MockClient((req) async {
         final path = req.url.path;
         if (req.method == 'GET' && path == '/folders') {
-          return _json([
+          return _json(folders ?? [
             {'id': 7, 'parent_id': null, 'name': 'Testing 2', 'bill_count': 0},
           ]);
         }
@@ -49,6 +50,7 @@ class _Server {
           return _json({
             'jobs': [for (var id = bills; id >= 1; id--) _upload(id)],
             'next_before_id': null,
+            'counts': {'root': {'check': bills}},
           });
         }
         if (req.method == 'POST' && path == '/invoices/bulk-move') {
@@ -102,6 +104,7 @@ void main() {
     final server = _Server(6)..hold = Completer<http.Response>();
     await http.runWithClient(() async {
       await _open(tester);
+      expect(find.text('0 bills'), findsOneWidget, reason: 'Testing 2 starts empty');
       await tester.tap(find.text('Select'));
       await _settle(tester);
       expect(find.byKey(_cards), findsNWidgets(6), reason: 'the fixture must show six bills to move');
@@ -119,6 +122,10 @@ void main() {
       expect(server.requests.single['folder_id'], 7);
       // …and the bills are already gone from home.
       expect(find.byKey(_cards), findsNothing);
+      // The folder already says what it holds, though the server has not
+      // answered: the number is counted here, not fetched.
+      expect(find.text('6 bills'), findsOneWidget);
+      expect(find.text('0 bills'), findsNothing);
       // The shopkeeper can see it is not finished.
       expect(find.byKey(const ValueKey('move-progress')), findsOneWidget);
       expect(find.textContaining('Moving 6 to Testing 2'), findsOneWidget);
@@ -147,6 +154,7 @@ void main() {
       await _settle(tester);
 
       expect(find.byKey(_cards), findsNWidgets(3), reason: 'the three it refused should be back at home');
+      expect(find.text('3 bills'), findsOneWidget, reason: 'the folder holds only what the server took');
       expect(find.textContaining("3 couldn't be moved and went back"), findsOneWidget);
     }, () => server.client);
   });
@@ -160,9 +168,36 @@ void main() {
       await _settle(tester);
 
       expect(find.byKey(_cards), findsNWidgets(6));
+      expect(find.text('0 bills'), findsOneWidget);
       expect(find.byKey(const ValueKey('move-progress')), findsNothing);
       expect(find.textContaining("6 couldn't be moved and went back"), findsOneWidget);
       expect(find.textContaining('boom'), findsOneWidget);
+    }, () => server.client);
+  });
+
+  testWidgets('a folder counts what is inside the folders beneath it, and names them', (tester) async {
+    _ignoreOverflow();
+    final server = _Server(6, folders: [
+      {'id': 7, 'parent_id': null, 'name': 'Outer', 'bill_count': 0},
+      {'id': 8, 'parent_id': 7, 'name': 'Inner', 'bill_count': 0},
+      {'id': 9, 'parent_id': 7, 'name': 'Other', 'bill_count': 0},
+    ])
+      ..answer = (_) => _json({'moved_jobs': [1, 2, 3, 4, 5, 6], 'moved_invoices': [], 'skipped': []});
+    await http.runWithClient(() async {
+      await _open(tester);
+      expect(find.text('0 bills · 2 folders'), findsOneWidget);
+
+      // Six bills into Inner, which is inside Outer: Outer holds them too.
+      await tester.tap(find.text('Select'));
+      await _settle(tester);
+      await tester.tap(find.text('Select all'));
+      await _settle(tester);
+      await tester.tap(find.text('Move'));
+      await _settle(tester);
+      await tester.tap(find.descendant(of: find.byType(ListTile), matching: find.text('Inner')));
+      await _settle(tester);
+
+      expect(find.text('6 bills · 2 folders'), findsOneWidget);
     }, () => server.client);
   });
 }

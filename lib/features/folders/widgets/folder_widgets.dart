@@ -107,11 +107,17 @@ class FolderTile extends StatelessWidget {
   final Folder folder;
   final VoidCallback onOpen;
   final VoidCallback onMenu;
+
+  /// What to say under the name. Defaults to the saved bills directly inside,
+  /// which is all Purchases lists; the capture screen passes the whole
+  /// folder's contents.
+  final String? subtitle;
   const FolderTile(
       {super.key,
       required this.folder,
       required this.onOpen,
-      required this.onMenu});
+      required this.onMenu,
+      this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +150,7 @@ class FolderTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     Text(
-                        '${folder.billCount} ${folder.billCount == 1 ? 'bill' : 'bills'}',
+                        subtitle ?? '${folder.billCount} ${folder.billCount == 1 ? 'bill' : 'bills'}',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -170,6 +176,7 @@ SliverPadding folderTileGrid({
   required List<Folder> folders,
   required void Function(Folder) onOpen,
   required void Function(Folder) onMenu,
+  String Function(Folder)? subtitleOf,
 }) {
   return SliverPadding(
     padding: const EdgeInsets.fromLTRB(Spacing.m, Spacing.s, Spacing.m, 0),
@@ -183,6 +190,7 @@ SliverPadding folderTileGrid({
       delegate: SliverChildBuilderDelegate(
         (context, i) => FolderTile(
             folder: folders[i],
+            subtitle: subtitleOf?.call(folders[i]),
             onOpen: () => onOpen(folders[i]),
             onMenu: () => onMenu(folders[i])),
         childCount: folders.length,
@@ -489,4 +497,11 @@ Future<void> showFolderActions(
         fail(e);
       }
   }
+}
+
+/// "327 bills", or "327 bills · 2 folders" — what a folder holds, in the
+/// words a shopkeeper would use. Folders are named only when there are some.
+String folderSubtitle({required int bills, required int folders}) {
+  final b = '$bills ${bills == 1 ? 'bill' : 'bills'}';
+  return folders == 0 ? b : '$b · $folders ${folders == 1 ? 'folder' : 'folders'}';
 }

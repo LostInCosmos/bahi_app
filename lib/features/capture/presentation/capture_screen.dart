@@ -1097,6 +1097,41 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   final GlobalKey<UploadHistoryState> _uploadHistory = GlobalKey<UploadHistoryState>();
 
+  // ---- what each folder tile says ----
+  //
+  // Counted here, from the bills this screen holds, rather than asked of the
+  // server: the server's number counts saved bills only (a folder of 327
+  // unread-or-unsaved bills said "5 bills"), and it only changes when the
+  // folders are fetched again — long after the bills visibly moved.
+  Map<int?, int> _folderTotals = const {};
+
+  void _onFolderTotals(Map<int?, int> totals) {
+    if (!mounted) return;
+    setState(() => _folderTotals = totals);
+  }
+
+  /// Every bill in [id] and the folders beneath it, plus this phone's own
+  /// bills that have not reached the server yet and so are in no list.
+  int _billsIn(int id) {
+    final ids = <int>{id};
+    final queue = [id];
+    while (queue.isNotEmpty) {
+      for (final child in _folders.tree.childrenOf(queue.removeLast())) {
+        if (ids.add(child.id)) queue.add(child.id);
+      }
+    }
+    final onServer = ids.fold(0, (n, f) => n + (_folderTotals[f] ?? 0));
+    final onlyHere = _items.where((i) => (i.jobId ?? i.lastJobId) == null && ids.contains(i.folderId)).length;
+    return onServer + onlyHere;
+  }
+
+  String _folderSubtitle(Folder folder) => folderSubtitle(
+        // Until the list has answered, the server's own count is the best
+        // there is.
+        bills: _listSettled ? _billsIn(folder.id) : folder.billCount,
+        folders: _folders.tree.childrenOf(folder.id).length,
+      );
+
   // ---- choosing several bills ----
   //
   // `_visible` is what the list last reported it is drawing, and it is the
@@ -1403,9 +1438,15 @@ class CaptureScreenState extends State<CaptureScreen> {
                   ),
           ),
         if (subfolders.isNotEmpty)
-          folderTileGrid(folders: subfolders, onOpen: (f) => _folders.open(f.id), onMenu: _openFolderMenu),
+          folderTileGrid(
+            folders: subfolders,
+            onOpen: (f) => _folders.open(f.id),
+            onMenu: _openFolderMenu,
+            subtitleOf: _folderSubtitle,
+          ),
         UploadHistory(
           key: _uploadHistory,
+          onFolderTotals: _onFolderTotals,
           localItems: _items,
           localEntries: localEntries,
           folderId: _folders.currentId,

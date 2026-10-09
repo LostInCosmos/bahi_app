@@ -192,4 +192,11 @@ void main() {
     expect(find.text('1 bill'), findsOneWidget);
     expect(find.text('4 bills'), findsOneWidget);
   });
+
+  test('the words under a folder name', () {
+    expect(folderSubtitle(bills: 0, folders: 0), '0 bills');
+    expect(folderSubtitle(bills: 1, folders: 0), '1 bill');
+    expect(folderSubtitle(bills: 327, folders: 1), '327 bills · 1 folder');
+    expect(folderSubtitle(bills: 2, folders: 3), '2 bills · 3 folders');
+  });
 }

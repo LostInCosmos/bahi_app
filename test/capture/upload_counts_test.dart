@@ -172,4 +172,64 @@ void main() {
     expect(page.counts, {'root': {'check': 74}, '5': {'saved': 2, 'review': 1}});
     expect(UploadPage.fromJson({'jobs': []}).counts, isNull);
   });
+
+  group('what each folder holds', () {
+    Widget totalsList(void Function(Map<int?, int>) onTotals, {GlobalKey<UploadHistoryState>? key, bool morePages = true}) {
+      var served = 0;
+      return _host(UploadHistory(
+        key: key,
+        localItems: const [],
+        folderId: null,
+        selected: const {},
+        onOpen: (_) async {},
+        onFolderTotals: onTotals,
+        fetch: ({int limit = 50, int? beforeId}) {
+          // One page, then — while "more" is claimed — every later page held
+          // open, as a slow server would. Answering the first page again
+          // would put the same bills in the list twice.
+          if (++served > 1) return Completer<UploadPage>().future;
+          return Future.value(UploadPage(
+            uploads: [_bill(3), _bill(2, folderId: 5), _bill(1, folderId: 5)],
+            nextBeforeId: morePages ? 1 : null,
+            counts: const {
+              'root': {'check': 70},
+              '5': {'check': 200, 'saved': 4},
+            },
+          ));
+        },
+      ));
+    }
+
+    testWidgets("uses the server's tally while more bills remain, over every bill", (tester) async {
+      var seenTotals = <int?, int>{};
+      await tester.pumpWidget(totalsList((t) => seenTotals = t));
+      await tester.pump();
+      await tester.pump();
+
+      expect(seenTotals, {null: 70, 5: 204});   // not {null: 1, 5: 2}
+    });
+
+    testWidgets('counts the bills it holds once every page is in', (tester) async {
+      var seenTotals = <int?, int>{};
+      await tester.pumpWidget(totalsList((t) => seenTotals = t, morePages: false));
+      await tester.pump();
+      await tester.pump();
+
+      expect(seenTotals, {null: 1, 5: 2});
+    });
+
+    testWidgets('moving bills changes the totals at once', (tester) async {
+      var seenTotals = <int?, int>{};
+      final key = GlobalKey<UploadHistoryState>();
+      await tester.pumpWidget(totalsList((t) => seenTotals = t, key: key));
+      await tester.pump();
+      await tester.pump();
+
+      key.currentState!.refile({3: 5});
+      await tester.pump();
+      await tester.pump();
+
+      expect(seenTotals, {null: 69, 5: 205});
+    });
+  });
 }

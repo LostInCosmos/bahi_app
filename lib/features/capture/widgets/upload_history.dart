@@ -70,6 +70,13 @@ class UploadHistory extends StatefulWidget {
     required Map<String, int> counts,
   })? onEntries;
 
+  /// How many bills each folder holds (`null` is home), over the whole shop —
+  /// counted from the bills this list holds once they are all loaded, and
+  /// from the server's tally before that, so a folder tile reads the same
+  /// number whether or not anyone has scrolled to the bottom, and changes at
+  /// once when bills are moved.
+  final void Function(Map<int?, int> totals)? onFolderTotals;
+
   /// How to fetch a page. Defaults to the real client; injectable so the
   /// list can be driven in a test without a network, the same way
   /// BillThumbnail takes its loader.
@@ -86,6 +93,7 @@ class UploadHistory extends StatefulWidget {
     this.chosen = const {},
     this.onToggle,
     this.onEntries,
+    this.onFolderTotals,
     this.fetch,
   });
 
@@ -288,12 +296,42 @@ class UploadHistoryState extends State<UploadHistory> {
     return counts;
   }
 
+  /// Bills per folder: the held bills counted one by one once every page is
+  /// in (exact, live), the server's whole-shop tally until then.
+  Map<int?, int> get _folderTotals {
+    final totals = <int?, int>{};
+    final tally = _tally;
+    if ((_loadedOnce && _nextBeforeId == null) || tally == null) {
+      for (final u in _uploads) {
+        totals[u.folderId] = (totals[u.folderId] ?? 0) + 1;
+      }
+      return totals;
+    }
+    tally.forEach((key, byCategory) {
+      final n = byCategory.values.fold(0, (a, b) => a + b);
+      if (n > 0) totals[key == 'root' ? null : int.parse(key)] = n;
+    });
+    return totals;
+  }
+
+  String _reportedTotals = '';
   String _reportedKey = '';
 
   /// Told to the screen after the frame, never during it — a parent that
   /// rebuilds mid-build is an error. Keyed on the ids, so a card changing
   /// its status does not re-announce an unchanged set.
   void _report(List<ListEntry> entries) {
+    final tellTotals = widget.onFolderTotals;
+    if (tellTotals != null) {
+      final totals = _folderTotals;
+      final signature = (totals.entries.map((e) => '${e.key}:${e.value}').toList()..sort()).join(',');
+      if (signature != _reportedTotals) {
+        _reportedTotals = signature;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) tellTotals(totals);
+        });
+      }
+    }
     final tell = widget.onEntries;
     if (tell == null) return;
     final settled = _loadedOnce || _error != null;
