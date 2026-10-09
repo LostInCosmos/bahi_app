@@ -488,7 +488,7 @@ void main() {
       }, () => server.client);
     });
 
-    testWidgets('on a saved bill it explains instead of deleting', (tester) async {
+    testWidgets('on a saved bill it asks about moving it back, and discards nothing', (tester) async {
       _ignoreOverflow();
       final server = _Server();
       await http.runWithClient(() async {
@@ -496,7 +496,7 @@ void main() {
         await tester.tap(cross('j:10'));
         await _settle(tester);
         expect(server.discarded, isEmpty);
-        expect(find.textContaining('This bill is saved'), findsOneWidget);
+        expect(find.text('Move back to Check & save?'), findsOneWidget);
         expect(find.byKey(const ValueKey('j:10')), findsOneWidget);
       }, () => server.client);
     });

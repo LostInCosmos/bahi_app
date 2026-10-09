@@ -259,6 +259,21 @@ extension InvoiceApi on ApiClient {
     _checkOk(res);
   }
 
+  /// Send a saved bill back to Check & save — or Needs review, if its read had
+  /// issues — in the folder it was filed in. The bill's read stays; the
+  /// invoice goes. [removeStock] is the shopkeeper's answer to whether the
+  /// stock it added leaves inventory too (required: never assumed). Throws
+  /// ApiException(409) if some of that stock has already been sold, or if
+  /// there is no read to go back to — surface `.message`.
+  Future<void> unsaveInvoice(int invoiceId, {required bool removeStock}) async {
+    final res = await http.post(
+      _uri('/invoices/$invoiceId/unsave'),
+      headers: {..._authHeader, 'Content-Type': 'application/json'},
+      body: jsonEncode({'remove_stock': removeStock}),
+    );
+    _checkOk(res);
+  }
+
   Future<Uint8List> exportExcel({
     String? startDate,
     String? endDate,

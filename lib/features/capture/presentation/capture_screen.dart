@@ -29,6 +29,7 @@ import '../widgets/capture_empty_state.dart';
 import '../widgets/selection_bar.dart';
 import '../widgets/upload_history.dart';
 import '../widgets/confirm_bill_dialog.dart';
+import '../widgets/unsave_dialog.dart';
 import 'crop_screen.dart';
 
 /// Adobe-Scanner-style batch flow: add several bill photos (each gets its
@@ -528,7 +529,10 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// the server knows about is discarded there, and the row stays for our
   /// team with a "discarded" mark.
   Future<void> _removeItem(BatchItem item) async {
-    if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) return _say(_savedCannotDiscard);
+    if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) {
+      final invoiceId = item.savedInvoiceId;
+      return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId, item: item);
+    }
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId != null && item.savedInvoiceId == null) {
       try {
@@ -548,17 +552,46 @@ class CaptureScreenState extends State<CaptureScreen> {
     unawaited(_uploadHistory.currentState?.refresh());
   }
 
-  static const _savedCannotDiscard =
-      'This bill is saved. Open it to delete it — that also puts its stock back.';
+  static const _savedNoId = 'This bill is saved. Open it to change it.';
+
+  /// The ✕ on a SAVED bill: send it back to Check & save, asking whether its
+  /// stock leaves inventory too. It is not thrown away from here — the bill
+  /// comes back to be checked again — and the stock is the shopkeeper's call.
+  Future<void> _unsave(int invoiceId, {BatchItem? item}) async {
+    final choice = await showUnsaveDialog(context);
+    if (choice == null || !mounted) return;
+    final removeStock = choice == UnsaveChoice.removeStock;
+    try {
+      await ApiClient.instance.unsaveInvoice(invoiceId, removeStock: removeStock);
+    } on ApiException catch (e) {
+      // Stock already sold, or no read to go back to: nothing changed.
+      if (mounted) _say("Couldn't move it back: ${e.message}");
+      return;
+    } catch (e) {
+      if (mounted) _say("Couldn't move it back: $e");
+      return;
+    }
+    if (!mounted) return;
+    // This phone's copy of a saved bill is finished with; the shop's list
+    // shows the bill again, unsaved, once it is asked.
+    if (item != null) _dropLocal(item);
+    _say(removeStock
+        ? 'Moved back to Check & save. Its stock was taken out of inventory.'
+        : 'Moved back to Check & save. Its stock stays in inventory.');
+    unawaited(_uploadHistory.currentState?.refresh());
+    unawaited(_folders.load());
+  }
 
   /// The ✕ on a processed bill from the shop's list (failed ones included;
-  /// bills still being read have none). A saved bill is not thrown away from
-  /// here — deleting one reverses its stock, which is a decision, not a
-  /// tidy-up — and says so. Otherwise it goes at once and comes back if the
-  /// server refuses, exactly as a bulk discard does.
+  /// bills still being read have none). A saved bill is sent back to Check &
+  /// save instead, after asking about its stock. Otherwise it goes at once and
+  /// comes back if the server refuses, exactly as a bulk discard does.
   Future<void> _discardUpload(UploadSummary upload) async {
     final category = uploadCategory(upload);
-    if (category == 'saved') return _say(_savedCannotDiscard);
+    if (category == 'saved') {
+      final invoiceId = upload.invoiceId;
+      return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId);
+    }
     final history = _uploadHistory.currentState;
     history?.forget([upload.jobId]);
     try {
