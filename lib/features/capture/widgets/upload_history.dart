@@ -7,6 +7,7 @@ import '../models/batch_item.dart';
 import '../models/list_entry.dart';
 import '../models/status_filter.dart';
 import '../models/upload_summary.dart';
+import 'batch_item_card.dart' show ChromeButton;
 import 'bill_thumbnail.dart';
 import 'selection_mark.dart';
 
@@ -77,10 +78,24 @@ class UploadHistory extends StatefulWidget {
   /// once when bills are moved.
   final void Function(Map<int?, int> totals)? onFolderTotals;
 
+  /// Read this bill again. Offered on the cards that want a second look —
+  /// the ones that failed and the ones that need review — and never while
+  /// bills are being chosen.
+  final void Function(UploadSummary upload)? onRetry;
+
   /// How to fetch a page. Defaults to the real client; injectable so the
   /// list can be driven in a test without a network, the same way
   /// BillThumbnail takes its loader.
   final Future<UploadPage> Function({int limit, int? beforeId})? fetch;
+
+  /// The same, narrowed by the server to [categories] in [folder] (`root` or
+  /// an id). Used while a status box is ticked.
+  final Future<UploadPage> Function({
+    int limit,
+    int? beforeId,
+    Set<String> categories,
+    String? folder,
+  })? fetchFiltered;
 
   const UploadHistory({
     super.key,
@@ -94,7 +109,9 @@ class UploadHistory extends StatefulWidget {
     this.onToggle,
     this.onEntries,
     this.onFolderTotals,
+    this.onRetry,
     this.fetch,
+    this.fetchFiltered,
   });
 
   @override
@@ -109,6 +126,19 @@ class UploadHistoryState extends State<UploadHistory> {
   bool _loading = false;
   bool _loadedOnce = false;
   String? _error;
+
+  /// Bumped whenever the list starts over, so an answer to a question asked
+  /// of the old filter is never added to the new one.
+  int _generation = 0;
+
+  /// The status boxes the SERVER narrows by. `tocrop` is a state only this
+  /// phone has, so it is never asked of the server.
+  static const _serverBoxes = {'working', 'check', 'review', 'saved', 'failed'};
+  Set<String> get _categories => widget.selected.intersection(_serverBoxes);
+
+  /// While a box is ticked the list holds only what the server returned for
+  /// it, so what it holds is NOT the shop — counts must come from the tally.
+  bool get _narrowed => _categories.isNotEmpty;
 
   /// The server's tally of the whole shop, taken with the newest page — what
   /// lets a box say 74 before 74 bills have been scrolled to. Kept in step
@@ -142,9 +172,28 @@ class UploadHistoryState extends State<UploadHistory> {
     _loadMore();
   }
 
+  @override
+  void didUpdateWidget(UploadHistory oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final before = oldWidget.selected.intersection(_serverBoxes);
+    final after = _categories;
+    // A different set of boxes starts over, asked of the server. A different
+    // folder does too, but only while narrowed: unnarrowed, the whole shop is
+    // held and a folder is just a view of it.
+    final changed = before.length != after.length || !before.containsAll(after) ||
+        (after.isNotEmpty && oldWidget.folderId != widget.folderId);
+    if (changed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) reload();
+      });
+    }
+  }
+
   /// Called by the screen when a bill is saved or removed, so the list
   /// stops disagreeing with the grid above it.
   Future<void> reload() async {
+    _generation++;
+    _loading = false;
     setState(() {
       _uploads.clear();
       _nextBeforeId = null;
@@ -166,9 +215,9 @@ class UploadHistoryState extends State<UploadHistory> {
   /// or moved out — so it is dropped rather than left to linger.
   Future<void> refresh() async {
     try {
-      final fetch = widget.fetch ?? ApiClient.instance.listUploads;
-      final page = await fetch(limit: _pageSize, beforeId: null);
-      if (!mounted) return;
+      final generation = _generation;
+      final page = await _fetchPage(beforeId: null);
+      if (!mounted || generation != _generation) return;
       setState(() {
         _takeTally(page.counts);
         final fresh = {for (final u in page.uploads) u.jobId: u};
@@ -239,17 +288,31 @@ class UploadHistoryState extends State<UploadHistory> {
     });
   }
 
+  Future<UploadPage> _fetchPage({int? beforeId}) {
+    if (_narrowed) {
+      final fetch = widget.fetchFiltered ?? ApiClient.instance.listUploads;
+      return fetch(
+        limit: _pageSize,
+        beforeId: beforeId,
+        categories: _categories,
+        folder: widget.folderId == null ? 'root' : '${widget.folderId}',
+      );
+    }
+    final fetch = widget.fetch ?? ApiClient.instance.listUploads;
+    return fetch(limit: _pageSize, beforeId: beforeId);
+  }
+
   Future<void> _loadMore() async {
     if (_loading) return;
     if (_loadedOnce && _nextBeforeId == null) return;   // the last page is in
+    final generation = _generation;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final fetch = widget.fetch ?? ApiClient.instance.listUploads;
-      final page = await fetch(limit: _pageSize, beforeId: _nextBeforeId);
-      if (!mounted) return;
+      final page = await _fetchPage(beforeId: _nextBeforeId);
+      if (!mounted || generation != _generation) return;
       setState(() {
         _takeTally(page.counts);
         _uploads.addAll(page.uploads);
@@ -257,13 +320,13 @@ class UploadHistoryState extends State<UploadHistory> {
         _loadedOnce = true;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       // Never fatal: the grid above is this device's own work and must
       // keep working offline. The list says it could not load, and
       // offers to try again.
       setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) setState(() => _loading = false);
     }
   }
 
@@ -299,7 +362,7 @@ class UploadHistoryState extends State<UploadHistory> {
     // Everything is loaded, or the server did not say: what is held is
     // exact, and live as cards change status.
     final whole = _tally?[_folderKey(widget.folderId)];
-    if ((_loadedOnce && _nextBeforeId == null) || _tally == null) return tally;
+    if ((!_narrowed && _loadedOnce && _nextBeforeId == null) || _tally == null) return tally;
 
     // More bills exist than are loaded. Use the server's count of the whole
     // shop, less this device's own bills, which the grid above counts and
@@ -320,7 +383,7 @@ class UploadHistoryState extends State<UploadHistory> {
   Map<int?, int> get _folderTotals {
     final totals = <int?, int>{};
     final tally = _tally;
-    if ((_loadedOnce && _nextBeforeId == null) || tally == null) {
+    if ((!_narrowed && _loadedOnce && _nextBeforeId == null) || tally == null) {
       for (final u in _uploads) {
         totals[u.folderId] = (totals[u.folderId] ?? 0) + 1;
       }
@@ -384,6 +447,7 @@ class UploadHistoryState extends State<UploadHistory> {
                 choosing: widget.choosing,
                 chosen: widget.chosen.contains(id),
                 onTap: () => widget.choosing ? widget.onToggle?.call(id) : widget.onOpen(u),
+                onRetry: widget.onRetry == null ? null : () => widget.onRetry!(u),
               ),
             );
           }).toList()
@@ -467,6 +531,7 @@ class _UploadCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool choosing;
   final bool chosen;
+  final VoidCallback? onRetry;
 
   const _UploadCard({
     super.key,
@@ -474,6 +539,7 @@ class _UploadCard extends StatelessWidget {
     required this.onTap,
     this.choosing = false,
     this.chosen = false,
+    this.onRetry,
   });
 
   @override
@@ -524,6 +590,21 @@ class _UploadCard extends StatelessWidget {
               ),
             ),
             Positioned(top: Spacing.xs, left: Spacing.xs, child: _badge(context, category)),
+            // Read it again — for the bills that want a second look. Above
+            // the date, where this phone's own cards wear theirs.
+            if (onRetry != null && !choosing && (category == 'failed' || category == 'review'))
+              Positioned(
+                bottom: 26,
+                right: Spacing.xs,
+                child: ChromeButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onRetry!();
+                  },
+                  icon: Icons.refresh_rounded,
+                  tooltip: 'Read this bill again',
+                ),
+              ),
             ...selectionOverlay(context, choosing: choosing, chosen: chosen),
           ],
         ),

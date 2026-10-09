@@ -107,8 +107,22 @@ extension InvoiceApi on ApiClient {
   ///
   /// Keyset paging on [beforeId], replayed from the previous page's
   /// `nextBeforeId`; the server caps [limit] at 200.
-  Future<UploadPage> listUploads({int limit = 50, int? beforeId}) async {
-    final query = {'limit': '$limit', if (beforeId != null) 'before_id': '$beforeId'};
+  ///
+  /// [categories] (status boxes: working, check, review, saved, failed) and
+  /// [folder] (`root` for home, or a folder id) narrow the list on the server
+  /// before it is paged, so a filtered list finds its bills on any page.
+  Future<UploadPage> listUploads({
+    int limit = 50,
+    int? beforeId,
+    Set<String> categories = const {},
+    String? folder,
+  }) async {
+    final query = {
+      'limit': '$limit',
+      if (beforeId != null) 'before_id': '$beforeId',
+      if (categories.isNotEmpty) 'category': (categories.toList()..sort()).join(','),
+      if (folder != null) 'folder': folder,
+    };
     final res = await http.get(_uri('/invoices/extract', query), headers: _authHeader);
     _checkOk(res);
     return UploadPage.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
@@ -143,18 +157,6 @@ extension InvoiceApi on ApiClient {
     );
     _checkOk(res);
     return BulkDiscardReply.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
-  }
-
-  /// Take an upload out of this shop's list, everywhere.
-  ///
-  /// Not a local hide: the server marks the row, so the bill is gone from
-  /// every phone and browser this shop signs in from. Our team can still
-  /// see it. Refused (409) for a bill that has been SAVED — that reverses
-  /// stock and goes through deleteInvoice — and while it is still being
-  /// read.
-  Future<void> discardUpload(int jobId) async {
-    final res = await http.delete(_uri('/invoices/extract/$jobId'), headers: _authHeader);
-    _checkOk(res);
   }
 
   Future<ExtractionJob> getExtractionJob(int jobId) async {

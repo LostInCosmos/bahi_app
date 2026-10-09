@@ -110,7 +110,7 @@ class BatchItemCard extends StatelessWidget {
               Positioned(
                 top: 4,
                 left: 4,
-                child: _ChromeButton(
+                child: ChromeButton(
                   onPressed: () {
                     HapticFeedback.lightImpact();
                     onDelete!();
@@ -122,7 +122,7 @@ class BatchItemCard extends StatelessWidget {
               Positioned(
                 bottom: 26,
                 right: 4,
-                child: _ChromeButton(
+                child: ChromeButton(
                   onPressed: () {
                     HapticFeedback.lightImpact();
                     onReprocess!();
@@ -135,7 +135,7 @@ class BatchItemCard extends StatelessWidget {
               Positioned(
                 bottom: 26,
                 left: 4,
-                child: _ChromeButton(
+                child: ChromeButton(
                   onPressed: () {
                     HapticFeedback.lightImpact();
                     onMove!();
@@ -209,11 +209,13 @@ class _Badge extends StatelessWidget {
 /// A small translucent circular icon button for controls that sit directly
 /// on a photo (delete, reprocess) — its own dark chip keeps it legible on
 /// light bills as well as dark ones.
-class _ChromeButton extends StatelessWidget {
+/// The small round button a card wears in a corner — shared by this phone's
+/// cards and the shop's, so they look the same.
+class ChromeButton extends StatelessWidget {
   final VoidCallback onPressed;
   final IconData icon;
   final String? tooltip;
-  const _ChromeButton({required this.onPressed, required this.icon, this.tooltip});
+  const ChromeButton({super.key, required this.onPressed, required this.icon, this.tooltip});
 
   @override
   Widget build(BuildContext context) {

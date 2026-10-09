@@ -501,7 +501,9 @@ class CaptureScreenState extends State<CaptureScreen> {
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId != null && item.savedInvoiceId == null) {
       try {
-        await ApiClient.instance.discardUpload(jobId);
+        // One bill is a batch of one: there is no single-bill discard.
+        final reply = await ApiClient.instance.bulkDiscard([jobId]);
+        if (!reply.discarded.contains(jobId)) throw 'it is saved or still being read';
       } catch (e) {
         if (!mounted) return;
         // Left on screen deliberately: a bill that is still on the server
@@ -1069,7 +1071,9 @@ class CaptureScreenState extends State<CaptureScreen> {
             child: _buildGrid(
               here,
               subfolders,
-              empty: here.isEmpty && subfolders.isEmpty && _visible.isEmpty && _listSettled,
+              // Not while more bills are still to be fetched: the ones that
+              // match may be on a page that has not loaded.
+              empty: here.isEmpty && subfolders.isEmpty && _visible.isEmpty && _listSettled && !_visibleMore,
               filtering: filtering,
             ),
           ),
@@ -1433,6 +1437,14 @@ class CaptureScreenState extends State<CaptureScreen> {
     }
     if (!mounted) return;
     if (!await _askRetry('Bill', why)) return;
+    await _retryUpload(upload, why: why);
+  }
+
+  /// Read a bill from the shop's list again. It joins this phone's own bills
+  /// so the status loop watches it, and keeps its place — its upload order.
+  /// Works on any bill that is not being read: one that failed, or one whose
+  /// result needs a second look.
+  Future<void> _retryUpload(UploadSummary upload, {String? why}) async {
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..lastJobId = upload.jobId
@@ -1515,6 +1527,7 @@ class CaptureScreenState extends State<CaptureScreen> {
         UploadHistory(
           key: _uploadHistory,
           onFolderTotals: _onFolderTotals,
+          onRetry: _retryUpload,
           localItems: _items,
           localEntries: localEntries,
           folderId: _folders.currentId,

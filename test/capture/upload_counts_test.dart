@@ -27,6 +27,12 @@ Widget _host(UploadHistory list) => MaterialApp(
       home: Scaffold(body: CustomScrollView(slivers: [list])),
     );
 
+/// Any sliver in a scroll view — for tests that wrap the list in something
+/// that rebuilds it, as the screen does when a status box is ticked.
+Widget _hostAny(Widget sliver) => MaterialApp(
+      home: Scaffold(body: CustomScrollView(slivers: [sliver])),
+    );
+
 void main() {
   late Map<String, int> seen;
   late bool moreBelow;
@@ -248,6 +254,146 @@ void main() {
       await tester.pump();
 
       expect(seenTotals, {null: 69, 5: 205});
+    });
+  });
+
+  group('a status box asks the server', () {
+    // "Failed 1" sat over "Nothing here matches": the one failed bill was on
+    // a page nobody had scrolled to, and filtering the pages already loaded
+    // could not find it. The box now asks for exactly its bills.
+    late List<String> asked;
+    late ValueNotifier<Set<String>> selected;
+    late ValueNotifier<int?> folder;
+    var shown = <int>[];
+    var shownCounts = <String, int>{};
+
+    Widget host({Future<UploadPage> Function()? filteredAnswer}) {
+      asked = [];
+      shown = [];
+      shownCounts = {};
+      selected = ValueNotifier<Set<String>>({});
+      folder = ValueNotifier<int?>(null);
+      return _hostAny(ValueListenableBuilder<Set<String>>(
+        valueListenable: selected,
+        builder: (context, boxes, _) => ValueListenableBuilder<int?>(
+          valueListenable: folder,
+          builder: (context, folderId, _) => UploadHistory(
+            localItems: const [],
+            folderId: folderId,
+            selected: boxes,
+            onOpen: (_) async {},
+            onEntries: (entries, {required more, required settled, required counts}) {
+              shown = [for (final e in entries) e.upload!.jobId];
+              shownCounts = counts;
+            },
+            fetch: ({int limit = 50, int? beforeId}) {
+              // One page, then every later page held open, as a slow server
+              // would. Answering the first page again would put the same
+              // bills in the list twice. Only first pages are recorded: the
+              // list asking for the next one as it nears the end is not what
+              // these tests are about.
+              if (beforeId != null) return Completer<UploadPage>().future;
+              asked.add('all');
+              return Future.value(UploadPage(
+                uploads: [_bill(3), _bill(2), _bill(1)],
+                nextBeforeId: 1,
+                counts: const {'root': {'check': 70, 'failed': 1}},
+              ));
+            },
+            fetchFiltered: ({int limit = 50, int? beforeId, Set<String> categories = const {}, String? folder}) {
+              asked.add('${(categories.toList()..sort()).join('+')}@$folder');
+              if (filteredAnswer != null) return filteredAnswer();
+              return Future.value(UploadPage(
+                uploads: [_bill(0, status: 'failed')],
+                counts: const {'root': {'check': 70, 'failed': 1}},
+              ));
+            },
+          ),
+        ),
+      ));
+    }
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump();
+      }
+    }
+
+    testWidgets('ticking a box fetches that box, and finds a bill on a page nobody loaded', (tester) async {
+      await tester.pumpWidget(host());
+      await settle(tester);
+      expect(shown, [3, 2, 1], reason: 'unticked, the shop is loaded as before');
+
+      selected.value = {'failed'};
+      await settle(tester);
+
+      expect(asked, ['all', 'failed@root']);
+      expect(shown, [0], reason: 'bill 0 was never in the pages that were loaded');
+    });
+
+    testWidgets('unticking goes back to the whole shop', (tester) async {
+      await tester.pumpWidget(host());
+      await settle(tester);
+      selected.value = {'failed'};
+      await settle(tester);
+
+      selected.value = {};
+      await settle(tester);
+
+      expect(asked, ['all', 'failed@root', 'all']);
+      expect(shown, [3, 2, 1]);
+    });
+
+    testWidgets("a device-only box is not something to ask the server", (tester) async {
+      await tester.pumpWidget(host());
+      await settle(tester);
+
+      selected.value = {'tocrop'};
+      await settle(tester);
+
+      expect(asked, ['all'], reason: "'to crop' exists only on this phone");
+    });
+
+    testWidgets('the numbers on the boxes stay the whole shops while the list is narrowed', (tester) async {
+      await tester.pumpWidget(host());
+      await settle(tester);
+
+      selected.value = {'failed'};
+      await settle(tester);
+
+      // The list holds one bill, and every page is in; counting what it
+      // holds would say {failed: 1} and wipe the other boxes.
+      expect(shownCounts, {'check': 70, 'failed': 1});
+    });
+
+    testWidgets('changing folders while narrowed asks again; unnarrowed it does not', (tester) async {
+      await tester.pumpWidget(host());
+      await settle(tester);
+      folder.value = 5;
+      await settle(tester);
+      expect(asked, ['all'], reason: 'unnarrowed, a folder is only a view of what is held');
+
+      selected.value = {'failed'};
+      await settle(tester);
+      folder.value = 9;
+      await settle(tester);
+
+      expect(asked, ['all', 'failed@5', 'failed@9']);
+    });
+
+    testWidgets("an answer to the old box is not added to the new one", (tester) async {
+      final slow = Completer<UploadPage>();
+      await tester.pumpWidget(host(filteredAnswer: () => slow.future));
+      await settle(tester);
+
+      selected.value = {'failed'};          // asks, and the answer is slow
+      await settle(tester);
+      selected.value = {};                   // changes its mind
+      await settle(tester);
+      slow.complete(UploadPage(uploads: [_bill(0, status: 'failed')]));
+      await settle(tester);
+
+      expect(shown, [3, 2, 1], reason: 'the failed bill belongs to a question nobody is asking now');
     });
   });
 }

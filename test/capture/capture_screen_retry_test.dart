@@ -36,6 +36,8 @@ class _Server {
         if (req.method == 'GET' && path == '/invoices/extract') {
           return _json({
             'jobs': [
+              {'job_id': 9, 'status': 'done', 'source_image': '8/9.jpg', 'created_at': '2026-10-08T12:00:00Z', 'issue_count': 0},
+              {'job_id': 8, 'status': 'done', 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': 2},
               {
                 'job_id': 7,
                 'status': 'failed',
@@ -45,7 +47,7 @@ class _Server {
               },
             ],
             'next_before_id': null,
-            'counts': {'root': {'failed': 1}},
+            'counts': {'root': {'failed': 1, 'review': 1, 'check': 1}},
           });
         }
         if (req.method == 'GET' && path == '/invoices/extract/7') {
@@ -56,6 +58,7 @@ class _Server {
           });
         }
         if (req.method == 'POST' && path == '/invoices/extract/7/retry') return _json({'job_id': 7});
+        if (req.method == 'POST' && path == '/invoices/extract/8/retry') return _json({'job_id': 8});
         if (req.method == 'POST' && path == '/invoices/extract/status') {
           // The real server holds this request open until something changes.
           // Answering at once made the screen's watch loop spin without a
@@ -116,7 +119,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
       await _settle(tester);
 
-      await tester.tap(find.byType(InkWell).last);
+      await tester.tap(find.byKey(const ValueKey('j:7')));
       await _settle(tester);
 
       expect(find.text('Qwen timed out reading this bill'), findsOneWidget);
@@ -143,12 +146,55 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
       await _settle(tester);
 
-      await tester.tap(find.byType(InkWell).last);
+      await tester.tap(find.byKey(const ValueKey('j:7')));
       await _settle(tester);
       await tester.tap(find.widgetWithText(TextButton, 'Close'));
       await _settle(tester);
 
       expect(server.requests.where((r) => r.contains('/retry')), isEmpty);
+    }, () => server.client);
+  });
+
+  testWidgets('a bill that needs review can be read again from its card', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+
+      final review = find.byKey(const ValueKey('j:8'));
+      await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
+      await _settle(tester);
+
+      expect(server.requests, contains('POST /invoices/extract/8/retry'));
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
+    }, () => server.client);
+  });
+
+  testWidgets('failed and needs-review cards wear the button; a clean one does not', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+
+      bool wears(String id) => find
+          .descendant(of: find.byKey(ValueKey(id)), matching: find.byIcon(Icons.refresh_rounded))
+          .evaluate()
+          .isNotEmpty;
+      expect(wears('j:7'), isTrue, reason: 'failed');
+      expect(wears('j:8'), isTrue, reason: 'needs review');
+      expect(wears('j:9'), isFalse, reason: 'check & save: nothing to second-guess');
+
+      // Not while choosing.
+      await tester.tap(find.text('Select'));
+      await _settle(tester);
+      expect(wears('j:7'), isFalse);
+      expect(wears('j:8'), isFalse);
     }, () => server.client);
   });
 }

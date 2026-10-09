@@ -515,11 +515,13 @@ void main() {
         selected: const {'saved'},
         onOpen: (_) async {},
         onEntries: (entries, {required more, required settled, required counts}) => seen = counts,
-        fetch: ({int limit = 50, int? beforeId}) async => UploadPage(uploads: [
-              _upload(jobId: 3, sourceImage: '8/3.jpg', issueCount: 2),
-              _upload(jobId: 2, sourceImage: '8/2.jpg'),
-              _upload(jobId: 1, sourceImage: '8/1.jpg', invoiceId: 4),
-            ]),
+        // A ticked box is asked of the server: it sends only the saved bill,
+        // and the tally of EVERY box — which is what the numbers say.
+        fetchFiltered: ({int limit = 50, int? beforeId, Set<String> categories = const {}, String? folder}) async =>
+            UploadPage(
+              uploads: [_upload(jobId: 1, sourceImage: '8/1.jpg', invoiceId: 4)],
+              counts: const {'root': {'review': 1, 'check': 1, 'saved': 1}},
+            ),
       )));
       await tester.pumpAndSettle();
 
