@@ -13,6 +13,11 @@
 /// separates a bill that wants a person from one that is merely waiting
 /// to be saved. The full result is fetched for the one bill that gets
 /// opened (`getExtractionJob`).
+String? _text(Object? value) {
+  final text = (value as String? ?? '').trim();
+  return text.isEmpty ? null : text;
+}
+
 class UploadSummary {
   final int jobId;
   final String status;
@@ -35,6 +40,12 @@ class UploadSummary {
   /// When the server intends to try again, while it is backing off.
   final DateTime? retryAt;
 
+  /// Who the bill is from, and its number: the saved invoice's own values once
+  /// saved, otherwise what was read. Null until a read has produced them, and
+  /// on a server older than the fields. They label the card and feed search.
+  final String? sellerName;
+  final String? invoiceNo;
+
   const UploadSummary({
     required this.jobId,
     required this.status,
@@ -44,6 +55,8 @@ class UploadSummary {
     this.folderId,
     this.issueCount = 0,
     this.retryAt,
+    this.sellerName,
+    this.invoiceNo,
   });
 
   factory UploadSummary.fromJson(Map<String, dynamic> json) => UploadSummary(
@@ -59,6 +72,8 @@ class UploadSummary {
         retryAt: json['retry_at'] == null
             ? null
             : DateTime.parse(json['retry_at'] as String).toLocal(),
+        sellerName: _text(json['seller_name']),
+        invoiceNo: _text(json['invoice_no']),
       );
 
   bool get isSaved => invoiceId != null;
@@ -75,6 +90,8 @@ class UploadSummary {
         folderId: folder,
         issueCount: issueCount,
         retryAt: retryAt,
+        sellerName: sellerName,
+        invoiceNo: invoiceNo,
       );
 }
 

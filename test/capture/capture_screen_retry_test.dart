@@ -557,7 +557,7 @@ void main() {
     final server = _Server(filed: true, neverFinishes: true);
     await http.runWithClient(() async {
       // Wide enough that every status box is built; the row builds lazily.
-      await tester.binding.setSurfaceSize(const Size(1400, 800));
+      await tester.binding.setSurfaceSize(const Size(1400, 1600));
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
       await _settle(tester);
       await tester.tap(find.text('Testing2'));
