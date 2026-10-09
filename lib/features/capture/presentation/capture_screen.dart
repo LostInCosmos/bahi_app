@@ -108,12 +108,28 @@ class CaptureScreenState extends State<CaptureScreen> {
   @override
   void dispose() {
     _listRefresh?.cancel();
+    _retryLock?.cancel();
     _folders.removeListener(_onFoldersChanged);
     _folders.dispose();
     super.dispose();
   }
 
   Timer? _listRefresh;
+
+  // Retries are locked for a moment after each one. In a filtered list the
+  // retried bill leaves the box at once and the list closes up, so the NEXT
+  // bill is now under the same spot — a double tap, or ten quick taps in one
+  // place, retried ten different bills ("it retried many"). A tap on a
+  // different bill a second later is still immediate.
+  Timer? _retryLock;
+  static const _retryLockFor = Duration(milliseconds: 1200);
+
+  /// Whether this tap may retry something; takes the lock if it may.
+  bool _mayRetry() {
+    if (_retryLock?.isActive ?? false) return false;
+    _retryLock = Timer(_retryLockFor, () {});
+    return true;
+  }
 
   /// A bill has just entered or left Working — a retry began, or a read
   /// finished or failed: move the numbers now (one box down, the other up),
@@ -785,8 +801,10 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// Explicit "try again". A bill that failed is retried the way the dialog
   /// retries it — a failed save as a save, a failed upload as an upload — and
   /// any other is a fresh read.
-  Future<void> _reprocessItem(BatchItem item) =>
-      item.status == BatchItemStatus.failed ? _retryFailed(item) : _processOne(item);
+  Future<void> _reprocessItem(BatchItem item) async {
+    if (!_mayRetry()) return;
+    return item.status == BatchItemStatus.failed ? _retryFailed(item) : _processOne(item);
+  }
 
   // ==================== review & save ====================
 
@@ -1514,6 +1532,7 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// Works on any bill that is not being read: one that failed, or one whose
   /// result needs a second look.
   Future<void> _retryUpload(UploadSummary upload, {String? why}) async {
+    if (!_mayRetry()) return;
     // The server counts this bill in the box it is in now; it is about to be
     // read again, so one moves from that box to Working at once.
     _uploadHistory.currentState?.shiftCategory(upload.folderId, uploadCategory(upload), 'working');
