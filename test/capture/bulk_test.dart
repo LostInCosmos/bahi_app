@@ -186,4 +186,56 @@ void main() {
     expect(u.withFolder(null).folderId, isNull, reason: 'null must mean home, not "unchanged"');
     expect(u.withFolder(9).jobId, 5);
   });
+
+  group('planning a move', () {
+    test('332 bills are four requests, not 332', () {
+      final plan = planMove([for (var id = 1; id <= 332; id++) _job(id: id)]);
+
+      expect(plan.batches.map((b) => b.entries.length), [100, 100, 100, 32]);
+      expect(plan.total, 332);
+      expect(plan.batches.expand((b) => b.jobIds).toSet(), {for (var id = 1; id <= 332; id++) id},
+          reason: 'every bill in exactly one request');
+    });
+
+    test('saved bills travel by invoice id, unsaved by job id, device-only stay home', () {
+      final plan = planMove([
+        _job(id: 1),
+        _job(id: 2, invoiceId: 90),
+        _local(),                      // never reached the server
+        _local(jobId: 3),
+        _local(savedInvoiceId: 91, status: BatchItemStatus.saved),
+      ]);
+
+      expect(plan.local, hasLength(1));
+      expect(plan.batches, hasLength(1));
+      expect(plan.batches.single.jobIds, [1, 3]);
+      expect(plan.batches.single.invoiceIds, [90, 91]);
+      expect(plan.total, 5);
+    });
+
+    test('nothing to send is no requests', () {
+      expect(planMove([_local()]).batches, isEmpty);
+      expect(planMove(const []).total, 0);
+    });
+
+    test('what the server did not move is handed back, by the id it was sent under', () {
+      final batch = planMove([_job(id: 1), _job(id: 2), _job(id: 3, invoiceId: 90)]).batches.single;
+
+      final refused = batch.refused(const BulkMoveReply(movedJobs: {1}, movedInvoices: {}));
+
+      expect(refused.map((e) => e.id), ['j:2', 'j:3']);
+    });
+
+    test('a bill moved is not refused, saved or not', () {
+      final batch = planMove([_job(id: 1), _job(id: 2, invoiceId: 90)]).batches.single;
+      expect(batch.refused(const BulkMoveReply(movedJobs: {1}, movedInvoices: {90})), isEmpty);
+    });
+
+    test('the reply reads its ids, and an empty one moves nothing', () {
+      final reply = BulkMoveReply.fromJson({'moved_jobs': [1, 2], 'moved_invoices': [9], 'skipped': []});
+      expect(reply.movedJobs, {1, 2});
+      expect(reply.movedInvoices, {9});
+      expect(BulkMoveReply.fromJson({}).movedJobs, isEmpty);
+    });
+  });
 }

@@ -114,18 +114,22 @@ extension InvoiceApi on ApiClient {
     return UploadPage.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
-  /// File a bill that has been read but not yet saved. `null` is home.
-  ///
-  /// A folder used to live only on a saved invoice, so most of the capture
-  /// screen could not be filed at all. A saved bill is refused (409) — it is
-  /// moved through [moveInvoice], so the two places cannot disagree.
-  Future<void> moveUpload(int jobId, {required int? folderId}) async {
-    final res = await http.patch(
-      _uri('/invoices/extract/$jobId/folder'),
+  /// File many bills at once: unsaved uploads by job id, saved bills by
+  /// invoice id. One request, and the only way to file an upload — a single
+  /// bill is a batch of one. Bills the server could not move are simply
+  /// missing from the reply.
+  Future<BulkMoveReply> bulkMove({
+    List<int> jobIds = const [],
+    List<int> invoiceIds = const [],
+    required int? folderId,
+  }) async {
+    final res = await http.post(
+      _uri('/invoices/bulk-move'),
       headers: {..._authHeader, 'Content-Type': 'application/json'},
-      body: jsonEncode({'folder_id': folderId}),
+      body: jsonEncode({'job_ids': jobIds, 'invoice_ids': invoiceIds, 'folder_id': folderId}),
     );
     _checkOk(res);
+    return BulkMoveReply.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// Take an upload out of this shop's list, everywhere.

@@ -972,14 +972,16 @@ class CaptureScreenState extends State<CaptureScreen> {
     final savedId = item.savedInvoiceId;
     final jobId = item.jobId ?? item.lastJobId;
     try {
-      if (item.status == BatchItemStatus.saved && savedId != null) {
-        await ApiClient.instance.moveInvoice(savedId, folderId: choice.folderId);
-      } else if (jobId != null) {
-        // A bill that has been read but not saved is filed on the server
-        // too. Before it could only be filed on this phone, so the shop's
-        // other devices never saw the move, and saving elsewhere dropped
-        // the bill back at home.
-        await ApiClient.instance.moveUpload(jobId, folderId: choice.folderId);
+      // One bill is a batch of one: there is no separate single-bill move.
+      final saved = item.status == BatchItemStatus.saved && savedId != null;
+      if (saved || jobId != null) {
+        final reply = await ApiClient.instance.bulkMove(
+          jobIds: saved ? const [] : [jobId!],
+          invoiceIds: saved ? [savedId] : const [],
+          folderId: choice.folderId,
+        );
+        final moved = saved ? reply.movedInvoices.contains(savedId) : reply.movedJobs.contains(jobId);
+        if (!moved) throw 'it is saved, discarded or no longer in this shop';
       }
     } catch (e) {
       if (!mounted) return;
@@ -1060,6 +1062,7 @@ class CaptureScreenState extends State<CaptureScreen> {
               filtering: filtering,
             ),
           ),
+          if (_moving != null) _MoveStrip(_moving!),
           if (_choosing)
             SelectionBar(
               count: _chosenEntries().length,
@@ -1107,6 +1110,7 @@ class CaptureScreenState extends State<CaptureScreen> {
   bool _listSettled = false;
   Map<String, int> _serverCounts = const {};
   bool _bulkBusy = false;
+  _MoveProgress? _moving;
 
   // A bill on this device has no id of its own; this gives each card one for
   // the life of the screen so a selection can name it.
@@ -1202,33 +1206,73 @@ class CaptureScreenState extends State<CaptureScreen> {
     );
     if (choice == null || !mounted) return;
 
-    setState(() => _bulkBusy = true);
+    final plan = planMove(entries);
+    final target = choice.folderId;
+    final name = _folders.tree.byId(target)?.name ?? 'Home';
+
+    // Show it moved FIRST. Bills used to stay where they were until the last
+    // request came back — minutes, for a few hundred — and then vanished all
+    // at once. Now they leave this view and arrive in the folder at once, and
+    // the server catches up behind them; anything it refuses is put back.
+    final before = <String, int?>{};      // where each bill was, for putting back
     final refile = <int, int?>{};
-    final result = await runBulk(entries, (e) async {
-      final step = moveStep(e);
-      switch (step.via) {
-        case MoveVia.invoice:
-          await ApiClient.instance.moveInvoice(step.id!, folderId: choice.folderId);
-        case MoveVia.job:
-          await ApiClient.instance.moveUpload(step.id!, folderId: choice.folderId);
-        case MoveVia.local:
-          break;
-      }
+    void place(ListEntry e, int? folder) {
       final item = e.item;
       if (item != null) {
-        item.folderId = choice.folderId;
+        item.folderId = folder;
       } else {
-        refile[e.upload!.jobId] = choice.folderId;
+        refile[e.upload!.jobId] = folder;
       }
-    });
-    _uploadHistory.currentState?.refile(refile);
-    if (!mounted) return;
+    }
+
+    for (final e in entries) {
+      before[e.id] = e.item?.folderId ?? e.upload!.folderId;
+      place(e, target);
+    }
+    _uploadHistory.currentState?.refile(Map.of(refile));
+    refile.clear();
     setState(() {
       _chosen.clear();
+      _bulkBusy = true;
+      _moving = _MoveProgress(name, plan.total, plan.local.length);
+    });
+
+    var moved = plan.local.length;
+    final refused = <ListEntry>[];
+    var firstError = '';
+    for (final batch in plan.batches) {
+      try {
+        final reply = await ApiClient.instance.bulkMove(
+          jobIds: batch.jobIds,
+          invoiceIds: batch.invoiceIds,
+          folderId: target,
+        );
+        final no = batch.refused(reply);
+        refused.addAll(no);
+        moved += batch.entries.length - no.length;
+      } catch (e) {
+        refused.addAll(batch.entries);
+        if (firstError.isEmpty) firstError = '$e';
+      }
+      if (!mounted) return;
+      setState(() => _moving = _MoveProgress(name, plan.total, moved + refused.length));
+    }
+
+    for (final e in refused) {
+      place(e, before[e.id]);
+    }
+    _uploadHistory.currentState?.refile(Map.of(refile));
+    if (!mounted) return;
+    setState(() {
       _bulkBusy = false;
+      _moving = null;
     });
     await _persistBatch();
-    _say(summarise('Moved', result));
+    final left = refused.length;
+    _say(left == 0
+        ? 'Moved $moved bill${moved == 1 ? '' : 's'} to $name.'
+        : "Moved $moved to $name; $left couldn't be moved and went back"
+            '${firstError.isEmpty ? ' (saved, discarded or not in this shop)' : ': $firstError'}.');
     unawaited(_folders.load());   // the tiles count what is inside them
   }
 
@@ -1373,6 +1417,46 @@ class CaptureScreenState extends State<CaptureScreen> {
           onEntries: _onEntries,
         ),
       ],
+    );
+  }
+}
+
+
+/// How far a move has got. Shown as a strip above the bottom bar, because
+/// the bills have already moved on screen and the shopkeeper should know
+/// the server is still catching up — and when it is done.
+class _MoveProgress {
+  final String folder;
+  final int total;
+  final int done;
+
+  const _MoveProgress(this.folder, this.total, this.done);
+}
+
+class _MoveStrip extends StatelessWidget {
+  final _MoveProgress progress;
+
+  const _MoveStrip(this.progress);
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      key: const ValueKey('move-progress'),
+      color: scheme.surfaceContainerHigh,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Moving ${progress.total} to ${progress.folder} · ${progress.done} of ${progress.total} saved',
+                style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(value: progress.total == 0 ? null : progress.done / progress.total),
+          ],
+        ),
+      ),
     );
   }
 }

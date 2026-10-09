@@ -150,3 +150,79 @@ String summarise(String verb, BulkResult result, {int savedLeft = 0, int reading
   }
   return '${parts.join('; ')}.';
 }
+
+/// What the server says about a batch it was asked to file. Only what was
+/// actually moved is listed; anything asked for and absent was skipped
+/// (already saved, discarded, not this shop's).
+class BulkMoveReply {
+  final Set<int> movedJobs;
+  final Set<int> movedInvoices;
+
+  const BulkMoveReply({this.movedJobs = const {}, this.movedInvoices = const {}});
+
+  factory BulkMoveReply.fromJson(Map<String, dynamic> json) => BulkMoveReply(
+        movedJobs: {for (final id in json['moved_jobs'] as List<dynamic>? ?? const []) (id as num).toInt()},
+        movedInvoices: {for (final id in json['moved_invoices'] as List<dynamic>? ?? const []) (id as num).toInt()},
+      );
+}
+
+/// Bills sent per request. Big enough that 332 bills is four calls, small
+/// enough that one slow call does not hold the progress bar for long.
+const int kMoveChunk = 100;
+
+/// One request's worth of a move.
+class MoveBatch {
+  final List<ListEntry> entries;
+  final List<int> jobIds;
+  final List<int> invoiceIds;
+
+  const MoveBatch(this.entries, this.jobIds, this.invoiceIds);
+
+  /// The entries the server did NOT move, given its [reply] — these must go
+  /// back where they were, because the screen has already shown them moved.
+  List<ListEntry> refused(BulkMoveReply reply) => [
+        for (final e in entries)
+          if (!_moved(e, reply)) e,
+      ];
+
+  static bool _moved(ListEntry e, BulkMoveReply reply) {
+    final step = moveStep(e);
+    return switch (step.via) {
+      MoveVia.invoice => reply.movedInvoices.contains(step.id),
+      MoveVia.job => reply.movedJobs.contains(step.id),
+      MoveVia.local => true,
+    };
+  }
+}
+
+class MovePlan {
+  /// Bills that exist only on this phone: moving them is a local change.
+  final List<ListEntry> local;
+  final List<MoveBatch> batches;
+
+  const MovePlan(this.local, this.batches);
+
+  int get total => local.length + batches.fold(0, (n, b) => n + b.entries.length);
+}
+
+/// Split a selection into what stays on the phone and the requests that
+/// carry the rest, [chunk] bills at a time.
+MovePlan planMove(Iterable<ListEntry> entries, {int chunk = kMoveChunk}) {
+  final local = <ListEntry>[];
+  final remote = <ListEntry>[];
+  for (final e in entries) {
+    (moveStep(e).via == MoveVia.local ? local : remote).add(e);
+  }
+  final batches = <MoveBatch>[];
+  for (var i = 0; i < remote.length; i += chunk) {
+    final part = remote.sublist(i, i + chunk > remote.length ? remote.length : i + chunk);
+    final jobs = <int>[];
+    final invoices = <int>[];
+    for (final e in part) {
+      final step = moveStep(e);
+      (step.via == MoveVia.invoice ? invoices : jobs).add(step.id!);
+    }
+    batches.add(MoveBatch(part, jobs, invoices));
+  }
+  return MovePlan(local, batches);
+}
