@@ -734,8 +734,11 @@ class CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
-  /// Explicit "try again": always a fresh submission, never a resume.
-  Future<void> _reprocessItem(BatchItem item) => _processOne(item);
+  /// Explicit "try again". A bill that failed is retried the way the dialog
+  /// retries it — a failed save as a save, a failed upload as an upload — and
+  /// any other is a fresh read.
+  Future<void> _reprocessItem(BatchItem item) =>
+      item.status == BatchItemStatus.failed ? _retryFailed(item) : _processOne(item);
 
   // ==================== review & save ====================
 
@@ -773,19 +776,27 @@ class CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
-  Future<void> _offerRetry(BatchItem item) async {
+  Future<bool> _askRetry(String title, String? message) async {
     final retry = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(item.label),
-        content: Text(item.errorMessage ?? 'Something went wrong processing this bill.'),
+        title: Text(title),
+        content: Text(message ?? 'Something went wrong processing this bill.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Close')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Retry')),
         ],
       ),
     );
-    if (retry != true) return;
+    return retry == true;
+  }
+
+  Future<void> _offerRetry(BatchItem item) async {
+    if (!await _askRetry(item.label, item.errorMessage)) return;
+    await _retryFailed(item);
+  }
+
+  Future<void> _retryFailed(BatchItem item) async {
     // A save that failed is retried as a save. Re-extracting would spend an
     // LLM call to reproduce the result that has just failed to save.
     final result = item.result;
@@ -1358,6 +1369,11 @@ class CaptureScreenState extends State<CaptureScreen> {
       return;
     }
 
+    if (uploadCategory(upload) == 'failed') {
+      await _offerRetryForUpload(upload);
+      return;
+    }
+
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..jobId = upload.jobId
@@ -1402,6 +1418,32 @@ class CaptureScreenState extends State<CaptureScreen> {
     unawaited(_uploadHistory.currentState?.refresh());
   }
 
+  /// A bill that FAILED, from the shop's list rather than this phone.
+  ///
+  /// Tapping one used to say "that bill has not finished being read yet" —
+  /// untrue, and with no way to try again. It now says why it failed and
+  /// offers Retry. A retry joins this phone's own bills so the status loop
+  /// watches it; it keeps its place in the list, which is its upload order.
+  Future<void> _offerRetryForUpload(UploadSummary upload) async {
+    String? why;
+    try {
+      why = (await ApiClient.instance.getExtractionJob(upload.jobId)).errorMessage;
+    } catch (_) {
+      // Not worth refusing a retry over: the dialog just says less.
+    }
+    if (!mounted) return;
+    if (!await _askRetry('Bill', why)) return;
+    final item = BatchItem(label: 'Bill', pages: [])
+      ..sourceImages = [upload.sourceImage]
+      ..lastJobId = upload.jobId
+      ..folderId = upload.folderId
+      ..status = BatchItemStatus.failed
+      ..errorMessage = why;
+    setState(() => _items.add(item));
+    await _processOne(item);
+    unawaited(_uploadHistory.currentState?.refresh());
+  }
+
   /// ONE list: this device's bills and the shop's, three across, in the order
   /// they were uploaded. Folder tiles sit above them.
   Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders, {required bool empty, required bool filtering}) {
@@ -1429,12 +1471,7 @@ class CaptureScreenState extends State<CaptureScreen> {
               onDelete: !_choosing && item.status != BatchItemStatus.processing && item.status != BatchItemStatus.saved
                   ? () => _removeItem(item)
                   : null,
-              onReprocess: !_choosing &&
-                      item.isUploaded &&
-                      item.status != BatchItemStatus.preparing &&
-                      item.status != BatchItemStatus.processing
-                  ? () => _reprocessItem(item)
-                  : null,
+              onReprocess: item.canReprocess(choosing: _choosing) ? () => _reprocessItem(item) : null,
               // Not while an upload or extraction is in flight; its folder
               // is read when it is saved, so it can be moved any time after.
               onMove: !_choosing && item.status != BatchItemStatus.preparing && item.status != BatchItemStatus.processing

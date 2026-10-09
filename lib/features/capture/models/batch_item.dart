@@ -132,6 +132,20 @@ class BatchItem {
 
   bool get isUploaded => sourceImages.isNotEmpty;
 
+  /// Whether the card offers its ↻ button.
+  ///
+  /// Not while its photos are being uploaded or it is being read, and not
+  /// while bills are being chosen. A bill that FAILED always offers it, even
+  /// when the failure was the upload itself and nothing is on the server: the
+  /// button used to need an uploaded photo, so three bills that timed out
+  /// uploading showed a failure badge and no way to try again short of
+  /// guessing that the card could be tapped.
+  bool canReprocess({required bool choosing}) {
+    if (choosing) return false;
+    if (status == BatchItemStatus.preparing || status == BatchItemStatus.processing) return false;
+    return isUploaded || status == BatchItemStatus.failed;
+  }
+
   /// Whether anything about this item is worth keeping across a restart.
   bool get isPersistable => isUploaded || pages.any((p) => p.photoId != null);
 
