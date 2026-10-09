@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
 import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
+import 'package:gst_bill_app/features/capture/widgets/status_filter_bar.dart';
 
 /// Trying again on a bill that failed.
 ///
@@ -17,8 +18,25 @@ import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
 /// true, and no way to try again — and a phone's own bill whose upload failed
 /// had no ↻ button because the button needed an uploaded photo.
 
-http.Response _json(Object body, [int status = 200]) =>
-    http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+http.Response _json(Object body, [int status = 200, String? category]) {
+  // A server that honours `category=`, as the real one does.
+  if (category != null && body is Map && body['jobs'] is List) {
+    final keep = {
+      'failed': (Map j) => j['status'] == 'failed',
+      'review': (Map j) => j['status'] == 'done' && (j['issue_count'] as int) > 0,
+      'check': (Map j) => j['status'] == 'done' && (j['issue_count'] as int) == 0,
+    };
+    final wanted = category.split(',');
+    body = {
+      ...body,
+      'jobs': [
+        for (final j in body['jobs'] as List)
+          if (wanted.any((c) => keep[c]!(j as Map))) j,
+      ],
+    };
+  }
+  return http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+}
 
 BatchItem _item(BatchItemStatus status, {bool uploaded = true}) {
   final item = BatchItem(label: 'Bill', pages: [])..status = status;
@@ -27,15 +45,24 @@ BatchItem _item(BatchItemStatus status, {bool uploaded = true}) {
 }
 
 class _Server {
+  /// Bills filed in folder 3 ("Testing2"), as on the phone, so the status
+  /// boxes — which only show inside a folder — are reachable.
+  _Server({this.filed = false});
+
+  final bool filed;
   final requests = <String>[];
 
   MockClient get client => MockClient((req) async {
         final path = req.url.path;
-        requests.add('${req.method} $path');
-        if (req.method == 'GET' && path == '/folders') return _json([]);
+        requests.add('${req.method} $path${req.url.query.isEmpty ? '' : '?${req.url.query}'}');
+        if (req.method == 'GET' && path == '/folders') {
+          return _json(filed ? [{'id': 3, 'parent_id': null, 'name': 'Testing2', 'bill_count': 0}] : []);
+        }
         if (req.method == 'GET' && path == '/invoices/extract') {
+          final asked = req.url.queryParameters['category'];
+          Map<String, dynamic> job(Map<String, dynamic> j) => filed ? {...j, 'folder_id': 3} : j;
           return _json({
-            'jobs': [
+            'jobs': [for (final j in [
               {'job_id': 9, 'status': 'done', 'source_image': '8/9.jpg', 'created_at': '2026-10-08T12:00:00Z', 'issue_count': 0},
               {'job_id': 8, 'status': 'done', 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': 2},
               {
@@ -45,10 +72,10 @@ class _Server {
                 'created_at': '2026-10-08T10:00:00Z',
                 'issue_count': 0,
               },
-            ],
+            ]) job(j)],
             'next_before_id': null,
             'counts': {'root': {'failed': 1, 'review': 1, 'check': 1}},
-          });
+          }, 200, asked);
         }
         if (req.method == 'GET' && path == '/invoices/extract/7') {
           return _json({
@@ -195,6 +222,37 @@ void main() {
       await _settle(tester);
       expect(wears('j:7'), isFalse);
       expect(wears('j:8'), isFalse);
+    }, () => server.client);
+  });
+
+  testWidgets('ticking Failed shows the failed bill — asked of the server, from a list that has it', (tester) async {
+    _ignoreOverflow();
+    final server = _Server(filed: true);
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+      expect(find.byKey(const ValueKey('j:9')), findsOneWidget, reason: 'unticked, the clean bill is there');
+
+      // The filter row scrolls sideways; at phone width "Failed" is off the
+      // right edge, and a tap on it there silently hits nothing.
+      final chip = find.descendant(of: find.byType(FilterChip), matching: find.textContaining('Failed'));
+      await tester.scrollUntilVisible(
+        chip,
+        200,
+        scrollable: find.descendant(of: find.byType(StatusFilterBar), matching: find.byType(Scrollable)).first,
+      );
+      await tester.pump();
+      await tester.tap(chip);
+      await _settle(tester);
+
+      expect(server.requests.where((r) => r.startsWith('GET /invoices/extract?')).toList(), contains(contains('category=failed')),
+          reason: 'the box must be asked of the server: ${server.requests}');
+      expect(find.byKey(const ValueKey('j:7')), findsOneWidget, reason: 'the failed bill must be shown');
+      expect(find.byKey(const ValueKey('j:9')), findsNothing);
+      expect(find.textContaining('Nothing here'), findsNothing);
     }, () => server.client);
   });
 }
