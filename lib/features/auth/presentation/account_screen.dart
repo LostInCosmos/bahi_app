@@ -59,7 +59,7 @@ class _AccountScreenState extends State<AccountScreen> {
         _businessType = account.businessType;
       });
     } catch (e) {
-      setState(() => _error = 'Could not load account: $e');
+      if (mounted) setState(() => _error = 'Could not load account: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -85,9 +85,9 @@ class _AccountScreenState extends State<AccountScreen> {
         _savedMessage = 'Saved.';
       });
     } on ApiException catch (e) {
-      setState(() => _error = 'Could not save: ${e.message}');
+      if (mounted) setState(() => _error = 'Could not save: ${e.message}');
     } catch (e) {
-      setState(() => _error = 'Could not save: $e');
+      if (mounted) setState(() => _error = 'Could not save: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -33,6 +33,8 @@ import '../widgets/confirm_bill_dialog.dart';
 import '../widgets/unsave_dialog.dart';
 import 'crop_screen.dart';
 
+part 'capture_selection.dart';
+
 /// Adobe-Scanner-style batch flow: add several bill photos (each gets its
 /// corners set right after it's taken). Extraction for each bill starts on
 /// its own the moment that bill finishes uploading — there's no separate
@@ -58,11 +60,12 @@ class CaptureScreen extends StatefulWidget {
   State<CaptureScreen> createState() => CaptureScreenState();
 }
 
-class CaptureScreenState extends State<CaptureScreen> {
+class CaptureScreenState extends State<CaptureScreen> with _Selection {
   final List<BatchItem> _items = [];
 
   /// The shop's folders and where this screen is in them. Bills are shown
   /// folder by folder: a bill captured inside a folder is saved into it.
+  @override
   final FolderController _folders = FolderController();
   bool _foldersLoaded = false;
 
@@ -197,6 +200,7 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   /// A disposed screen never writes: the next screen restores from the last
   /// save and redoes whatever this one hadn't recorded yet.
+  @override
   Future<void> _persistBatch() async {
     if (!mounted) return;
     await _store?.save(_items);
@@ -240,7 +244,6 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   // ==================== capture & upload ====================
 
-  /// Captures one or more photos for a single bill: after each crop, the user
   /// Several bills picked from the gallery at once (DAS-25).
   ///
   /// Each becomes an ordinary bill straight away — saved here, shown on
@@ -404,15 +407,12 @@ class CaptureScreenState extends State<CaptureScreen> {
     final page = item.pages.first;
     final bytes = page.memoryBytes ??
         (page.photoId == null ? null : await PendingPhotoStore.read(page.photoId!));
+    if (!mounted) return;
     if (bytes == null) {
-      setState(() {
-        item.status = BatchItemStatus.failed;
-        item.errorMessage = 'that photo is no longer on this device';
-      });
+      setState(() => item.markFailed('that photo is no longer on this device'));
       await _persistBatch();
       return;
     }
-    if (!mounted) return;
     final crop = await Navigator.of(context).push<CropResult>(
       MaterialPageRoute(builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
     );
@@ -431,6 +431,7 @@ class CaptureScreenState extends State<CaptureScreen> {
     await _uploadAndExtract(item);
   }
 
+  /// Captures one or more photos for a single bill: after each crop, the user
   /// can finish or tap "+ Add another page" to add pages to the SAME bill.
   /// Each photo is written to the device as soon as its crop is confirmed.
   Future<void> _addPhoto(ImageSource source) async {
@@ -507,10 +508,7 @@ class CaptureScreenState extends State<CaptureScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        item.status = BatchItemStatus.failed;
-        item.errorMessage = 'Upload failed: $e';
-      });
+      setState(() => item.markFailed('Upload failed: $e'));
       await _persistBatch();
       return;
     }
@@ -538,14 +536,6 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   /// Throw a bill away.
   ///
-  /// This used to drop it from THIS device only, which was invisible
-  /// while the phone showed nothing but its own bills. Now that the
-  /// shop's uploads are listed underneath, a local-only removal would be
-  /// a cross that does nothing: the bill reappears from the server a
-  /// moment later. So anything the server knows about is discarded
-  /// there, and the row stays for our team with a "discarded" mark.
-  /// Throw a bill away.
-  ///
   /// This used to drop it from THIS device only, which was invisible while
   /// the phone showed nothing but its own bills. Now that the shop's uploads
   /// are listed too, a local-only removal would be a cross that does
@@ -558,7 +548,7 @@ class CaptureScreenState extends State<CaptureScreen> {
       return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId, item: item);
     }
     final jobId = item.jobId ?? item.lastJobId;
-    if (jobId != null && item.savedInvoiceId == null) {
+    if (jobId != null) {
       try {
         // One bill is a batch of one: there is no single-bill discard.
         final reply = await ApiClient.instance.bulkDiscard([jobId]);
@@ -631,6 +621,7 @@ class CaptureScreenState extends State<CaptureScreen> {
 
   /// Forget a bill on THIS device: its card, its saved state and its photos.
   /// Nothing about the server — callers settle that first.
+  @override
   void _dropLocal(BatchItem item) {
     setState(() => _items.remove(item));
     _persistBatch();
@@ -640,6 +631,7 @@ class CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
+  @override
   void _say(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -690,11 +682,7 @@ class CaptureScreenState extends State<CaptureScreen> {
       _ensureStatusLoop();
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        item.jobId = null;
-        item.status = BatchItemStatus.failed;
-        item.errorMessage = e.toString();
-      });
+      setState(() => item.markFailed(e.toString()));
       await _persistBatch();
     }
   }
@@ -813,14 +801,10 @@ class CaptureScreenState extends State<CaptureScreen> {
         result = ExtractionResult.blank(
           job.sourceImage ?? item.sourceImages.first,
           job.errorMessage ?? "Automatic extraction couldn't read this bill — please enter its details by hand.",
+          extraSourceImages: job.extraSourceImages ?? item.sourceImages.skip(1).toList(),
         );
       } else {
-        setState(() {
-          item.jobId = null;
-          item.processingSince = null;
-          item.status = BatchItemStatus.failed;
-          item.errorMessage = job.errorMessage ?? 'extraction failed';
-        });
+        setState(() => item.markFailed(job.errorMessage ?? 'extraction failed'));
         return;
       }
       setState(() {
@@ -967,11 +951,16 @@ class CaptureScreenState extends State<CaptureScreen> {
   /// question leaves the bill ready to confirm, not failed: nothing went
   /// wrong, the shopkeeper just has not answered yet.
   Future<void> _confirmAndSave(BatchItem item, ExtractionResult result, {Future<VendorHint?>? hint}) async {
-    final meta = ExtractionMeta(
-      sourceImage: item.sourceImages.first,
-      extraSourceImages: item.sourceImages.skip(1).toList(),
-      method: result.meta.method,
-      reviewedByUser: true,
+    // Every page of the bill. A bill opened or retried from the shop's list is
+    // known here by its first page only, while its read lists them all; a
+    // manual-entry form lists none, while this phone has them. Whichever is
+    // longer is the whole bill.
+    final readPages = [
+      for (final p in [result.meta.sourceImage, ...result.meta.extraSourceImages])
+        if (p.isNotEmpty) p,
+    ];
+    final meta = result.meta.reviewed(
+      pages: readPages.length >= item.sourceImages.length ? readPages : item.sourceImages,
     );
     var gstinConfirmed = false;
     int? confirmedVendorId;
@@ -1024,7 +1013,6 @@ class CaptureScreenState extends State<CaptureScreen> {
       } on ApiException catch (e) {
         if (!mounted) return;
         final detail = e.detail;
-        final kind = detail is Map ? detail['error'] : null;
         // Its folder was deleted since the bill was filed. Not worth failing
         // the save over: file it at home and say so.
         if (e.statusCode == 404 && e.message.contains('folder') && item.folderId != null) {
@@ -1033,19 +1021,12 @@ class CaptureScreenState extends State<CaptureScreen> {
               .showSnackBar(const SnackBar(content: Text('That folder no longer exists — saving to Home.')));
           continue;
         }
-        if (kind == 'gstin_confirmation_required' || kind == 'gstin_required') {
-          final asked = await ask(VendorHint(
-            needsConfirmation: true,
-            vendorKnown: detail['vendor_known'] as bool? ?? false,
-            verified: false,
-            vendorId: detail['vendor_id'] as int?,
-            gstin: (detail['gstin'] ?? detail['read_gstin']) as String? ?? '',
-            vendorName: (detail['seller_name'] as String?) ?? '',
-          ));
-          if (!asked) break;   // backed out: still ready to confirm
+        final question = VendorHint.fromSaveRefusal(detail);
+        if (question != null) {
+          if (!await ask(question)) break;   // backed out: still ready to confirm
           continue;
         }
-        if (kind == 'validation_failed') {
+        if (detail is Map && detail['error'] == 'validation_failed') {
           final rawIssues = (detail['issues'] as List<dynamic>? ?? []);
           setState(() {
             item.status = BatchItemStatus.needsReview;
@@ -1056,20 +1037,12 @@ class CaptureScreenState extends State<CaptureScreen> {
             );
           });
         } else {
-          setState(() {
-            item.status = BatchItemStatus.failed;
-            item.failedAtSave = true;
-            item.errorMessage = e.message;
-          });
+          setState(() => item.markFailed(e.message, atSave: true));
         }
         break;
       } catch (e) {
         if (!mounted) return;
-        setState(() {
-          item.status = BatchItemStatus.failed;
-          item.failedAtSave = true;
-          item.errorMessage = e.toString();
-        });
+        setState(() => item.markFailed(e.toString(), atSave: true));
         break;
       }
     }
@@ -1268,6 +1241,7 @@ class CaptureScreenState extends State<CaptureScreen> {
     return counts;
   }
 
+  @override
   final GlobalKey<UploadHistoryState> _uploadHistory = GlobalKey<UploadHistoryState>();
 
   // ---- what each folder tile says ----
@@ -1304,216 +1278,6 @@ class CaptureScreenState extends State<CaptureScreen> {
         bills: _listSettled ? _billsIn(folder.id) : folder.billCount,
         folders: _folders.tree.childrenOf(folder.id).length,
       );
-
-  // ---- choosing several bills ----
-  //
-  // `_visible` is what the list last reported it is drawing, and it is the
-  // ONLY thing the actions are measured against: ticking a bill and then
-  // filtering it out of view must not leave it armed for a Discard the
-  // shopkeeper can no longer see.
-  bool _choosing = false;
-  final Set<String> _chosen = {};
-  List<ListEntry> _visible = const [];
-  bool _visibleMore = false;
-  bool _listSettled = false;
-  Map<String, int> _serverCounts = const {};
-  bool _bulkBusy = false;
-  _MoveProgress? _moving;
-
-  // A bill on this device has no id of its own; this gives each card one for
-  // the life of the screen so a selection can name it.
-  final Expando<String> _entryIds = Expando<String>();
-  int _nextEntryId = 0;
-  String _idOf(BatchItem item) => _entryIds[item] ??= 'l:${_nextEntryId++}';
-
-  void _onEntries(
-    List<ListEntry> entries, {
-    required bool more,
-    required bool settled,
-    required Map<String, int> counts,
-  }) {
-    if (!mounted) return;
-    setState(() {
-      _visible = entries;
-      _visibleMore = more;
-      _listSettled = settled;
-      _serverCounts = counts;
-    });
-  }
-
-  void _toggleChosen(String id) {
-    setState(() {
-      if (!_chosen.remove(id)) _chosen.add(id);
-    });
-  }
-
-  void _stopChoosing() {
-    setState(() {
-      _choosing = false;
-      _chosen.clear();
-    });
-  }
-
-  void _selectAll() => setState(() => _chosen.addAll(_visible.map((e) => e.id)));
-
-  List<ListEntry> _chosenEntries() => _visible.where((e) => _chosen.contains(e.id)).toList();
-
-  Future<void> _discardChosen() async {
-    final plan = planDiscard(_chosenEntries());
-    if (plan.take.isEmpty) {
-      _say(summarise('Discarded', const BulkResult(0, []),
-          savedLeft: plan.savedLeft, readingLeft: plan.readingLeft));
-      return;
-    }
-    final n = plan.take.length;
-    // The one confirmation in the flow: it cannot be undone from here, and
-    // it reaches every device the shop signs in from.
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Discard $n bill${n == 1 ? '' : 's'}?'),
-        content: Text('${n == 1 ? 'It' : 'They'} will disappear from this shop on every device.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Discard')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    final requests = planDiscardRequests(plan.take);
-
-    // Show it gone first, as a move does. Bills that are only in the shop's
-    // list leave at once and come back if the server refuses; a bill held on
-    // this phone keeps its card until the server has said yes, because
-    // dropping it deletes its photos and that cannot be taken back.
-    final fromList = [for (final e in plan.take) if (e.upload != null) e.upload!];
-    _uploadHistory.currentState?.forget(fromList.map((u) => u.jobId));
-    for (final e in requests.local) {
-      if (e.item != null) _dropLocal(e.item!);
-    }
-    final total = plan.take.length;
-    setState(() {
-      _chosen.clear();
-      _bulkBusy = true;
-      _moving = _MoveProgress('Discarding $total', total, requests.local.length, 'done');
-    });
-
-    var done = requests.local.length;
-    final refused = <ListEntry>[];
-    var firstError = '';
-    for (final batch in requests.batches) {
-      List<ListEntry> no;
-      try {
-        no = batch.refused(await ApiClient.instance.bulkDiscard(batch.jobIds));
-      } catch (e) {
-        no = batch.entries;
-        if (firstError.isEmpty) firstError = '$e';
-      }
-      refused.addAll(no);
-      final refusedIds = {for (final e in no) e.id};
-      for (final e in batch.entries) {
-        final item = e.item;
-        if (item != null && !refusedIds.contains(e.id)) _dropLocal(item);
-      }
-      done += batch.entries.length - no.length;
-      if (!mounted) return;
-      setState(() => _moving = _MoveProgress('Discarding $total', total, done + refused.length, 'done'));
-    }
-
-    _uploadHistory.currentState?.restore([for (final e in refused) if (e.upload != null) e.upload!]);
-    if (!mounted) return;
-    setState(() {
-      _bulkBusy = false;
-      _moving = null;
-    });
-    final result = BulkResult(done, [for (final e in refused) BulkFailure(e, firstError.isEmpty ? 'refused' : firstError)]);
-    _say(summarise('Discarded', result, savedLeft: plan.savedLeft, readingLeft: plan.readingLeft) +
-        (firstError.isEmpty ? '' : ' ($firstError)'));
-    unawaited(_folders.load());
-  }
-
-  Future<void> _moveChosen() async {
-    final entries = _chosenEntries();
-    if (entries.isEmpty) return;
-    final n = entries.length;
-    final choice = await showFolderPicker(
-      context,
-      tree: _folders.tree,
-      title: 'Move $n bill${n == 1 ? '' : 's'} to…',
-      currentId: _folders.currentId,
-    );
-    if (choice == null || !mounted) return;
-
-    final plan = planMove(entries);
-    final target = choice.folderId;
-    final name = _folders.tree.byId(target)?.name ?? 'Home';
-
-    // Show it moved FIRST. Bills used to stay where they were until the last
-    // request came back — minutes, for a few hundred — and then vanished all
-    // at once. Now they leave this view and arrive in the folder at once, and
-    // the server catches up behind them; anything it refuses is put back.
-    final before = <String, int?>{};      // where each bill was, for putting back
-    final refile = <int, int?>{};
-    void place(ListEntry e, int? folder) {
-      final item = e.item;
-      if (item != null) {
-        item.folderId = folder;
-      } else {
-        refile[e.upload!.jobId] = folder;
-      }
-    }
-
-    for (final e in entries) {
-      before[e.id] = e.item?.folderId ?? e.upload!.folderId;
-      place(e, target);
-    }
-    _uploadHistory.currentState?.refile(Map.of(refile));
-    refile.clear();
-    setState(() {
-      _chosen.clear();
-      _bulkBusy = true;
-      _moving = _MoveProgress('Moving ${plan.total} to $name', plan.total, plan.local.length, 'saved');
-    });
-
-    var moved = plan.local.length;
-    final refused = <ListEntry>[];
-    var firstError = '';
-    for (final batch in plan.batches) {
-      try {
-        final reply = await ApiClient.instance.bulkMove(
-          jobIds: batch.jobIds,
-          invoiceIds: batch.invoiceIds,
-          folderId: target,
-        );
-        final no = batch.refused(reply);
-        refused.addAll(no);
-        moved += batch.entries.length - no.length;
-      } catch (e) {
-        refused.addAll(batch.entries);
-        if (firstError.isEmpty) firstError = '$e';
-      }
-      if (!mounted) return;
-      setState(() => _moving = _MoveProgress('Moving ${plan.total} to $name', plan.total, moved + refused.length, 'saved'));
-    }
-
-    for (final e in refused) {
-      place(e, before[e.id]);
-    }
-    _uploadHistory.currentState?.refile(Map.of(refile));
-    if (!mounted) return;
-    setState(() {
-      _bulkBusy = false;
-      _moving = null;
-    });
-    await _persistBatch();
-    final left = refused.length;
-    _say(left == 0
-        ? 'Moved $moved bill${moved == 1 ? '' : 's'} to $name.'
-        : "Moved $moved to $name; $left couldn't be moved and went back"
-            '${firstError.isEmpty ? ' (saved, discarded or not in this shop)' : ': $firstError'}.');
-    unawaited(_folders.load());   // the tiles count what is inside them
-  }
 
   /// Open a bill the SHOP has but this DEVICE does not, through the same
   /// confirm / review / save flow as any other card.
@@ -1709,47 +1473,3 @@ class CaptureScreenState extends State<CaptureScreen> {
   }
 }
 
-
-/// How far a move has got. Shown as a strip above the bottom bar, because
-/// the bills have already moved on screen and the shopkeeper should know
-/// the server is still catching up — and when it is done.
-class _MoveProgress {
-  /// "Moving 332 to Testing2", "Discarding 332".
-  final String headline;
-  final int total;
-  final int done;
-
-  /// What "done" means to the server: bills are `saved` to a folder, `done`
-  /// being discarded.
-  final String word;
-
-  const _MoveProgress(this.headline, this.total, this.done, this.word);
-}
-
-class _MoveStrip extends StatelessWidget {
-  final _MoveProgress progress;
-
-  const _MoveStrip(this.progress);
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      key: const ValueKey('move-progress'),
-      color: scheme.surfaceContainerHigh,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${progress.headline} · ${progress.done} of ${progress.total} ${progress.word}',
-                style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(value: progress.total == 0 ? null : progress.done / progress.total),
-          ],
-        ),
-      ),
-    );
-  }
-}

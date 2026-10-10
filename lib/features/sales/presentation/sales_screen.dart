@@ -45,15 +45,6 @@ class SalesScreenState extends State<SalesScreen> {
   bool _loading = false;
   String? _error;
 
-  // No interval: the server holds the request until something changes
-  // (DAS-21), so a client-side delay on top only adds latency.
-  //
-  // 180s is longer than bills' 120s because voice's worst-case chain is two
-  // sequential LLM calls, not one. It measures ONE ATTEMPT, not the whole
-  // job — a note queued behind three other recordings is not a note taking
-  // too long, and timing it out would lose a result already on its way.
-  static const _voiceJobTimeout = Duration(seconds: 180);
-
   @override
   void initState() {
     super.initState();
@@ -78,17 +69,8 @@ class SalesScreenState extends State<SalesScreen> {
   // processing, scoped per tenant so switching accounts never leaks one
   // shop's in-flight voice note into another's.
   String? _voiceJobsPrefsKey() {
-    final token = ApiClient.instance.token;
-    if (token == null) return null;
-    try {
-      final parts = token.split('.');
-      if (parts.length != 3) return null;
-      final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map<String, dynamic>;
-      final tenantId = payload['tenant_id'];
-      return tenantId == null ? null : 'bahi_voice_jobs_$tenantId';
-    } catch (_) {
-      return null;
-    }
+    final tenantId = ApiClient.instance.tenantId;
+    return tenantId == null ? null : 'bahi_voice_jobs_$tenantId';
   }
 
   Future<void> _persistVoiceJobs() async {
@@ -144,7 +126,7 @@ class SalesScreenState extends State<SalesScreen> {
       if (!mounted) return;
       setState(() => _products = products);
     } catch (e) {
-      setState(() => _error = 'Could not search: $e');
+      if (mounted) setState(() => _error = 'Could not search: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -170,6 +152,7 @@ class SalesScreenState extends State<SalesScreen> {
     );
     // The review screen mutates `_cart` in place (removals), so always
     // rebuild to reflect that even when the sale wasn't completed.
+    if (!mounted) return;
     setState(() {
       if (saleId != null) _cart.clear();
     });
@@ -200,11 +183,17 @@ class SalesScreenState extends State<SalesScreen> {
 
   Future<void> _pollVoiceJob(_VoiceJobItem item) async {
     try {
+      // No interval: the server holds the request until something changes
+      // (DAS-21). And no time limit: this phone used to fail a note after 180s
+      // of one attempt and drop it, though the server went on to finish it. The
+      // server fails a note nobody is working on (after 15 minutes), so it
+      // decides — and a dropped connection is only ever "ask again", for as
+      // long as this screen is open. A restart picks the note up again.
       final job = await pollUntilTerminal<VoiceOrderJob>(
         fetch: () => ApiClient.instance.getVoiceOrderJob(item.jobId, wait: true),
         isTerminal: (j) => j.isTerminal,
-        isStarted: (j) => j.isBeingWorkedOn,
-        timeout: _voiceJobTimeout,
+        transientFailures: null,
+        stillWanted: () => mounted,
       );
       if (!mounted) return;
       if (job.status == 'done') {
@@ -221,18 +210,13 @@ class SalesScreenState extends State<SalesScreen> {
         });
         _persistVoiceJobs();
       }
-    } on TimeoutException {
+    } catch (e) {
+      // Only a refusal gets here (the note is gone, say) — or the screen has
+      // closed, which needs nothing.
       if (!mounted) return;
       setState(() {
         item.status = _VoiceJobStatus.failed;
-        item.errorMessage = 'This is taking longer than expected — please try again.';
-      });
-      _persistVoiceJobs();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        item.status = _VoiceJobStatus.failed;
-        item.errorMessage = 'Could not reach the server.';
+        item.errorMessage = e is ApiException ? 'Could not get that voice note: ${e.message}' : 'Could not get that voice note.';
       });
       _persistVoiceJobs();
     }
@@ -423,7 +407,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       }
       setState(() => _detail = detail);
     } catch (e) {
-      setState(() => _error = 'Could not load product: $e');
+      if (mounted) setState(() => _error = 'Could not load product: $e');
     }
   }
 

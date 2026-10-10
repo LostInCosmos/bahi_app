@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/utils/recording_error.dart';
+import '../widgets/recording.dart';
 
 /// Mic capture for the "Voice sale" flow: tap to start, tap to stop (an
 /// utterance can run 30-60s so press-and-hold would be awkward), then
@@ -74,20 +74,12 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
 
   Future<void> _bootstrap() async {
     setState(() => _initializing = true);
-    bool granted = false;
-    try {
-      granted = await _recorder.hasPermission();
-    } catch (_) {
-      granted = false;
-    }
+    final granted = await hasMicPermission(_recorder);
     if (!mounted) return;
     setState(() {
       _hasPermission = granted;
       _initializing = false;
-      if (!granted) {
-        _errorMessage = 'Microphone permission was not granted. Please enable "Microphone" '
-            'for this app in your device Settings, then try again.';
-      }
+      if (!granted) _errorMessage = kMicPermissionMessage;
     });
   }
 
@@ -116,16 +108,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
     });
 
     try {
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/voice_sale_${DateTime.now().millisecondsSinceEpoch}.wav';
-      // WAV (PCM) rather than a compressed format: verified directly
-      // against Gemini's audio input that this container/codec is reliably
-      // accepted, and a 30-60s mono 16kHz recording is only ~1-2MB — small
-      // enough that upload size isn't worth trading away that reliability.
-      await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
-        path: path,
-      );
+      await _recorder.start(kVoiceRecordConfig, path: await newRecordingPath('voice_sale'));
       _startElapsedTimer();
       if (mounted) setState(() => _recording = true);
     } catch (e) {
@@ -211,22 +194,18 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
       } else {
         msg = 'Could not send: ${e.message}';
       }
-      setState(() => _errorMessage = msg);
+      if (mounted) setState(() => _errorMessage = msg);
     } catch (e) {
       // Most likely no connectivity — keep the recording so the shopkeeper
       // can retry once back online instead of re-recording.
-      setState(() => _errorMessage =
-          'Could not reach the server — check your connection and tap Retry. '
-          'Your recording is still here.');
+      if (mounted) {
+        setState(() => _errorMessage =
+            'Could not reach the server — check your connection and tap Retry. '
+            'Your recording is still here.');
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
-  }
-
-  String _formatElapsed(Duration d) {
-    final m = d.inMinutes.toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   @override
@@ -250,7 +229,8 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
                                 ? Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      _MicButton(
+                                      MicButton(
+                                        recordingIcon: Icons.pause,
                                         recording: !_paused,
                                         paused: _paused,
                                         enabled: !_uploading,
@@ -264,7 +244,8 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
                                       ),
                                     ],
                                   )
-                                : _MicButton(
+                                : MicButton(
+                                    recordingIcon: Icons.pause,
                                     recording: false,
                                     paused: false,
                                     enabled: _hasPermission && !_uploading,
@@ -274,8 +255,8 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
                             Text(
                               _recording
                                   ? (_paused
-                                      ? 'Paused at ${_formatElapsed(_elapsed)} — tap the mic to continue speaking'
-                                      : 'Recording ${_formatElapsed(_elapsed)} — tap to pause')
+                                      ? 'Paused at ${formatElapsed(_elapsed)} — tap the mic to continue speaking'
+                                      : 'Recording ${formatElapsed(_elapsed)} — tap to pause')
                                   : (hasRecording
                                       ? 'Recording ready — tap the mic to discard and re-record'
                                       : 'Tap the mic to speak a sale'),
@@ -300,7 +281,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
                                   Expanded(
                                     child: Text(
                                       hasRecording
-                                          ? 'Recorded ${_formatElapsed(_elapsed)} of audio, ready to send.'
+                                          ? 'Recorded ${formatElapsed(_elapsed)} of audio, ready to send.'
                                           : 'e.g. "pan forty ka do strip, augmentin 625 ka ek strip" — say the whole sale, then stop.',
                                       style: TextStyle(
                                         color: hasRecording
@@ -341,41 +322,6 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MicButton extends StatelessWidget {
-  // recording: actively capturing audio right now (tapping pauses it).
-  // paused: session is open but not capturing (tapping resumes it).
-  // Neither set: idle / ready-to-send (tapping starts a fresh recording).
-  final bool recording;
-  final bool paused;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _MicButton({required this.recording, required this.paused, required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = recording
-        ? AppColors.statusFailed
-        : (paused ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.primary);
-    final icon = recording ? Icons.pause : Icons.mic;
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 96,
-        height: 96,
-        decoration: BoxDecoration(
-          color: enabled ? color : Theme.of(context).colorScheme.outlineVariant,
-          shape: BoxShape.circle,
-          boxShadow: recording
-              ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 24, spreadRadius: 4)]
-              : null,
-        ),
-        child: Icon(icon, color: Colors.white, size: 40),
       ),
     );
   }

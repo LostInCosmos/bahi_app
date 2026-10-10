@@ -104,20 +104,33 @@ class BatchItem {
   /// slower but still correct.
   bool failedAtSave = false;
 
-  /// Set while the server is retrying a failed read. The bill is not stuck:
-  /// the server tries again at [retryAt], so the card says so instead of an
-  /// indefinite spinner or, worse, a failure. Not persisted — a restart
-  /// resumes polling the job and picks the retry state up from the server.
   /// When the server first said it was actually working on this bill, as
   /// opposed to leaving it queued. The per-attempt timeout runs from here,
   /// so a bill sitting behind a hundred others is never called failed for
   /// waiting its turn. Not persisted: a restart re-learns it from the server.
   DateTime? processingSince;
 
+  /// Set while the server is retrying a failed read. The bill is not stuck:
+  /// the server tries again at [retryAt], so the card says so instead of an
+  /// indefinite spinner or, worse, a failure. Not persisted — a restart
+  /// resumes polling the job and picks the retry state up from the server.
   int retryAttempt = 0;
   int retryMax = 3;
   DateTime? retryAt;
   bool get isRetrying => retryAt != null;
+
+  /// The bill failed: nothing is in flight for it any more. Clears the retry
+  /// state too — a bill still carrying [retryAt] is counted under Working
+  /// whatever its status says, so a read that failed straight after a server
+  /// retry stayed in Working, without its ✕.
+  void markFailed(String message, {bool atSave = false}) {
+    status = BatchItemStatus.failed;
+    errorMessage = message;
+    failedAtSave = atSave;
+    jobId = null;
+    processingSince = null;
+    retryAt = null;
+  }
 
   /// Sitting out the server's backoff, so asking about it now would only be
   /// told "retrying" again. [sweepMargin] is how late the server's own
@@ -137,11 +150,6 @@ class BatchItem {
   /// gives up on a bill itself, but those cards are still stored on phones.
   static const timedOutMessage = 'This bill is taking longer than expected — please try again.';
 
-  /// Failed only because this phone stopped waiting. The server may well have
-  /// finished: it ran the whole read-and-retry cycle (up to four model calls,
-  /// queued behind a cap on the provider) while the card had already said
-  /// "failed". Trying again should look at that job first, not read the bill
-  /// all over again and spend four more calls.
   /// What to do with this bill when the screen starts and finds it saved from
   /// last session.
   StartupAction get startupAction {
@@ -158,6 +166,11 @@ class BatchItem {
     return StartupAction.none;
   }
 
+  /// Failed only because this phone stopped waiting. The server may well have
+  /// finished: it ran the whole read-and-retry cycle (up to four model calls,
+  /// queued behind a cap on the provider) while the card had already said
+  /// "failed". Trying again should look at that job first, not read the bill
+  /// all over again and spend four more calls.
   bool get failedByTimeout =>
       status == BatchItemStatus.failed && errorMessage == timedOutMessage && lastJobId != null;
 

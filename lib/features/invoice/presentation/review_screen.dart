@@ -181,6 +181,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
   late final TextEditingController invoiceDate;
   late final TextEditingController placeOfSupply;
   String? invoiceType;
+  // Not shown on this form, but read off the bill — carried through so a
+  // save or revalidate does not erase it.
+  String? sellerPhone;
 
   late List<_LineItemForm> items;
 
@@ -254,6 +257,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     invoiceDate = TextEditingController(text: inv.invoiceDate);
     placeOfSupply = TextEditingController(text: inv.placeOfSupply ?? '');
     invoiceType = inv.invoiceType;
+    sellerPhone = inv.sellerPhone;
     items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
 
     subtotal = TextEditingController(text: _fmt(inv.totals.subtotal));
@@ -359,6 +363,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       sellerName: sellerName.text,
       sellerGstin: sellerGstin.text,
       sellerAddress: sellerAddress.text.isEmpty ? null : sellerAddress.text,
+      sellerPhone: sellerPhone,
       sellerDlNo: sellerDlNo.text.isEmpty ? null : sellerDlNo.text,
       buyerName: buyerName.text.isEmpty ? null : buyerName.text,
       buyerDlNo: buyerDlNo.text.isEmpty ? null : buyerDlNo.text,
@@ -392,6 +397,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     invoiceNo.text = inv.invoiceNo;
     invoiceDate.text = inv.invoiceDate;
     invoiceType = inv.invoiceType;
+    sellerPhone = inv.sellerPhone;
     placeOfSupply.text = inv.placeOfSupply ?? '';
 
     subtotal.text = _fmt(inv.totals.subtotal);
@@ -422,6 +428,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
       form.sgstAmount.text = _fmtNullable(item.sgstAmount);
       form.igstAmount.text = _fmtNullable(item.igstAmount);
       form.grossAmount.text = _fmt(item.grossAmount);
+      // The server's own answer, so the next save echoes it rather than the
+      // rates this form was opened with.
+      form.cgstPct = item.cgstPct;
+      form.sgstPct = item.sgstPct;
+      form.igstPct = item.igstPct;
     }
   }
 
@@ -449,7 +460,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       HapticFeedback.mediumImpact();
     } catch (e) {
       HapticFeedback.heavyImpact();
-      setState(() => _error = 'Could not revalidate: $e');
+      if (mounted) setState(() => _error = 'Could not revalidate: $e');
     } finally {
       if (mounted) setState(() => _revalidating = false);
     }
@@ -463,14 +474,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     });
     try {
       final invoice = _buildInvoiceData();
-      final meta = ExtractionMeta(
-        sourceImage: widget.result.meta.sourceImage,
-        extraSourceImages: widget.result.meta.extraSourceImages,
-        method: widget.result.meta.method,
-        templateId: widget.result.meta.templateId,
-        confidence: widget.result.meta.confidence,
-        reviewedByUser: true,
-      );
+      final meta = widget.result.meta.reviewed();
       // Ask BEFORE the round trip when the prefetch already knows the answer.
       // The server asks the same question itself and is what actually decides
       // — this only moves the dialog in front of the wait, so that tapping
@@ -507,30 +511,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
       HapticFeedback.heavyImpact();
       // The prefetch was stale or never landed — the server asks instead, and
       // the dialog is the same one, just after the round trip.
-      final detail = e.detail;
-      if (detail is Map &&
-          (detail['error'] == 'gstin_confirmation_required' || detail['error'] == 'gstin_required')) {
+      final question = VendorHint.fromSaveRefusal(e.detail);
+      if (question != null) {
         if (!mounted) return;
         setState(() => _saving = false);
-        final confirmed = await showGstinConfirmDialog(context, photo: _photoBytes,
-            fallbackName: sellerName.text.trim(), VendorHint(
-          needsConfirmation: true,
-          vendorKnown: detail['vendor_known'] as bool? ?? false,
-          verified: false,
-          vendorId: detail['vendor_id'] as int?,
-          gstin: (detail['gstin'] ?? detail['read_gstin']) as String? ?? '',
-          vendorName: (detail['seller_name'] as String?) ?? '',
-        ));
+        final confirmed = await showGstinConfirmDialog(context, question,
+            photo: _photoBytes, fallbackName: sellerName.text.trim());
         if (confirmed == null) {
           if (mounted) setState(() => _error = 'Saving needs the supplier\'s GSTIN.');
           return;
         }
         sellerGstin.text = confirmed;
         _gstinConfirmed = true;
-        _confirmedVendorId = detail['vendor_id'] as int?;
+        _confirmedVendorId = question.vendorId;
         await _save();   // one retry; the server accepts it now the identity is settled
         return;
       }
+      if (!mounted) return;
       if (e.detail is Map && e.detail['error'] == 'validation_failed') {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
         setState(() {
@@ -542,7 +539,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       }
     } catch (e) {
       HapticFeedback.heavyImpact();
-      setState(() => _error = 'Save failed: $e');
+      if (mounted) setState(() => _error = 'Save failed: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

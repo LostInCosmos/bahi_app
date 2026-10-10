@@ -202,11 +202,6 @@ class VoiceOrderJob {
 
   bool get isRetrying => status == 'retrying';
 
-  /// A worker has this job in hand, so the per-attempt clock should run.
-  /// 'queued' is deliberately excluded: waiting behind someone else's
-  /// recording is not the job taking too long. See poll.dart's isStarted.
-  bool get isBeingWorkedOn => status == 'transcribing' || status == 'parsing';
-
   factory VoiceOrderJob.fromJson(Map<String, dynamic> json) {
     final error = json['error'] as Map<String, dynamic>?;
     return VoiceOrderJob(

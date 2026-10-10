@@ -54,6 +54,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
       Navigator.of(context).pop(result['sale_id'] as int);
     } on ApiException catch (e) {
       final detail = e.detail;
+      if (!mounted) return;
       if (detail is Map && detail['error'] == 'insufficient_stock') {
         setState(() => _message = 'Not enough stock for ${detail['product_name']}: '
             'requested ${detail['requested']}, available ${detail['available']}.');
@@ -61,7 +62,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
         setState(() => _message = 'Sale failed: $e');
       }
     } catch (e) {
-      setState(() => _message = 'Sale failed: $e');
+      if (mounted) setState(() => _message = 'Sale failed: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

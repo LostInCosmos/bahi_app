@@ -5,8 +5,41 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import 'theme/app_theme.dart';
 
-class GstBillApp extends StatelessWidget {
+class GstBillApp extends StatefulWidget {
   const GstBillApp({super.key});
+
+  @override
+  State<GstBillApp> createState() => _GstBillAppState();
+}
+
+class _GstBillAppState extends State<GstBillApp> {
+  final _navigator = GlobalKey<NavigatorState>();
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
+
+  @override
+  void initState() {
+    super.initState();
+    ApiClient.instance.onSessionEnded = _onSessionEnded;
+  }
+
+  @override
+  void dispose() {
+    if (ApiClient.instance.onSessionEnded == _onSessionEnded) ApiClient.instance.onSessionEnded = null;
+    super.dispose();
+  }
+
+  /// The server refused this device's token (signed out elsewhere). Back to
+  /// the login screen, saying why — every open screen goes, so nothing keeps
+  /// asking with a token that will only be refused again.
+  void _onSessionEnded() {
+    _navigator.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+    _messenger.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('You were signed out. Please log in again.')));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +48,8 @@ class GstBillApp extends StatelessWidget {
       builder: (context, businessType, child) {
         final theme = buildAppTheme(brightness: Brightness.dark, businessType: businessType);
         return MaterialApp(
+          navigatorKey: _navigator,
+          scaffoldMessengerKey: _messenger,
           title: 'GST Bill Reconciliation',
           debugShowCheckedModeBanner: false,
           themeMode: ThemeMode.dark,

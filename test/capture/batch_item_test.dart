@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gst_bill_app/core/api/api_client.dart';
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
+import 'package:gst_bill_app/features/capture/models/status_filter.dart';
 
 BatchItemPage _page(String? photoId) => BatchItemPage(
       photoId: photoId,
@@ -103,5 +104,34 @@ void main() {
     final restored = BatchItem.fromJson(legacy)!;
     expect(restored.folderId, isNull);
     expect(restored.savedInvoiceId, 3);
+  });
+
+  test('a bill that fails straight after a server retry is counted as failed, not working', () {
+    // The server said "retrying" and then "failed" before this phone asked
+    // again. The retry time used to survive the failure, and a bill with one
+    // is counted under Working whatever its status says — so it sat in the
+    // wrong box without its ✕.
+    final item = BatchItem(label: 'Bill', pages: [])
+      ..sourceImages = ['7/abc.jpg']
+      ..status = BatchItemStatus.processing
+      ..jobId = 42
+      ..retryAt = DateTime.now().toUtc()
+      ..processingSince = DateTime.now().toUtc();
+
+    item.markFailed('gave up');
+
+    expect(item.status, BatchItemStatus.failed);
+    expect(item.errorMessage, 'gave up');
+    expect(item.isRetrying, isFalse);
+    expect(item.jobId, isNull);
+    expect(item.processingSince, isNull);
+    expect(item.failedAtSave, isFalse);
+    expect(categoryOfItem(item), 'failed');
+  });
+
+  test('a failed save is marked as one, so trying again saves rather than re-reads', () {
+    final item = BatchItem(label: 'Bill', pages: [])..sourceImages = ['7/abc.jpg'];
+    item.markFailed('server down', atSave: true);
+    expect(item.failedAtSave, isTrue);
   });
 }

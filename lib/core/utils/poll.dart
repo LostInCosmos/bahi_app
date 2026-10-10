@@ -1,10 +1,25 @@
 import 'dart:async';
 
+import '../api/api_exception.dart';
+
+/// Thrown by [pollUntilTerminal] once its caller no longer wants the answer
+/// (the screen watching the job has closed). Callers that already return on
+/// `!mounted` after a failure need no special handling for it.
+class PollAbandoned implements Exception {
+  const PollAbandoned();
+}
+
 /// Repeatedly calls [fetch] (typically a "get job status" endpoint) until
 /// [isTerminal] says the result is done, and returns that result. Throws a
-/// [TimeoutException] if [timeout] elapses first, so callers keep their own
-/// terminal-branch handling (done/failed/timeout can mean different things
-/// per screen) but not the loop mechanics.
+/// [TimeoutException] if a [timeout] is given and elapses first, so callers
+/// keep their own terminal-branch handling (done/failed/timeout can mean
+/// different things per screen) but not the loop mechanics.
+///
+/// With no [timeout] the server alone decides when a job is over — it fails a
+/// job nobody is working on — which is what bills and voice both do now: a
+/// phone that gave up first called jobs failed that the server went on to
+/// finish. Such a wait should pass [stillWanted], so it ends when its screen
+/// does (by throwing [PollAbandoned]) rather than outliving it.
 ///
 /// Three things here exist because the server now holds the request open
 /// instead of answering instantly (DAS-19 for bills, DAS-21 for voice):
@@ -24,28 +39,39 @@ import 'dart:async';
 ///    for 25s means tunnels, network switches and NAT timeouts land on the
 ///    client routinely. A dropped request must mean "ask again", never "the
 ///    job failed" — the next call re-reads current state, so nothing is lost
-///    by retrying. Set it to 0 to get the old fail-fast behaviour.
+///    by retrying. Set it to 0 to get the old fail-fast behaviour, or null to
+///    keep asking for as long as [stillWanted] says so. A request the server
+///    *answered* with a refusal (a 4xx: the job is gone, or the session has
+///    ended) is not transient and is never retried.
 Future<T> pollUntilTerminal<T>({
   required Future<T> Function() fetch,
   required bool Function(T result) isTerminal,
-  required Duration timeout,
+  Duration? timeout,
   Duration interval = Duration.zero,
   bool Function(T result)? isStarted,
-  int transientFailures = 3,
+  int? transientFailures = 3,
   Duration transientBackoff = const Duration(seconds: 2),
+  bool Function()? stillWanted,
 }) async {
   // Null until the job is known to be running. With no [isStarted] the clock
   // starts at the first answer, which is the old whole-job behaviour.
   DateTime? startedAt;
   var consecutiveFailures = 0;
 
+  void checkWanted() {
+    if (stillWanted != null && !stillWanted()) throw const PollAbandoned();
+  }
+
   while (true) {
+    checkWanted();
     final T result;
     try {
       result = await fetch();
-    } catch (_) {
+    } catch (e) {
+      if (_refused(e)) rethrow;
       consecutiveFailures++;
-      if (consecutiveFailures > transientFailures) rethrow;
+      final allowed = transientFailures;
+      if (allowed != null && consecutiveFailures > allowed) rethrow;
       await Future.delayed(transientBackoff);
       continue;
     }
@@ -55,7 +81,7 @@ Future<T> pollUntilTerminal<T>({
 
     if (isStarted == null || isStarted(result)) {
       startedAt ??= DateTime.now();
-      if (DateTime.now().difference(startedAt) > timeout) {
+      if (timeout != null && DateTime.now().difference(startedAt) > timeout) {
         throw TimeoutException('Job did not finish within $timeout of starting');
       }
     } else {
@@ -66,3 +92,12 @@ Future<T> pollUntilTerminal<T>({
     if (interval > Duration.zero) await Future.delayed(interval);
   }
 }
+
+/// The server answered, and said no: asking again gets the same answer.
+/// Request Timeout (408) and Too Many Requests (429) are worth another try.
+bool _refused(Object error) =>
+    error is ApiException &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500 &&
+    error.statusCode != 408 &&
+    error.statusCode != 429;

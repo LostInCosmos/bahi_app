@@ -34,6 +34,10 @@ class _CropScreenState extends State<CropScreen> {
   List<Offset> _corners = [];
   int _rotationDegrees = 0;
 
+  /// Confirming before the photo has loaded used to return no corners, which
+  /// every caller reads as "cancelled" — the photo was silently dropped.
+  bool get _ready => _corners.length == 4;
+
   void _finish({required bool addAnotherPage}) {
     Navigator.of(context).pop(
       CropResult(corners: _corners, rotationDegrees: _rotationDegrees, addAnotherPage: addAnotherPage),
@@ -70,7 +74,16 @@ class _CropScreenState extends State<CropScreen> {
                   quarterTurns: _rotationDegrees ~/ 90,
                   child: CropCanvas(
                     imageBytes: widget.imageBytes,
-                    onCornersChanged: (corners, _) => _corners = corners,
+                    onCornersChanged: (corners, _) {
+                      // The first report is the photo having loaded: only now
+                      // is there anything to confirm. Later ones are drags,
+                      // which need no rebuild here.
+                      if (_corners.isEmpty) {
+                        setState(() => _corners = corners);
+                      } else {
+                        _corners = corners;
+                      }
+                    },
                   ),
                 ),
               ),
@@ -94,13 +107,13 @@ class _CropScreenState extends State<CropScreen> {
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: () => _finish(addAnotherPage: true),
+                    onPressed: _ready ? () => _finish(addAnotherPage: true) : null,
                     icon: const Icon(Icons.note_add_outlined),
                     label: const Text('+ Add another page to this bill'),
                   ),
                   const SizedBox(height: 8),
                   FilledButton(
-                    onPressed: () => _finish(addAnotherPage: false),
+                    onPressed: _ready ? () => _finish(addAnotherPage: false) : null,
                     child: Text(isContinuedPage ? 'Confirm bill (${widget.pageNumber} pages)' : 'Confirm this page'),
                   ),
                 ],

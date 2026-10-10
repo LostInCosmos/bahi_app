@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../core/api/api_client.dart';
 import '../models/voice.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/utils/recording_error.dart';
+import '../widgets/recording.dart';
 
 /// General voice commands — "how much Maggi do I have", "delete Sharma's
 /// sale from yesterday", "add 20 Maggi to inventory" — distinct from the
@@ -56,20 +56,12 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
 
   Future<void> _bootstrap() async {
     setState(() => _initializing = true);
-    bool granted = false;
-    try {
-      granted = await _recorder.hasPermission();
-    } catch (_) {
-      granted = false;
-    }
+    final granted = await hasMicPermission(_recorder);
     if (!mounted) return;
     setState(() {
       _hasPermission = granted;
       _initializing = false;
-      if (!granted) {
-        _errorMessage = 'Microphone permission was not granted. Please enable "Microphone" '
-            'for this app in your device Settings, then try again.';
-      }
+      if (!granted) _errorMessage = kMicPermissionMessage;
     });
   }
 
@@ -90,12 +82,7 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
     });
 
     try {
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/voice_command_${DateTime.now().millisecondsSinceEpoch}.wav';
-      await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
-        path: path,
-      );
+      await _recorder.start(kVoiceRecordConfig, path: await newRecordingPath('voice_command'));
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
       });
@@ -141,12 +128,16 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
         await _showConfirmDialog(result);
       }
     } on ApiException catch (e) {
-      setState(() => _errorMessage = e.statusCode == 429
-          ? "You're sending commands too quickly — please wait a moment and try again."
-          : 'Could not process that: ${e.message}');
+      if (mounted) {
+        setState(() => _errorMessage = e.statusCode == 429
+            ? "You're sending commands too quickly — please wait a moment and try again."
+            : 'Could not process that: ${e.message}');
+      }
     } catch (e) {
-      setState(() => _errorMessage =
-          'Could not reach the server — check your connection and tap the mic to retry.');
+      if (mounted) {
+        setState(() => _errorMessage =
+            'Could not reach the server — check your connection and tap the mic to retry.');
+      }
     } finally {
       if (mounted) setState(() => _processing = false);
     }
@@ -186,12 +177,6 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
     }
   }
 
-  String _formatElapsed(Duration d) {
-    final m = d.inMinutes.toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -208,7 +193,8 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _MicButton(
+                            MicButton(
+                              recordingIcon: Icons.stop,
                               recording: _recording,
                               enabled: _hasPermission && !_processing,
                               onTap: _toggleRecording,
@@ -216,7 +202,7 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
                             const SizedBox(height: Spacing.l),
                             Text(
                               _recording
-                                  ? 'Listening ${_formatElapsed(_elapsed)} — tap to stop'
+                                  ? 'Listening ${formatElapsed(_elapsed)} — tap to stop'
                                   : (_processing ? 'Working on it…' : 'Tap the mic and speak a command'),
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
@@ -261,34 +247,6 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MicButton extends StatelessWidget {
-  final bool recording;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _MicButton({required this.recording, required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = recording ? AppColors.statusFailed : Theme.of(context).colorScheme.primary;
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 96,
-        height: 96,
-        decoration: BoxDecoration(
-          color: enabled ? color : Theme.of(context).colorScheme.outlineVariant,
-          shape: BoxShape.circle,
-          boxShadow: recording
-              ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 24, spreadRadius: 4)]
-              : null,
-        ),
-        child: Icon(recording ? Icons.stop : Icons.mic, color: Colors.white, size: 40),
       ),
     );
   }

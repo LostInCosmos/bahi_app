@@ -35,7 +35,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
       if (!mounted) return;
       setState(() => _sale = sale);
     } catch (e) {
-      setState(() => _error = 'Could not load receipt: $e');
+      if (mounted) setState(() => _error = 'Could not load receipt: $e');
     }
   }
 

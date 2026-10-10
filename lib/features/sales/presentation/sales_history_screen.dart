@@ -64,7 +64,7 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
       if (!mounted) return;
       setState(() => _sales = sales);
     } catch (e) {
-      setState(() => _error = 'Could not load sales: $e');
+      if (mounted) setState(() => _error = 'Could not load sales: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -83,7 +83,7 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
       await file.writeAsBytes(bytes);
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GST sales export'));
     } catch (e) {
-      setState(() => _error = 'Export failed: $e');
+      if (mounted) setState(() => _error = 'Export failed: $e');
     } finally {
       if (mounted) setState(() => _exporting = false);
     }

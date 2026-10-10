@@ -50,11 +50,13 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       if (!mounted) return;
       setState(() => _order = updated);
     } on ApiException catch (e) {
-      setState(() => _message = e.statusCode == 409
-          ? 'This draft is no longer editable (already confirmed or cancelled).'
-          : 'Could not update line: ${e.message}');
+      if (mounted) {
+        setState(() => _message = e.statusCode == 409
+            ? 'This draft is no longer editable (already confirmed or cancelled).'
+            : 'Could not update line: ${e.message}');
+      }
     } catch (e) {
-      setState(() => _message = 'Could not update line: $e');
+      if (mounted) setState(() => _message = 'Could not update line: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -166,7 +168,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     } on ApiException catch (e) {
       await _handleConfirmError(e);
     } catch (e) {
-      setState(() => _message = 'Could not confirm sale: $e');
+      if (mounted) setState(() => _message = 'Could not confirm sale: $e');
     } finally {
       if (mounted) setState(() => _confirming = false);
     }
@@ -204,6 +206,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       // Plain-string 422, e.g. "nothing to confirm — every line is unresolved or skipped".
       msg = e.message;
     }
+    if (!mounted) return;
     setState(() => _message = msg);
     // The rejection may reflect stock/state that changed server-side —
     // refresh so the lines on screen match reality before the next attempt.
@@ -239,13 +242,12 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       _message = 'Adding more…';
     });
     try {
+      // No time limit, as on SalesScreen: the server decides when a
+      // recording has failed. The wait ends if this screen does.
       final job = await pollUntilTerminal<VoiceOrderJob>(
         fetch: () => ApiClient.instance.getVoiceOrderJob(jobId, wait: true),
         isTerminal: (j) => j.isTerminal,
-        // 180s of being worked on, not 180s since the Add more was spoken —
-        // see poll.dart. Same clock as the strip on SalesScreen.
-        isStarted: (j) => j.isBeingWorkedOn,
-        timeout: const Duration(seconds: 180),
+        stillWanted: () => mounted,
       );
       if (!mounted) return;
       if (job.status == 'done') {
@@ -256,9 +258,6 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       } else {
         setState(() => _message = job.errorMessage ?? 'Could not add that recording.');
       }
-    } on TimeoutException {
-      if (!mounted) return;
-      setState(() => _message = 'This is taking longer than expected — please try again.');
     } catch (_) {
       if (!mounted) return;
       setState(() => _message = 'Could not reach the server.');
@@ -920,7 +919,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
         _searched = true;
       });
     } catch (e) {
-      setState(() => _error = 'Could not search: $e');
+      if (mounted) setState(() => _error = 'Could not search: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -978,9 +977,9 @@ class _AddItemSheetState extends State<_AddItemSheet> {
         _creatingNew = false;
       });
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Could not create product: $e');
+      if (mounted) setState(() => _error = 'Could not create product: $e');
     } finally {
       if (mounted) setState(() => _creating = false);
     }

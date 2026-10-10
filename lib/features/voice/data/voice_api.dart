@@ -11,14 +11,13 @@ extension VoiceApi on ApiClient {
   /// background worker, not inline in this request — so the caller waits on
   /// getVoiceOrderJob(..., wait: true) until it reaches a terminal status.
   Future<int> submitVoiceOrderAudio(File audioFile, {int? voiceOrderId}) async {
-    final query = voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null;
-    final request = http.MultipartRequest('POST', _uri('/voice-orders/parse-audio', query))
-      ..headers.addAll(_authHeader)
-      ..files.add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav')));
-    final streamed = await request.send();
-    final res = await http.Response.fromStream(streamed);
-    _checkOk(res);
-    return (jsonDecode(res.body) as Map<String, dynamic>)['job_id'] as int;
+    final res = await _multipart(
+      '/voice-orders/parse-audio',
+      query: voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null,
+      (request) async => request.files
+          .add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav'))),
+    );
+    return ApiClient._object(res)['job_id'] as int;
   }
 
   /// With [wait], the server holds the request open until this job changes
@@ -26,20 +25,21 @@ extension VoiceApi on ApiClient {
   /// request per state change rather than one every two seconds. A timeout
   /// or dropped connection here means "ask again", not "the job failed":
   /// every answer re-states current status, so nothing is missed.
+  ///
+  /// A held request gets [ApiClient.heldTimeout], as [jobStatuses] does: past
+  /// the server's hold it is a dead connection, and without a cap a socket
+  /// that died silently would leave the caller waiting for ever.
   Future<VoiceOrderJob> getVoiceOrderJob(int jobId, {bool wait = false}) async {
-    final res = await http.get(
-      _uri('/voice-orders/jobs/$jobId', wait ? {'wait': 'true'} : null),
-      headers: _authHeader,
+    final res = await _get(
+      '/voice-orders/jobs/$jobId',
+      query: wait ? {'wait': 'true'} : null,
+      timeout: wait ? ApiClient.heldTimeout : ApiClient.readTimeout,
     );
-    _checkOk(res);
-    return VoiceOrderJob.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    return VoiceOrderJob.fromJson(ApiClient._object(res));
   }
 
-  Future<VoiceOrder> getVoiceOrder(int id) async {
-    final res = await http.get(_uri('/voice-orders/$id'), headers: _authHeader);
-    _checkOk(res);
-    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
-  }
+  Future<VoiceOrder> getVoiceOrder(int id) async =>
+      VoiceOrder.fromJson(ApiClient._object(await _get('/voice-orders/$id')));
 
   /// Patches one line of a draft voice order (product choice, quantity,
   /// unit, prescription ref, or skip) — omit any field left unchanged.
@@ -59,23 +59,19 @@ extension VoiceApi on ApiClient {
     String? discountType,
     double? discountValue,
   }) async {
-    final body = <String, dynamic>{};
-    if (productId != null) body['product_id'] = productId;
-    if (quantity != null) body['quantity'] = quantity;
-    if (unit != null) body['unit'] = unit;
-    if (prescriptionRef != null) body['prescription_ref'] = prescriptionRef;
-    if (skip != null) body['skip'] = skip;
-    if (mrp != null) body['mrp'] = mrp;
-    if (discountType != null) body['discount_type'] = discountType;
-    if (discountValue != null) body['discount_value'] = discountValue;
-    final res = await http.patch(
-      _uri('/voice-orders/$orderId/lines/$lineId'),
-      headers: {..._authHeader, 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    _checkOk(res);
-    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final res = await _patchJson('/voice-orders/$orderId/lines/$lineId', {
+      if (productId != null) 'product_id': productId,
+      if (quantity != null) 'quantity': quantity,
+      if (unit != null) 'unit': unit,
+      if (prescriptionRef != null) 'prescription_ref': prescriptionRef,
+      if (skip != null) 'skip': skip,
+      if (mrp != null) 'mrp': mrp,
+      if (discountType != null) 'discount_type': discountType,
+      if (discountValue != null) 'discount_value': discountValue,
+    });
+    return VoiceOrder.fromJson(ApiClient._object(res));
   }
+
   Future<VoiceOrder> addVoiceOrderLine(
     int orderId, {
     required int productId,
@@ -85,21 +81,15 @@ extension VoiceApi on ApiClient {
     String? discountType,
     double? discountValue,
   }) async {
-    final body = <String, dynamic>{
+    final res = await _postJson('/voice-orders/$orderId/lines', {
       'product_id': productId,
       'quantity': quantity,
       'unit': unit,
-    };
-    if (mrp != null) body['mrp'] = mrp;
-    if (discountType != null) body['discount_type'] = discountType;
-    if (discountValue != null) body['discount_value'] = discountValue;
-    final res = await http.post(
-      _uri('/voice-orders/$orderId/lines'),
-      headers: {..._authHeader, 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    _checkOk(res);
-    return VoiceOrder.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+      if (mrp != null) 'mrp': mrp,
+      if (discountType != null) 'discount_type': discountType,
+      if (discountValue != null) 'discount_value': discountValue,
+    });
+    return VoiceOrder.fromJson(ApiClient._object(res));
   }
 
   Future<Map<String, dynamic>> confirmVoiceOrder(
@@ -107,27 +97,19 @@ extension VoiceApi on ApiClient {
     String? buyerName,
     String? buyerGstin,
   }) async {
-    final res = await http.post(
-      _uri('/voice-orders/$orderId/confirm'),
-      headers: {..._authHeader, 'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'buyer_name': (buyerName == null || buyerName.isEmpty) ? null : buyerName,
-        'buyer_gstin': (buyerGstin == null || buyerGstin.isEmpty) ? null : buyerGstin,
-      }),
-    );
-    _checkOk(res);
-    return jsonDecode(res.body) as Map<String, dynamic>;
+    final res = await _postJson(
+        '/voice-orders/$orderId/confirm',
+        {
+          'buyer_name': (buyerName == null || buyerName.isEmpty) ? null : buyerName,
+          'buyer_gstin': (buyerGstin == null || buyerGstin.isEmpty) ? null : buyerGstin,
+        },
+        timeout: ApiClient.workTimeout);
+    return ApiClient._object(res);
   }
 
-  Future<void> cancelVoiceOrder(int orderId) async {
-    final res = await http.post(_uri('/voice-orders/$orderId/cancel'), headers: _authHeader);
-    _checkOk(res);
-  }
+  Future<void> cancelVoiceOrder(int orderId) => _post('/voice-orders/$orderId/cancel');
 
-  Future<void> undoVoiceOrder(int orderId) async {
-    final res = await http.post(_uri('/voice-orders/$orderId/undo'), headers: _authHeader);
-    _checkOk(res);
-  }
+  Future<void> undoVoiceOrder(int orderId) => _post('/voice-orders/$orderId/undo');
 
   /// General voice command (check inventory, delete a sale, add stock,
   /// ...) — distinct from the voice-sale flow above. The backend never
@@ -135,23 +117,20 @@ extension VoiceApi on ApiClient {
   /// [VoiceCommandResult.requiresConfirmation] response must be followed by
   /// [confirmVoiceCommand] with its [VoiceCommandResult.confirmationToken]
   /// before anything is actually deleted/removed.
+  ///
+  /// Answered only once the recording has been transcribed and understood,
+  /// so it gets the transfer timeout, not a read's.
   Future<VoiceCommandResult> sendVoiceCommand(File audioFile) async {
-    final request = http.MultipartRequest('POST', _uri('/voice-commands/audio'))
-      ..headers.addAll(_authHeader)
-      ..files.add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav')));
-    final streamed = await request.send();
-    final res = await http.Response.fromStream(streamed);
-    _checkOk(res);
-    return VoiceCommandResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final res = await _multipart(
+      '/voice-commands/audio',
+      (request) async => request.files
+          .add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav'))),
+    );
+    return VoiceCommandResult.fromJson(ApiClient._object(res));
   }
 
   Future<VoiceCommandResult> confirmVoiceCommand(String confirmationToken) async {
-    final res = await http.post(
-      _uri('/voice-commands/confirm'),
-      headers: {..._authHeader, 'Content-Type': 'application/json'},
-      body: jsonEncode({'confirmation_token': confirmationToken}),
-    );
-    _checkOk(res);
-    return VoiceCommandResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final res = await _postJson('/voice-commands/confirm', {'confirmation_token': confirmationToken});
+    return VoiceCommandResult.fromJson(ApiClient._object(res));
   }
 }

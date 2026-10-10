@@ -254,6 +254,19 @@ class ExtractionMeta {
         vendorKnown: json['vendor_known'] as bool? ?? false,
       );
 
+  /// What a save sends: this read's meta, marked as checked by a person.
+  /// Everything else is echoed back as the server sent it. [pages], when
+  /// given, replaces the page list — see the capture screen's one-tap save.
+  ExtractionMeta reviewed({List<String>? pages}) => ExtractionMeta(
+        sourceImage: pages == null || pages.isEmpty ? sourceImage : pages.first,
+        extraSourceImages: pages == null || pages.isEmpty ? extraSourceImages : pages.skip(1).toList(),
+        method: method,
+        templateId: templateId,
+        confidence: confidence,
+        reviewedByUser: true,
+        vendorKnown: vendorKnown,
+      );
+
   Map<String, dynamic> toJson() => {
         'source_image': sourceImage,
         'extra_source_images': extraSourceImages,
@@ -334,9 +347,18 @@ class ExtractionResult {
   /// Used when the backend retried extraction once and the result still
   /// didn't match the invoice schema — routes straight to a blank,
   /// manual-entry review form instead of leaving the user stuck on an error.
-  factory ExtractionResult.blank(String sourceImage, String message) => ExtractionResult(
+  ///
+  /// [extraSourceImages] keeps a multi-page bill's other pages, which the
+  /// form saves with it.
+  factory ExtractionResult.blank(String sourceImage, String message, {List<String>? extraSourceImages}) =>
+      ExtractionResult(
         invoice: InvoiceData(),
-        meta: ExtractionMeta(sourceImage: sourceImage, method: 'llm', reviewedByUser: false),
+        meta: ExtractionMeta(
+          sourceImage: sourceImage,
+          extraSourceImages: extraSourceImages,
+          method: 'llm',
+          reviewedByUser: false,
+        ),
         issues: [ValidationIssue(field: 'invoice', severity: 'warning', message: message)],
       );
 }
@@ -599,6 +621,23 @@ class VendorHint {
     required this.vendorName,
     this.matchReason,
   });
+
+  /// The question inside a save the server refused because the supplier's
+  /// GSTIN needs confirming (`gstin_confirmation_required` / `gstin_required`),
+  /// or null for any other refusal. Both save paths ask it the same way.
+  static VendorHint? fromSaveRefusal(Object? detail) {
+    if (detail is! Map) return null;
+    final kind = detail['error'];
+    if (kind != 'gstin_confirmation_required' && kind != 'gstin_required') return null;
+    return VendorHint(
+      needsConfirmation: true,
+      vendorKnown: detail['vendor_known'] as bool? ?? false,
+      verified: false,
+      vendorId: detail['vendor_id'] as int?,
+      gstin: (detail['gstin'] ?? detail['read_gstin']) as String? ?? '',
+      vendorName: (detail['seller_name'] as String?) ?? '',
+    );
+  }
 
   factory VendorHint.fromJson(Map<String, dynamic> json) => VendorHint(
         needsConfirmation: json['needs_confirmation'] as bool? ?? true,

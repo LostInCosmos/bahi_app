@@ -36,6 +36,7 @@ class _CropCanvasState extends State<CropCanvas> {
   static const double _handleRadiusActive = 18;
 
   ui.Image? _decodedImage;
+  bool _undecodable = false;
   List<Offset> _corners = [];
   int? _draggingIndex;
 
@@ -54,9 +55,16 @@ class _CropCanvasState extends State<CropCanvas> {
   }
 
   Future<void> _decode() async {
-    final codec = await ui.instantiateImageCodec(widget.imageBytes);
-    final frame = await codec.getNextFrame();
-    final image = frame.image;
+    final ui.Image image;
+    try {
+      final codec = await ui.instantiateImageCodec(widget.imageBytes);
+      image = (await codec.getNextFrame()).image;
+    } catch (_) {
+      // A file the phone cannot read as an image. Said, rather than a spinner
+      // that never ends — no corners are reported, so it cannot be confirmed.
+      if (mounted) setState(() => _undecodable = true);
+      return;
+    }
     final w = image.width.toDouble();
     final h = image.height.toDouble();
     const inset = 0.08;
@@ -86,7 +94,11 @@ class _CropCanvasState extends State<CropCanvas> {
   Widget build(BuildContext context) {
     final image = _decodedImage;
     if (image == null) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: _undecodable
+            ? const Text("Couldn't open this photo. Go back and choose another.", textAlign: TextAlign.center)
+            : const CircularProgressIndicator(),
+      );
     }
 
     return LayoutBuilder(builder: (context, constraints) {

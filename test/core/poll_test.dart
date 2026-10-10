@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gst_bill_app/core/api/api_exception.dart';
 import 'package:gst_bill_app/core/utils/poll.dart';
 
 // DAS-21. The server now holds a status request open until something
@@ -160,6 +161,80 @@ void main() {
       );
       sw.stop();
       expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(60));
+    });
+  });
+
+  group('with no time limit, the server decides', () {
+    // Voice failed a note after 180s of one attempt and dropped it, though the
+    // server went on to finish it — the bill flow's old mistake again.
+    test('no timeout means no deadline, however long it is worked on', () async {
+      final server = _Server([...List.filled(50, 'parsing'), 'done']);
+      final job = await pollUntilTerminal<_Job>(
+        fetch: server.fetch,
+        isTerminal: (j) => j.isTerminal,
+        transientBackoff: Duration.zero,
+      );
+      expect(job.status, 'done');
+    });
+
+    test('transientFailures: null keeps asking through any number of drops', () async {
+      final server = _Server([...List<String?>.filled(20, null), 'done']);
+      final job = await pollUntilTerminal<_Job>(
+        fetch: server.fetch,
+        isTerminal: (j) => j.isTerminal,
+        transientFailures: null,
+        transientBackoff: Duration.zero,
+      );
+      expect(job.status, 'done');
+      expect(server.calls, 21);
+    });
+
+    test('it stops once its screen no longer wants the answer', () async {
+      final server = _Server(['parsing']);
+      var wanted = true;
+      final waiting = pollUntilTerminal<_Job>(
+        fetch: () async {
+          if (server.calls == 3) wanted = false;
+          return server.fetch();
+        },
+        isTerminal: (j) => j.isTerminal,
+        transientFailures: null,
+        stillWanted: () => wanted,
+      );
+      await expectLater(waiting, throwsA(isA<PollAbandoned>()));
+      expect(server.calls, 4, reason: 'no request after the screen has gone');
+    });
+  });
+
+  group('a refusal is not a dropped connection', () {
+    test('a 4xx is rethrown at once, not retried', () async {
+      var calls = 0;
+      final waiting = pollUntilTerminal<_Job>(
+        fetch: () async {
+          calls++;
+          throw ApiException(404, 'job not found');
+        },
+        isTerminal: (j) => j.isTerminal,
+        transientFailures: null,
+        transientBackoff: Duration.zero,
+      );
+      await expectLater(waiting, throwsA(isA<ApiException>()));
+      expect(calls, 1);
+    });
+
+    test('a 429 or a 5xx is still worth asking again', () async {
+      final answers = <Object>[ApiException(429, 'slow down'), ApiException(502, 'bad gateway'), _Job('done')];
+      var i = 0;
+      final job = await pollUntilTerminal<_Job>(
+        fetch: () async {
+          final a = answers[i++];
+          if (a is Exception) throw a;
+          return a as _Job;
+        },
+        isTerminal: (j) => j.isTerminal,
+        transientBackoff: Duration.zero,
+      );
+      expect(job.status, 'done');
     });
   });
 }

@@ -46,7 +46,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           ..addAll(pages);
       });
     } catch (e) {
-      setState(() => _error = 'Could not load invoice: $e');
+      if (mounted) setState(() => _error = 'Could not load invoice: $e');
     }
   }
 

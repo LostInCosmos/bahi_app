@@ -35,7 +35,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (!mounted) return;
       setState(() => _detail = detail);
     } catch (e) {
-      setState(() => _error = 'Could not load product: $e');
+      if (mounted) setState(() => _error = 'Could not load product: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

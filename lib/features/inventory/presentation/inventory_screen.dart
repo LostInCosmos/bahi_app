@@ -46,7 +46,7 @@ class InventoryScreenState extends State<InventoryScreen> {
       if (!mounted) return;
       setState(() => _products = products);
     } catch (e) {
-      setState(() => _error = 'Could not load inventory: $e');
+      if (mounted) setState(() => _error = 'Could not load inventory: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
