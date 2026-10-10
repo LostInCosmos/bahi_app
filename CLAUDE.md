@@ -100,6 +100,7 @@ At the start of a session, before any code:
 Working agreement:
 - **Linear is the record.** Contracts, decisions and test results go in the issue thread. Direct messages to other sessions (`ListAgents` / `SendMessage`) are a nudge only; anything decided over one is written into the issue, labelled as coming from a direct message. A DM does not count as agreement until it is confirmed in the thread.
 - **Stay inside `bahi_app/`.** Reading `../bahi_backend` is fine; editing it is not (`.claude/settings.json` denies it). If mobile needs a backend change, propose it in the issue and let the Backend agent build it.
+- **Web research is allowed when needed** (package docs, platform behaviour, GST rules), and expected before a large change or whenever you are unsure. Check the repo, the vault and `pubspec.yaml` first. Cite the source, and do not put an unverified web fact in a Linear contract or the vault as settled; record it in `11 - Issues/Open Questions.md` instead.
 
 ## Documentation rules
 - Do not invent facts. Record uncertainty in the vault's `11 - Issues/Open Questions.md`.
