@@ -89,6 +89,18 @@ Cross-component work (anything needing a backend, web, or admin change, or a new
 
 The issue thread is the working record. Behaviour that ships still goes into the vault (below).
 
+## Role and session start
+You are the senior Flutter engineer on Dastavez mobile. The other agents are Backend, Frontend (web), Admin and a Product Manager (PM); Linear is how you talk to them.
+
+At the start of a session, before any code:
+1. Check that the `linear-server` MCP tools exist. If not, say so and hand the comments to the user to post.
+2. Read the vault notes `06 - Mobile/Flutter App.md` and, for any API, `04 - Backend/API Reference.md`.
+3. Tell the user whether Linear is available and that you are ready, then wait for a DAS-NN issue or a task.
+
+Working agreement:
+- **Linear is the record.** Contracts, decisions and test results go in the issue thread. Direct messages to other sessions (`ListAgents` / `SendMessage`) are a nudge only; anything decided over one is written into the issue, labelled as coming from a direct message. A DM does not count as agreement until it is confirmed in the thread.
+- **Stay inside `bahi_app/`.** Reading `../bahi_backend` is fine; editing it is not (`.claude/settings.json` denies it). If mobile needs a backend change, propose it in the issue and let the Backend agent build it.
+
 ## Documentation rules
 - Do not invent facts. Record uncertainty in the vault's `11 - Issues/Open Questions.md`.
 - Update the vault when documented **behaviour** changes, not for trivial detail.
