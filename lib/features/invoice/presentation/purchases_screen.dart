@@ -1,14 +1,15 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/share_file.dart';
 import '../../folders/data/folder_controller.dart';
+import '../../folders/models/folder.dart';
 import '../../folders/widgets/folder_widgets.dart';
 import '../models/invoice.dart';
+import '../models/purchase_export.dart';
+import '../widgets/export_options.dart';
 import '../../../app/theme/app_theme.dart';
 import 'invoice_detail_screen.dart';
 
@@ -154,24 +155,101 @@ class PurchasesScreenState extends State<PurchasesScreen> {
     _refresh();
   }
 
-  Future<void> _export() async {
+  /// The main Export button: offers the files that can be made from the bills
+  /// uploaded in the range picked above (all of them with no range).
+  Future<void> _openExport() => showExportOptions(
+        context,
+        heading: exportRangeLabel(start: _iso(_startDate), end: _iso(_endDate), vendorGstin: _gstinController.text),
+        options: [
+          ExportOption(
+            title: 'GSTR2 purchase register',
+            subtitle: 'Excel file of the saved bills in this range',
+            run: _exportRange,
+          ),
+        ],
+      );
+
+  /// The GSTR2 file for the range above.
+  Future<void> _exportRange() async {
     if (_exporting) return;
     setState(() {
       _exporting = true;
       _error = null;
     });
     try {
-      final bytes = await ApiClient.instance.exportExcel(
+      final export = await ApiClient.instance.exportExcel(
         startDate: _iso(_startDate),
         endDate: _iso(_endDate),
         vendorGstin: _gstinController.text.trim(),
       );
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/purchases_${DateTime.now().millisecondsSinceEpoch}.xlsx');
-      await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GST purchase export'));
+      if (!mounted) return;
+      if (export.billCount == 0) {
+        setState(() => _error = 'No bills in this range.');
+        return;
+      }
+      await shareBytes(context, export.bytes,
+          name: 'purchases_${DateTime.now().millisecondsSinceEpoch}.xlsx', text: 'GST purchase export');
     } catch (e) {
       if (mounted) setState(() => _error = 'Export failed: $e');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  /// The folder menu's Export: offers the files that can be made from the
+  /// bills filed directly in [folder].
+  Future<void> _openFolderExport(Folder folder) => showExportOptions(
+        context,
+        heading: 'Export "${folder.name}"',
+        options: [
+          ExportOption(
+            title: 'GSTR2 purchase register',
+            subtitle: 'Excel file of every saved bill in this folder',
+            run: () => _exportFolder(folder),
+          ),
+        ],
+      );
+
+  /// The GSTR2 file for [folder]. Sends nothing but the folder, so the range
+  /// is the bills' own.
+  Future<void> _exportFolder(Folder folder) async {
+    if (_exporting) return;
+    setState(() {
+      _exporting = true;
+      _error = null;
+    });
+    void say(String message) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
+
+    try {
+      final export = await ApiClient.instance.exportExcel(folderId: folder.id);
+      if (!mounted) return;
+      if (export.billCount == 0) {
+        say('No bills in this folder.');
+        return;
+      }
+      await shareBytes(
+        context,
+        export.bytes,
+        name: 'purchases_folder${folder.id}_${DateTime.now().millisecondsSinceEpoch}.xlsx',
+        text: 'GST purchase export — ${folder.name}',
+      );
+      final n = export.billCount;
+      if (n != null) say('Exported $n ${n == 1 ? 'bill' : 'bills'}.');
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) {
+        // Deleted on another device since this tree loaded.
+        say('That folder no longer exists.');
+        _refresh();
+      } else {
+        say(e.message);
+      }
+    } catch (e) {
+      say('Export failed: $e');
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -190,14 +268,14 @@ class PurchasesScreenState extends State<PurchasesScreen> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => _pickDate(isStart: true),
-                  child: Text(_startDate == null ? 'From' : _iso(_startDate)!),
+                  child: Text(_startDate == null ? 'Uploaded from' : _iso(_startDate)!),
                 ),
               ),
               const SizedBox(width: Spacing.s),
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => _pickDate(isStart: false),
-                  child: Text(_endDate == null ? 'To' : _iso(_endDate)!),
+                  child: Text(_endDate == null ? 'Uploaded to' : _iso(_endDate)!),
                 ),
               ),
             ],
@@ -221,7 +299,7 @@ class PurchasesScreenState extends State<PurchasesScreen> {
               const SizedBox(width: Spacing.s),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _exporting ? null : _export,
+                  onPressed: _exporting ? null : _openExport,
                   icon: _exporting
                       ? const SizedBox(
                           height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -259,7 +337,7 @@ class PurchasesScreenState extends State<PurchasesScreen> {
                 child: folderTileGridBox(
                   folders: _folders.children,
                   onOpen: (f) => _folders.open(f.id),
-                  onMenu: (f) => showFolderActions(context, _folders, f, onDeleted: (_, __) => _refresh()),
+                  onMenu: (f) => showFolderActions(context, _folders, f, onDeleted: (_, __) => _refresh(), onExport: _openFolderExport),
                 ),
               ),
           ],

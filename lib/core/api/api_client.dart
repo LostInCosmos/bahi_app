@@ -13,6 +13,7 @@ import '../../features/capture/models/bulk.dart';
 import '../../features/capture/models/upload_summary.dart';
 import '../../features/folders/models/folder.dart';
 import '../../features/invoice/models/invoice.dart';
+import '../../features/invoice/models/purchase_export.dart';
 import '../../features/inventory/models/product.dart';
 import '../../features/sales/models/sale.dart';
 import '../../features/voice/models/voice.dart';
@@ -255,6 +256,16 @@ class ApiClient {
   static Map<String, String> _dateRange(String? startDate, String? endDate) => {
         if (startDate != null) 'start_date': startDate,
         if (endDate != null) 'end_date': endDate,
+      };
+
+  /// What the purchase range means: bills by the date they were UPLOADED, not
+  /// the date printed on them. Sent only with a date, because without one the
+  /// basis changes nothing; the sales range stays on [_dateRange].
+  static const _uploadedBasis = 'uploaded';
+
+  static Map<String, String> _purchaseDateRange(String? startDate, String? endDate) => {
+        ..._dateRange(startDate, endDate),
+        if (startDate != null || endDate != null) 'date_basis': _uploadedBasis,
       };
 
   static Map<String, dynamic> _object(http.Response res) => jsonDecode(res.body) as Map<String, dynamic>;

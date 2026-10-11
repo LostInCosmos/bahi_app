@@ -401,12 +401,15 @@ class _PickerRow {
 
 /// Rename / move / delete for one folder. [onDeleted] gets the folder and how
 /// many saved bills the server moved, so a screen holding unsaved bills can
-/// move its own copies up a level too.
+/// move its own copies up a level too. [onExport] adds "Export" for a screen
+/// whose bills are saved purchases (it opens the screen's choice of files);
+/// leave it null (Capture) and the item is not shown.
 Future<void> showFolderActions(
   BuildContext context,
   FolderController controller,
   Folder folder, {
   void Function(Folder folder, int movedBills)? onDeleted,
+  Future<void> Function(Folder folder)? onExport,
 }) async {
   final action = await showModalBottomSheet<String>(
     context: context,
@@ -425,6 +428,11 @@ Future<void> showFolderActions(
             leading: const Icon(Icons.drive_file_move_outlined),
             title: const Text('Move to…'),
             onTap: () => Navigator.pop(context, 'move')),
+        if (onExport != null)
+          ListTile(
+              leading: const Icon(Icons.ios_share),
+              title: const Text('Export'),
+              onTap: () => Navigator.pop(context, 'export')),
         ListTile(
           leading: Icon(Icons.delete_outline,
               color: Theme.of(context).colorScheme.error),
@@ -463,6 +471,16 @@ Future<void> showFolderActions(
       } catch (e) {
         fail(e);
       }
+    case 'export':
+      // Counted from the tree the screen already holds, so an empty folder
+      // costs no request. A folder filled on another device since the tree
+      // loaded is exported on the next try, after the tree reloads.
+      if (folder.billCount == 0) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('No bills in this folder.')));
+        return;
+      }
+      await onExport!(folder);
     case 'delete':
       final parentName = controller.tree.byId(folder.parentId)?.name ?? 'Home';
       final subfolders = controller.tree.childrenOf(folder.id).length;

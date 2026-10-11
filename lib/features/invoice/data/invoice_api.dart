@@ -192,7 +192,7 @@ extension InvoiceApi on ApiClient {
     bool unfiled = false,
   }) async {
     final res = await _get('/invoices', query: {
-      ...ApiClient._dateRange(startDate, endDate),
+      ...ApiClient._purchaseDateRange(startDate, endDate),
       if (vendorGstin != null && vendorGstin.isNotEmpty) 'vendor_gstin': vendorGstin,
       // Neither given = every bill, in any folder. `unfiled` is home.
       if (folderId != null) 'folder_id': '$folderId' else if (unfiled) 'unfiled': 'true',
@@ -217,17 +217,33 @@ extension InvoiceApi on ApiClient {
   Future<void> unsaveInvoice(int invoiceId, {required bool removeStock}) =>
       _postJson('/invoices/$invoiceId/unsave', {'remove_stock': removeStock});
 
-  Future<Uint8List> exportExcel({
+  /// The purchases spreadsheet. A date range selects the bills by the date they
+  /// were uploaded. With [folderId], only the bills filed directly
+  /// in that folder. Throws if the server did not confirm the folder: an old
+  /// server ignores the filter and would send every bill.
+  Future<PurchaseExport> exportExcel({
     String? startDate,
     String? endDate,
     String? vendorGstin,
+    int? folderId,
   }) async {
     final res = await _get('/export/excel',
         query: {
-          ...ApiClient._dateRange(startDate, endDate),
+          ...ApiClient._purchaseDateRange(startDate, endDate),
           if (vendorGstin != null && vendorGstin.isNotEmpty) 'vendor_gstin': vendorGstin,
+          if (folderId != null) 'folder_id': '$folderId',
         },
         timeout: ApiClient.transferTimeout);
-    return res.bodyBytes;
+    final export = PurchaseExport.fromResponse(res.bodyBytes, res.headers);
+    if (folderId != null && export.folderId != folderId) {
+      throw ApiException(res.statusCode, "This server can't export a single folder yet.");
+    }
+    // A range was sent as "uploaded between": a server that ignored that
+    // would have matched the bill dates, and the file would not be the set
+    // the screen shows.
+    if ((startDate != null || endDate != null) && export.dateBasis != ApiClient._uploadedBasis) {
+      throw ApiException(res.statusCode, "This server can't export by upload date yet.");
+    }
+    return export;
   }
 }

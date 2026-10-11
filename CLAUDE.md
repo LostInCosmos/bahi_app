@@ -119,5 +119,5 @@ Working agreement:
 ## Before finishing a change
 1. `flutter analyze` is clean and `flutter test` passes.
 2. Test on a **real device** if you touched camera, mic or permissions — the simulator hides these failures.
-3. Update `06 - Mobile/Flutter App.md` only if documented behaviour changed.
+3. After each task, update the vault with anything worth remembering (changed flow, new feature, architecture or contract change, new known issue); skip minor fixes. `06 - Mobile/Flutter App.md` is the usual home for mobile behaviour. State in the report which notes were updated, or that none were needed.
 4. Never commit or push unless asked.

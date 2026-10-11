@@ -199,4 +199,46 @@ void main() {
     expect(folderSubtitle(bills: 327, folders: 1), '327 bills · 1 folder');
     expect(folderSubtitle(bills: 2, folders: 3), '2 bills · 3 folders');
   });
+
+  group('folder menu', () {
+    const oct = Folder(id: 2, parentId: 1, name: 'Oct', billCount: 3);
+
+    Future<void> openMenu(WidgetTester tester, Folder folder, {Future<void> Function(Folder)? onExport}) async {
+      final c = FolderController()..tree = _tree;
+      await tester.pumpWidget(_host((context) => TextButton(
+            onPressed: () => showFolderActions(context, c, folder, onExport: onExport),
+            child: const Text('menu'),
+          )));
+      await tester.tap(find.text('menu'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Purchases offers Export', (tester) async {
+      await openMenu(tester, oct, onExport: (_) async {});
+      expect(find.text('Export'), findsOneWidget);
+    });
+
+    testWidgets('Capture, which passes no export, does not', (tester) async {
+      await openMenu(tester, oct);
+      expect(find.text('Export'), findsNothing);
+      expect(find.text('Rename'), findsOneWidget);
+    });
+
+    testWidgets('tapping it exports that folder', (tester) async {
+      Folder? exported;
+      await openMenu(tester, oct, onExport: (f) async => exported = f);
+      await tester.tap(find.text('Export'));
+      await tester.pumpAndSettle();
+      expect(exported?.id, 2);
+    });
+
+    testWidgets('an empty folder says so and makes no export', (tester) async {
+      var exports = 0;
+      await openMenu(tester, const Folder(id: 5, parentId: null, name: 'Misc'), onExport: (_) async => exports++);
+      await tester.tap(find.text('Export'));
+      await tester.pumpAndSettle();
+      expect(exports, 0);
+      expect(find.text('No bills in this folder.'), findsOneWidget);
+    });
+  });
 }
