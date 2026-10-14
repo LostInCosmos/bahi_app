@@ -36,3 +36,32 @@ Future<UnsaveChoice?> showUnsaveDialog(BuildContext context) {
     ),
   );
 }
+
+/// The same question for a bill our team is still looking at (DAS-71). Its stock
+/// always goes back with it, so nothing is asked about the stock — the dialog
+/// only says so. True if they go ahead.
+Future<bool> showUnsaveUnderReviewDialog(BuildContext context) async {
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Move back to Check & save?'),
+      content: const Text(
+        'The bill stays as it was read and can be checked and saved again.\n\n'
+        'The stock this bill added will be taken out of inventory.',
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('unsave-cancel'),
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('unsave-go'),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Move back'),
+        ),
+      ],
+    ),
+  );
+  return go == true;
+}

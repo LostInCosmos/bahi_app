@@ -48,12 +48,12 @@ BatchItem _item(BatchItemStatus status, {bool uploaded = true}) {
 class _Server {
   /// Bills filed in folder 3 ("Testing2"), as on the phone, so the status
   /// boxes — which only show inside a folder — are reachable.
-  _Server({this.filed = false, this.finishes = false, this.neverFinishes = false, this.phoneSeesFailure = false});
+  _Server({this.filed = false, this.finishes = false, this.neverFinishes = false, this.job8Failed = false});
 
-  /// The phone is told bill 8 failed, while the shop's list still has it as
-  /// needing review — the two disagreeing, as they did for bills the phone
-  /// had given up on and the server went on to finish.
-  final bool phoneSeesFailure;
+  /// Bill 8 starts as a FAILED bill (the only kind that has a read-again
+  /// button since DAS-71) instead of a flagged one. Retrying it queues it, and
+  /// it finishes flagged.
+  final bool job8Failed;
 
   /// The server keeps answering "still processing" for bill 8, as a held
   /// long-poll would, for as long as the test lets time run.
@@ -98,7 +98,7 @@ class _Server {
               {'job_id': 11, 'status': 'processing', 'source_image': '8/11.jpg', 'created_at': '2026-10-08T14:00:00Z', 'issue_count': 0},
               {'job_id': 10, 'status': 'done', 'source_image': '8/10.jpg', 'created_at': '2026-10-08T13:00:00Z', 'issue_count': 0, 'invoice_id': 55},
               {'job_id': 9, 'status': 'done', 'source_image': '8/9.jpg', 'created_at': '2026-10-08T12:00:00Z', 'issue_count': 0},
-              {'job_id': 8, 'status': phase == 'retrying' ? 'queued' : 'done', 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': 2},
+              {'job_id': 8, 'status': phase == 'retrying' ? 'queued' : (job8Failed && phase == 'idle' ? 'failed' : 'done'), 'source_image': '8/8.jpg', 'created_at': '2026-10-08T11:00:00Z', 'issue_count': job8Failed && phase == 'idle' ? 0 : 2},
               {
                 'job_id': 7,
                 'status': 'failed',
@@ -111,7 +111,9 @@ class _Server {
             'counts': {
               filed ? '3' : 'root': phase == 'retrying'
                   ? {'failed': 1, 'working': 1, 'check': 1}
-                  : {'failed': 1, 'review': 1, 'check': 1},
+                  : (job8Failed && phase == 'idle'
+                      ? {'failed': 2, 'check': 1}
+                      : {'failed': 1, 'review': 1, 'check': 1}),
             },
           }, 200, asked);
         }
@@ -130,23 +132,8 @@ class _Server {
         if (req.method == 'POST' && path == '/invoices/extract/7/retry') return _json({'job_id': 7});
         if (req.method == 'POST' && path == '/invoices/extract/8/retry') {
           if (retryGate != null) await retryGate!.future;
-          // In the disagreement scenario the server never shows the bill as queued:
-          // it still has it as needing review while the phone is told it failed.
-          if (!phoneSeesFailure) phase = 'retrying';
+          phase = 'retrying';
           return _json({'job_id': 8});
-        }
-        if (phoneSeesFailure && req.method == 'POST' && path == '/invoices/extract/status') {
-          return _json({
-            'jobs': [{'job_id': 8, 'status': 'failed', 'attempt': 3, 'max_attempts': 3}],
-            'changed': true,
-          });
-        }
-        if (phoneSeesFailure && req.method == 'GET' && path == '/invoices/extract/8') {
-          return _json({
-            'job_id': 8,
-            'status': 'failed',
-            'error': {'kind': 'attempts_exhausted', 'message': 'gave up'},
-          });
         }
         if (neverFinishes && req.method == 'POST' && path == '/invoices/extract/status') {
           statusPolls++;
@@ -245,10 +232,14 @@ void main() {
       expect(_item(BatchItemStatus.failed).canReprocess(choosing: false), isTrue);
     });
 
-    test('an uploaded bill does, whatever it has become', () {
-      for (final s in [BatchItemStatus.pendingConfirm, BatchItemStatus.needsReview, BatchItemStatus.ready]) {
+    test('an uploaded bill does, unless it is flagged', () {
+      for (final s in [BatchItemStatus.pendingConfirm, BatchItemStatus.ready]) {
         expect(_item(s).canReprocess(choosing: false), isTrue, reason: '$s');
       }
+    });
+
+    test('a flagged bill never does: it is with our team (DAS-71)', () {
+      expect(_item(BatchItemStatus.needsReview).canReprocess(choosing: false), isFalse);
     });
 
     test('never while it is being uploaded or read, nor while choosing', () {
@@ -306,9 +297,9 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('a bill that needs review can be read again from its card', (tester) async {
+  testWidgets('a failed bill can be read again from its card', (tester) async {
     _ignoreOverflow();
-    final server = _Server();
+    final server = _Server(job8Failed: true);
     await http.runWithClient(() async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
@@ -325,7 +316,7 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('failed and needs-review cards wear the button; a clean one does not', (tester) async {
+  testWidgets('only a failed card wears the button; a flagged one (with our team) and a clean one do not', (tester) async {
     _ignoreOverflow();
     final server = _Server();
     await http.runWithClient(() async {
@@ -338,7 +329,7 @@ void main() {
           .evaluate()
           .isNotEmpty;
       expect(wears('j:7'), isTrue, reason: 'failed');
-      expect(wears('j:8'), isTrue, reason: 'needs review');
+      expect(wears('j:8'), isFalse, reason: 'flagged: with our team, and a second read would replace what they are checking');
       expect(wears('j:9'), isFalse, reason: 'check & save: nothing to second-guess');
 
       // Not while choosing.
@@ -385,7 +376,7 @@ void main() {
     // after the server had finished them: the boxes show the server's tally,
     // which only moves when it is asked again.
     _ignoreOverflow();
-    final server = _Server(filed: true, finishes: true);
+    final server = _Server(filed: true, finishes: true, job8Failed: true);
     await http.runWithClient(() async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
@@ -409,47 +400,51 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('the box numbers move live both ways: a retry starts (Working +1) and it finishes (Working -1)', (tester) async {
-    // "When a bill moves from Working to Needs review, Working goes down by one
-    // and Needs review up by one — and when a retry starts, the reverse." As it
-    // happens, not on the next fetch. Changes that do not involve Working wait
-    // for the server.
+  testWidgets('the box numbers move live: a retry starts (Failed -1, Under processing +1) and the read finishes', (tester) async {
+    // When a retry starts the bill leaves Failed and joins Under processing at
+    // once, as it happens, not on the next fetch. Under processing is Working
+    // and the flagged boxes together (DAS-71), so a read that ends flagged stays
+    // in it: nothing is counted twice or dropped.
     _ignoreOverflow();
-    final server = _Server(filed: true, finishes: true)
+    final server = _Server(filed: true, finishes: true, job8Failed: true)
       ..statusGate = Completer<void>()
       ..retryGate = Completer<void>();
+    // The boxes only: bills on the list wear "Under processing" badges too.
+    Finder box(String text) => find.descendant(of: find.byType(FilterChip), matching: find.textContaining(text));
     await http.runWithClient(() async {
-      await tester.binding.setSurfaceSize(const Size(1000, 800));
+      await tester.binding.setSurfaceSize(const Size(1400, 800));
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
       await _settle(tester);
       await tester.tap(find.text('Testing2'));
       await _settle(tester);
-      await tester.tap(find.textContaining('Needs review 1'));   // the server's tally now
+      await tester.tap(box('Failed 2'));         // the server's tally now
       await _settle(tester);
-      expect(find.textContaining('Needs review 1'), findsOneWidget);
+      expect(box('Failed 2'), findsOneWidget);
+      expect(box('Under processing'), findsOneWidget);
+      expect(box('Under processing 1'), findsNothing);
 
-      final review = find.byKey(const ValueKey('j:8'));
-      await tester.tap(find.descendant(of: review, matching: find.byIcon(Icons.refresh_rounded)));
+      final failed = find.byKey(const ValueKey('j:8'));
+      await tester.tap(find.descendant(of: failed, matching: find.byIcon(Icons.refresh_rounded)));
       await tester.pump();
       await tester.pump();                                       // the server has not answered the retry
-      expect(find.textContaining('Working 1'), findsOneWidget, reason: 'a retry began: Working +1 at once');
-      expect(find.textContaining('Needs review 1'), findsNothing, reason: 'and Needs review -1');
-      expect(find.textContaining('Working 2'), findsNothing);
+      expect(box('Under processing 1'), findsOneWidget, reason: 'a retry began: +1 at once');
+      expect(box('Failed 1'), findsOneWidget, reason: 'and Failed -1');
+      expect(box('Under processing 2'), findsNothing);
 
       server.retryGate!.complete();                              // the server agrees (queued)
       await _settle(tester);
-      expect(find.textContaining('Working 1'), findsOneWidget);
+      expect(box('Under processing 1'), findsOneWidget);
 
-      server.statusGate!.complete();                             // the read finishes
+      server.statusGate!.complete();                             // the read finishes, flagged
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));       // well inside the 800 ms before any refetch
-      expect(find.textContaining('Needs review 1'), findsOneWidget, reason: 'finished: Needs review +1');
-      expect(find.textContaining('Working 1'), findsNothing, reason: 'and Working -1');
+      expect(box('Under processing 1'), findsOneWidget, reason: 'flagged still counts as with us, once');
+      expect(box('Failed 1'), findsOneWidget);
 
       await _settle(tester);                                     // the refetch confirms it
-      expect(find.textContaining('Needs review 1'), findsOneWidget);
-      expect(find.textContaining('Working 1'), findsNothing);
+      expect(box('Under processing 1'), findsOneWidget);
+      expect(box('Failed 1'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));
@@ -574,7 +569,7 @@ void main() {
     // stops, and the card is never turned into a failure by anything but the
     // server.
     _ignoreOverflow();
-    final server = _Server(filed: true, neverFinishes: true);
+    final server = _Server(filed: true, neverFinishes: true, job8Failed: true);
     await http.runWithClient(() async {
       // Wide enough that every status box is built; the row builds lazily.
       await tester.binding.setSurfaceSize(const Size(1400, 1600));
@@ -582,7 +577,7 @@ void main() {
       await _settle(tester);
       await tester.tap(find.text('Testing2'));
       await _settle(tester);
-      expect(find.textContaining('Failed 1'), findsOneWidget);          // bill 7, a real failure
+      expect(find.textContaining('Failed 2'), findsOneWidget);          // bills 7 and 8, both failed
 
       final retry = find.descendant(
           of: find.byKey(const ValueKey('j:8')), matching: find.byIcon(Icons.refresh_rounded));
@@ -597,40 +592,9 @@ void main() {
       }
 
       expect(server.statusPolls, greaterThan(300), reason: 'the watch must not have stopped');
-      expect(find.textContaining('Failed 1'), findsOneWidget, reason: 'still just the one real failure');
+      expect(find.textContaining('Failed 1'), findsOneWidget, reason: 'still just the one real failure (bill 8 is being read)');
       expect(find.textContaining('Failed 2'), findsNothing);
       expect(find.textContaining('taking longer'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 40));
-    }, () => server.client);
-  });
-
-  testWidgets('a bill the server counts as Needs review is listed there, even when the phone holds it as failed', (tester) async {
-    // "Needs review 34, but 16 bills listed": the list hid every shop bill the
-    // phone also held a card for, and the phone's card was then filtered by its
-    // OWN status — so a bill the server counted as review but the phone held as
-    // failed was drawn in neither place. Counted, not drawn.
-    _ignoreOverflow();
-    final server = _Server(filed: true, phoneSeesFailure: true);
-    await http.runWithClient(() async {
-      await tester.binding.setSurfaceSize(const Size(1000, 800));
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
-      await _settle(tester);
-      await tester.tap(find.text('Testing2'));
-      await _settle(tester);
-      await tester.tap(find.textContaining('Needs review 1'));
-      await _settle(tester);
-      expect(find.byKey(const ValueKey('j:8')), findsOneWidget, reason: 'to start with, it is listed');
-
-      // Retry it; the phone is told it failed. The server's list still has it as review.
-      await tester.tap(find.descendant(of: find.byKey(const ValueKey('j:8')), matching: find.byIcon(Icons.refresh_rounded)));
-      await _settle(tester);
-      await _settle(tester);
-
-      expect(find.textContaining('Needs review 1'), findsOneWidget, reason: 'the box counts it, as the server does');
-      expect(find.byKey(const ValueKey('j:8')), findsOneWidget,
-          reason: 'so the list must show it — it must not vanish because the phone also holds a card for it');
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));

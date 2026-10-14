@@ -134,7 +134,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       if (detail.buyerDlNo != null) _kv('Buyer D.L. no.', detail.buyerDlNo!),
                       _kv('Extraction method', detail.extractionMethod),
                       _kv('Reviewed', detail.reviewed ? 'Yes' : 'No'),
-                      if (detail.validationIssues.isNotEmpty) ...[
+                      // What the machine flagged is for our team, not the shop
+                      // (DAS-71): shown only by a server that does not say who
+                      // holds the bill, as it always was.
+                      if (detail.validationIssues.isNotEmpty && detail.reviewState == null) ...[
                         const SizedBox(height: 16),
                         _sectionTitle(context, 'Flagged at save time'),
                         ...detail.validationIssues.map((i) => Padding(

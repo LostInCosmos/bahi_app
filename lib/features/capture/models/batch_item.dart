@@ -185,6 +185,9 @@ class BatchItem {
   bool canReprocess({required bool choosing}) {
     if (choosing) return false;
     if (status == BatchItemStatus.preparing || status == BatchItemStatus.processing) return false;
+    // A flagged bill is with our team (DAS-71); reading it again would replace
+    // the result they are checking.
+    if (status == BatchItemStatus.needsReview) return false;
     return isUploaded || status == BatchItemStatus.failed;
   }
 

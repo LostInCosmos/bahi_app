@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -12,7 +11,7 @@ import '../../folders/data/folder_controller.dart';
 import '../../folders/models/folder.dart';
 import '../../folders/widgets/folder_widgets.dart';
 import '../../invoice/models/invoice.dart';
-import '../../invoice/presentation/gstin_confirm.dart';
+import '../../invoice/widgets/saved_tick.dart';
 import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../../invoice/presentation/review_screen.dart';
 import '../data/batch_store.dart';
@@ -571,12 +570,26 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   /// The ✕ on a SAVED bill: send it back to Check & save, asking whether its
   /// stock leaves inventory too. It is not thrown away from here — the bill
   /// comes back to be checked again — and the stock is the shopkeeper's call.
-  Future<void> _unsave(int invoiceId, {BatchItem? item}) async {
-    final choice = await showUnsaveDialog(context);
-    if (choice == null || !mounted) return;
-    final removeStock = choice == UnsaveChoice.removeStock;
+  ///
+  /// Except for a bill our team is still looking at: its stock always goes
+  /// back with it (the server does that whatever is sent), so there is nothing
+  /// to ask, and the dialog says so. [underReview] comes from the shop's list
+  /// when the caller has the row; otherwise it is read from the bill itself.
+  Future<void> _unsave(int invoiceId, {BatchItem? item, bool? underReview}) async {
+    underReview ??= await _isUnderReview(invoiceId);
+    if (!mounted) return;
+    final bool removeStock;
+    if (underReview) {
+      if (!await showUnsaveUnderReviewDialog(context) || !mounted) return;
+      removeStock = true;
+    } else {
+      final choice = await showUnsaveDialog(context);
+      if (choice == null || !mounted) return;
+      removeStock = choice == UnsaveChoice.removeStock;
+    }
+    final bool removed;
     try {
-      await ApiClient.instance.unsaveInvoice(invoiceId, removeStock: removeStock);
+      removed = await ApiClient.instance.unsaveInvoice(invoiceId, removeStock: removeStock);
     } on ApiException catch (e) {
       // Stock already sold, or no read to go back to: nothing changed.
       if (mounted) _say("Couldn't move it back: ${e.message}");
@@ -589,11 +602,23 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     // This phone's copy of a saved bill is finished with; the shop's list
     // shows the bill again, unsaved, once it is asked.
     if (item != null) _dropLocal(item);
-    _say(removeStock
+    _say(removed
         ? 'Moved back to Check & save. Its stock was taken out of inventory.'
         : 'Moved back to Check & save. Its stock stays in inventory.');
     unawaited(_uploadHistory.currentState?.refresh());
     unawaited(_folders.load());
+  }
+
+  /// Whether our team is still looking at this saved bill. Asked of the server
+  /// because this phone's own copy cannot know; a failed question reads as
+  /// "no", which only means the shopkeeper is asked about the stock as before
+  /// (the server decides either way).
+  Future<bool> _isUnderReview(int invoiceId) async {
+    try {
+      return (await ApiClient.instance.getInvoiceDetail(invoiceId)).isUnderReview;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// The ✕ on a processed bill from the shop's list (failed ones included;
@@ -604,7 +629,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     final category = uploadCategory(upload);
     if (category == 'saved') {
       final invoiceId = upload.invoiceId;
-      return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId);
+      return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId, underReview: upload.isUnderReview);
     }
     final history = _uploadHistory.currentState;
     history?.forget([upload.jobId]);
@@ -813,7 +838,11 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         item.processingSince = null;
         // Zero issues means the numbers are internally consistent, not that
         // they were read correctly — so this still waits on a human tap.
-        item.status = result.issues.isEmpty ? BatchItemStatus.pendingConfirm : BatchItemStatus.needsReview;
+        // The supplier's GSTIN is our team's to check, not a reason for the
+        // shop to look at the bill (DAS-71), as the server's own count says.
+        item.status = result.issues.every((i) => i.field == 'seller_gstin')
+            ? BatchItemStatus.pendingConfirm
+            : BatchItemStatus.needsReview;
         item.result = result;
       });
     } catch (_) {
@@ -848,18 +877,25 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         return;
       case BatchItemStatus.pendingConfirm:
         final result = item.result!;
-        // Look the supplier up while the confirm dialog is open, so tapping
-        // Save can show the GSTIN step at once instead of after a round trip
-        // — the same head start the review screen gets. Advisory only: the
-        // save call re-decides.
-        final hint = ApiClient.instance.lookupVendor(result.invoice);
         final action = await showConfirmBillDialog(context, item.label, result.invoice);
         if (!mounted) return;
         if (action == ConfirmBillAction.save) {
-          await _confirmAndSave(item, result, hint: hint);
+          await _saveBill(item);
         } else if (action == ConfirmBillAction.edit) {
           await _openReview(item, result);
         }
+        return;
+      case BatchItemStatus.needsReview:
+        // A flagged bill is with our team (DAS-71): the shopkeeper may save
+        // what was read, but is not asked to correct it, so there is no Edit.
+        final result = item.result;
+        if (result == null) {
+          _say('That bill has not finished being read yet.');
+          return;
+        }
+        final action = await showConfirmBillDialog(context, item.label, result.invoice, allowEdit: false);
+        if (!mounted) return;
+        if (action == ConfirmBillAction.save) await _saveBill(item);
         return;
       default:
         final result = item.result;
@@ -906,9 +942,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }
     // A save that failed is retried as a save. Re-extracting would spend an
     // LLM call to reproduce the result that has just failed to save.
-    final result = item.result;
-    if (item.failedAtSave && result != null) {
-      await _confirmAndSave(item, result);
+    if (item.failedAtSave && (item.jobId ?? item.lastJobId) != null) {
+      await _saveBill(item);
       return;
     }
     // A failed upload has nothing on the server to extract yet — redo the
@@ -941,104 +976,53 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }
   }
 
-  /// Only reached from the one-tap confirm dialog — never automatic. A
-  /// duplicate can still surface here even though extraction-time validation
-  /// was clean, since the duplicate check only runs at save time.
-  ///
-  /// Asks for the supplier's GSTIN when the server needs a confirmation —
-  /// before the round trip if the prefetched [hint] already says so, or
-  /// after it if the hint was stale or never landed. Backing out of that
-  /// question leaves the bill ready to confirm, not failed: nothing went
-  /// wrong, the shopkeeper just has not answered yet.
-  Future<void> _confirmAndSave(BatchItem item, ExtractionResult result, {Future<VendorHint?>? hint}) async {
-    // Every page of the bill. A bill opened or retried from the shop's list is
-    // known here by its first page only, while its read lists them all; a
-    // manual-entry form lists none, while this phone has them. Whichever is
-    // longer is the whole bill.
-    final readPages = [
-      for (final p in [result.meta.sourceImage, ...result.meta.extraSourceImages])
-        if (p.isNotEmpty) p,
-    ];
-    final meta = result.meta.reviewed(
-      pages: readPages.length >= item.sourceImages.length ? readPages : item.sourceImages,
-    );
-    var gstinConfirmed = false;
-    int? confirmedVendorId;
-
-    Future<bool> ask(VendorHint question) async {
-      // Loaded here rather than kept on every card: this is one bill, at the
-      // moment it is being confirmed, and it is a cache hit in the normal
-      // case. A missing picture just means the dialog shows none.
-      Uint8List? photo;
-      try {
-        photo = await ApiClient.instance.fetchImage(item.sourceImages.first);
-      } catch (_) {}
-      if (!mounted) return false;
-      final answer = await showGstinConfirmDialog(
-        context, question,
-        photo: photo,
-        fallbackName: result.invoice.sellerName,
-      );
-      if (answer == null || !mounted) return false;
-      result.invoice.sellerGstin = answer;
-      gstinConfirmed = true;
-      confirmedVendorId = question.vendorId;
-      return true;
+  /// Saves what the server read, by job: the phone sends no values (DAS-71), so
+  /// it cannot overwrite a correction from our team, and a clean bill and a
+  /// flagged one save the same way. Only reached from the confirm dialog —
+  /// never automatic. Stock goes in at once; our team corrects any difference
+  /// later. Nothing is asked about the supplier's GSTIN: that is theirs to check.
+  Future<void> _saveBill(BatchItem item) async {
+    final jobId = item.jobId ?? item.lastJobId;
+    if (jobId == null) {
+      setState(() => item.markFailed('This bill has not been read yet.', atSave: true));
+      await _persistBatch();
+      return;
     }
-
-    final prefetched = hint == null ? null : await hint;
-    if (!mounted) return;
-    if (prefetched != null && prefetched.needsConfirmation && !await ask(prefetched)) return;
-
-    // At most a couple of rounds: the dialog only accepts a well-formed
-    // GSTIN, which is all the server's "usable" check asks for.
-    for (var round = 0; round < 3; round++) {
+    // Twice at most: the second try is for a folder that was deleted since
+    // the bill was filed.
+    for (var round = 0; round < 2; round++) {
       try {
-        final id = await ApiClient.instance.saveInvoice(
-          result.invoice, meta,
-          gstinConfirmed: gstinConfirmed,
-          confirmedVendorId: confirmedVendorId,
-          folderId: item.folderId,
-        );
+        final saved = await ApiClient.instance.saveJob(jobId, folderId: item.folderId);
         if (!mounted) return;
         setState(() {
           item.status = BatchItemStatus.saved;
-          item.savedInvoiceId = id;
+          item.savedInvoiceId = saved.invoiceId;
           item.failedAtSave = false;
           item.errorMessage = null;
         });
-        // Nothing was asked, so show that it landed.
-        if (!gstinConfirmed) await showSavedTick(context);
+        await showSavedTick(context);
         break;
       } on ApiException catch (e) {
         if (!mounted) return;
-        final detail = e.detail;
         // Its folder was deleted since the bill was filed. Not worth failing
         // the save over: file it at home and say so.
         if (e.statusCode == 404 && e.message.contains('folder') && item.folderId != null) {
           setState(() => item.folderId = null);
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('That folder no longer exists — saving to Home.')));
+          _say('That folder no longer exists — saving to Home.');
           continue;
         }
-        final question = VendorHint.fromSaveRefusal(detail);
-        if (question != null) {
-          if (!await ask(question)) break;   // backed out: still ready to confirm
-          continue;
+        if (e.statusCode == 409) {
+          // Saved already (from another phone, or a tap that went through).
+          // Not a failure: the list shows it as saved once it is asked.
+          _say(e.message);
+          unawaited(_uploadHistory.currentState?.refresh());
+          break;
         }
-        if (detail is Map && detail['error'] == 'validation_failed') {
-          final rawIssues = (detail['issues'] as List<dynamic>? ?? []);
-          setState(() {
-            item.status = BatchItemStatus.needsReview;
-            item.result = ExtractionResult(
-              invoice: result.invoice,
-              meta: result.meta,
-              issues: rawIssues.map((j) => ValidationIssue.fromJson(j as Map<String, dynamic>)).toList(),
-            );
-          });
-        } else {
-          setState(() => item.markFailed(e.message, atSave: true));
+        if (e.statusCode == 422) {
+          _say('That bill has not finished being read yet.');
+          break;
         }
+        setState(() => item.markFailed(e.message, atSave: true));
         break;
       } catch (e) {
         if (!mounted) return;
@@ -1303,6 +1287,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..jobId = upload.jobId
+      ..lastJobId = upload.jobId                // what Save is addressed to
       ..folderId = upload.folderId
       ..savedInvoiceId = upload.invoiceId
       ..status = BatchItemStatus.processing;   // until the result is in
@@ -1324,9 +1309,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         ..jobId = null                          // it is finished; nothing to poll
         ..status = upload.invoiceId != null
             ? BatchItemStatus.saved
-            : (result.issues.isEmpty
-                ? BatchItemStatus.pendingConfirm
-                : BatchItemStatus.needsReview);
+            : (uploadCategory(upload) == 'review'
+                ? BatchItemStatus.needsReview
+                : BatchItemStatus.pendingConfirm);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

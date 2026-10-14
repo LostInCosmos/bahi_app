@@ -184,11 +184,17 @@ class PurchasesScreenState extends State<PurchasesScreen> {
       );
       if (!mounted) return;
       if (export.billCount == 0) {
-        setState(() => _error = 'No bills in this range.');
+        setState(() => _error = excludedNote(export.excludedUnderReview) ?? 'No bills in this range.');
         return;
       }
       await shareBytes(context, export.bytes,
           name: 'purchases_${DateTime.now().millisecondsSinceEpoch}.xlsx', text: 'GST purchase export');
+      final left = excludedNote(export.excludedUnderReview);
+      if (left != null && mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(left)));
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'Export failed: $e');
     } finally {
@@ -229,7 +235,7 @@ class PurchasesScreenState extends State<PurchasesScreen> {
       final export = await ApiClient.instance.exportExcel(folderId: folder.id);
       if (!mounted) return;
       if (export.billCount == 0) {
-        say('No bills in this folder.');
+        say(excludedNote(export.excludedUnderReview) ?? 'No bills in this folder.');
         return;
       }
       await shareBytes(
@@ -239,7 +245,8 @@ class PurchasesScreenState extends State<PurchasesScreen> {
         text: 'GST purchase export — ${folder.name}',
       );
       final n = export.billCount;
-      if (n != null) say('Exported $n ${n == 1 ? 'bill' : 'bills'}.');
+      final left = excludedNote(export.excludedUnderReview);
+      if (n != null) say('Exported $n ${n == 1 ? 'bill' : 'bills'}.${left == null ? '' : ' $left'}');
     } on ApiException catch (e) {
       if (e.statusCode == 404) {
         // Deleted on another device since this tree loaded.

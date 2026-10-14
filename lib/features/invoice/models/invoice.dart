@@ -533,6 +533,12 @@ class InvoiceDetail {
   final List<ValidationIssue> validationIssues;
   final List<LineItem> lineItems;
 
+  /// `none` | `pending` | `done` (DAS-71); null on a server that predates it.
+  final String? reviewState;
+
+  /// Our team still has to look at this bill (see [UploadSummary.isUnderReview]).
+  bool get isUnderReview => reviewState != null && reviewState != 'none' && reviewState != 'done';
+
   InvoiceDetail({
     required this.id,
     required this.vendorGstin,
@@ -558,6 +564,7 @@ class InvoiceDetail {
     required this.reviewed,
     required this.validationIssues,
     required this.lineItems,
+    this.reviewState,
   }) : extraSourceImagePaths = extraSourceImagePaths ?? [];
 
   factory InvoiceDetail.fromJson(Map<String, dynamic> json) => InvoiceDetail(
@@ -591,61 +598,17 @@ class InvoiceDetail {
         lineItems: (json['line_items'] as List<dynamic>? ?? [])
             .map((e) => LineItem.fromJson(e as Map<String, dynamic>))
             .toList(),
+        reviewState: json['review_state'] as String?,
       );
 }
 
-/// What the server knows about this bill's supplier, fetched while the review
-/// screen is open so that tapping Save can show the GSTIN confirmation
-/// immediately. A hint for the UI only — the save call re-decides for itself.
-class VendorHint {
-  /// False only for a vendor our team has verified: the one case that saves
-  /// in a single tap.
-  final bool needsConfirmation;
-  final bool vendorKnown;
-  final bool verified;
-  /// The vendor row whose GSTIN is being shown. Sent back on save so a
-  /// correction lands on the right row instead of being guessed at.
-  final int? vendorId;
-  /// What to pre-fill: the stored identity when we have one, else what was
-  /// read off the bill.
-  final String gstin;
-  final String vendorName;
-  final String? matchReason;
+/// The answer to saving a bill by job (`POST /invoices/extract/{id}/save`).
+class SavedJob {
+  final int invoiceId;
 
-  const VendorHint({
-    required this.needsConfirmation,
-    required this.vendorKnown,
-    required this.verified,
-    required this.vendorId,
-    required this.gstin,
-    required this.vendorName,
-    this.matchReason,
-  });
+  /// `none` | `pending` | `done` for the bill just saved; null on a server
+  /// that does not say.
+  final String? reviewState;
 
-  /// The question inside a save the server refused because the supplier's
-  /// GSTIN needs confirming (`gstin_confirmation_required` / `gstin_required`),
-  /// or null for any other refusal. Both save paths ask it the same way.
-  static VendorHint? fromSaveRefusal(Object? detail) {
-    if (detail is! Map) return null;
-    final kind = detail['error'];
-    if (kind != 'gstin_confirmation_required' && kind != 'gstin_required') return null;
-    return VendorHint(
-      needsConfirmation: true,
-      vendorKnown: detail['vendor_known'] as bool? ?? false,
-      verified: false,
-      vendorId: detail['vendor_id'] as int?,
-      gstin: (detail['gstin'] ?? detail['read_gstin']) as String? ?? '',
-      vendorName: (detail['seller_name'] as String?) ?? '',
-    );
-  }
-
-  factory VendorHint.fromJson(Map<String, dynamic> json) => VendorHint(
-        needsConfirmation: json['needs_confirmation'] as bool? ?? true,
-        vendorKnown: json['vendor_known'] as bool? ?? false,
-        verified: json['verified'] as bool? ?? false,
-        vendorId: json['vendor_id'] as int?,
-        gstin: json['gstin'] as String? ?? '',
-        vendorName: json['vendor_name'] as String? ?? '',
-        matchReason: json['match_reason'] as String?,
-      );
+  const SavedJob({required this.invoiceId, this.reviewState});
 }

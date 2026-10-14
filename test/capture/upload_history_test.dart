@@ -14,6 +14,7 @@ import 'package:gst_bill_app/features/capture/widgets/upload_history.dart';
 /// on the server and saw none of them.
 
 UploadSummary _upload({
+  String? reviewState,
   int jobId = 1,
   String status = 'done',
   String sourceImage = '8/a.jpg',
@@ -31,6 +32,10 @@ UploadSummary _upload({
       folderId: folderId,
       issueCount: issueCount,
       retryAt: retryAt,
+      // A flagged bill's badge no longer says how many things were flagged
+      // (DAS-71), so a card is told apart by who the bill is from.
+      sellerName: issueCount > 0 ? 'Bill $issueCount' : null,
+      reviewState: reviewState,
     );
 
 void main() {
@@ -99,6 +104,26 @@ void main() {
       expect(uploadCategory(_upload(retryAt: DateTime(2026, 10, 8))), 'working');
     });
 
+    test("the server's review state decides, not the count (DAS-71)", () {
+      // A bill flagged only on its supplier's GSTIN has a count but is not for the shop.
+      expect(uploadCategory(_upload(issueCount: 1, reviewState: 'none')), 'check');
+      expect(uploadCategory(_upload(issueCount: 2, reviewState: 'pending')), 'review');
+      expect(uploadCategory(_upload(issueCount: 0, reviewState: 'pending')), 'review');
+      // Our team has been through it: waiting for the shopkeeper's tap again.
+      expect(uploadCategory(_upload(issueCount: 0, reviewState: 'done')), 'check');
+      // A saved bill is saved whatever its state.
+      expect(uploadCategory(_upload(invoiceId: 7, reviewState: 'pending')), 'saved');
+      // A server that does not say keeps the old reading.
+      expect(uploadCategory(_upload(issueCount: 2)), 'review');
+    });
+
+    test('an unknown review state reads as under review: the safe reading', () {
+      expect(_upload(reviewState: 'in_review').isUnderReview, isTrue);
+      expect(_upload(reviewState: 'none').isUnderReview, isFalse);
+      expect(_upload(reviewState: 'done').isUnderReview, isFalse);
+      expect(_upload().isUnderReview, isFalse);
+    });
+
     test('failed and cancelled both read as failed', () {
       expect(uploadCategory(_upload(status: 'failed')), 'failed');
       expect(uploadCategory(_upload(status: 'cancelled')), 'failed');
@@ -153,7 +178,10 @@ void main() {
       // One list, no headings: a file manager is a list of files, not a
       // "recent" group stacked over an "earlier" one.
       expect(find.text('Earlier uploads'), findsNothing);
-      expect(find.text('Check 3'), findsOneWidget);
+      expect(find.text('Bill 3'), findsOneWidget);
+      // A flagged bill is with our team: no count of what was flagged.
+      expect(find.text('Under processing'), findsOneWidget);
+      expect(find.textContaining('Check 3'), findsNothing);
       expect(find.text('Check & save'), findsOneWidget);
       expect(find.text('Saved'), findsOneWidget);
     });
@@ -177,7 +205,7 @@ void main() {
       )));
       await tester.pump();
 
-      expect(find.text('Check 3'), findsNothing, reason: 'drawn twice');
+      expect(find.text('Bill 3'), findsNothing, reason: 'drawn twice');
       expect(find.text('Check & save'), findsOneWidget);
     });
 
@@ -198,8 +226,8 @@ void main() {
       )));
       await tester.pump();
 
-      expect(find.text('Check 3'), findsNothing, reason: 'job 1 is drawn by the phone\'s card');
-      expect(find.text('Check 4'), findsOneWidget, reason: 'job 2 is a different bill and must be drawn');
+      expect(find.text('Bill 3'), findsNothing, reason: 'job 1 is drawn by the phone\'s card');
+      expect(find.text('Bill 4'), findsOneWidget, reason: 'job 2 is a different bill and must be drawn');
     });
 
     testWidgets("shows the shop's row for a bill the device holds but is NOT drawing", (tester) async {
@@ -216,7 +244,7 @@ void main() {
       )));
       await tester.pump();
 
-      expect(find.text('Check 3'), findsOneWidget, reason: 'the bill must be drawn once, by the shop\'s row');
+      expect(find.text('Bill 3'), findsOneWidget, reason: 'the bill must be drawn once, by the shop\'s row');
     });
 
     testWidgets('shows the folder you are standing in, not the whole shop', (tester) async {
@@ -281,7 +309,7 @@ void main() {
         onOpen: (u) => opened = u,
       )));
       await tester.pump();
-      await tester.tap(find.text('Check 2'));
+      await tester.tap(find.text('Bill 2'));
       await tester.pump();
 
       expect(opened?.jobId, 7);
@@ -333,7 +361,7 @@ void main() {
       await tester.pump();
 
       double top(String label) => tester.getTopLeft(find.text(label)).dy;
-      final order = ['Check 3', 'Check 2', 'Check 1'];
+      final order = ['Bill 3', 'Bill 2', 'Bill 1'];
       // Same row means same dy, so compare by column within the row:
       // three across, so newest is leftmost.
       double left(String label) => tester.getTopLeft(find.text(label)).dx;
@@ -362,35 +390,35 @@ void main() {
         },
       )));
       await tester.pump();
-      expect(find.text('Check 2'), findsOneWidget);
+      expect(find.text('Bill 2'), findsOneWidget);
 
       hold = true;
       final pending = key.currentState!.refresh();
       await tester.pump();
-      expect(find.text('Check 2'), findsOneWidget,
+      expect(find.text('Bill 2'), findsOneWidget,
           reason: 'the list was emptied while the refresh was in flight');
 
       release.complete();
       await pending;
       await tester.pump();
-      expect(find.text('Check 2'), findsOneWidget);
+      expect(find.text('Bill 2'), findsOneWidget);
     });
 
     testWidgets('a bill that got saved updates in place and does not move', (tester) async {
       final key = GlobalKey<UploadHistoryState>();
       await tester.pumpWidget(build(key));
       await tester.pump();
-      final before = tester.getTopLeft(find.text('Check 2'));
+      final before = tester.getTopLeft(find.text('Bill 2'));
 
       server[1] = _upload(jobId: 20, sourceImage: '8/20.jpg', invoiceId: 5, issueCount: 2);
       await key.currentState!.refresh();
       await tester.pump();
 
-      expect(find.text('Check 2'), findsNothing);
+      expect(find.text('Under processing'), findsNWidgets(2), reason: 'the saved bill is no longer with our team');
       expect(find.text('Saved'), findsOneWidget);
-      // Its neighbours kept their places: the saved card sits in the
-      // middle column where 'Check 2' was.
-      final after = tester.getTopLeft(find.text('Saved'));
+      // Its neighbours kept their places: the saved card is still in the
+      // middle column where it was (told apart by who it is from).
+      final after = tester.getTopLeft(find.text('Bill 2'));
       expect(after.dy, before.dy);
     });
 
@@ -403,9 +431,9 @@ void main() {
       await key.currentState!.refresh();
       await tester.pump();
 
-      expect(find.text('Check 2'), findsNothing);
-      expect(find.text('Check 3'), findsOneWidget);
-      expect(find.text('Check 1'), findsOneWidget);
+      expect(find.text('Bill 2'), findsNothing);
+      expect(find.text('Bill 3'), findsOneWidget);
+      expect(find.text('Bill 1'), findsOneWidget);
     });
 
     testWidgets('a new upload arrives at the top', (tester) async {
@@ -417,9 +445,9 @@ void main() {
       await key.currentState!.refresh();
       await tester.pump();
 
-      expect(find.text('Check 4'), findsOneWidget);
-      expect(tester.getTopLeft(find.text('Check 4')).dx <
-          tester.getTopLeft(find.text('Check 3')).dx, isTrue);
+      expect(find.text('Bill 4'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Bill 4')).dx <
+          tester.getTopLeft(find.text('Bill 3')).dx, isTrue);
     });
 
     testWidgets('asking for the next page while building does not throw', (tester) async {
@@ -438,7 +466,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Check 9'), findsOneWidget, reason: 'the next page never loaded');
+      expect(find.text('Bill 9'), findsOneWidget, reason: 'the next page never loaded');
     });
 
     testWidgets('older pages already loaded survive a refresh', (tester) async {
@@ -454,8 +482,8 @@ void main() {
       await key.currentState!.refresh();
       await tester.pump();
 
-      expect(find.text('Check 2'), findsOneWidget, reason: 'an older row was dropped');
-      expect(find.text('Check 1'), findsOneWidget);
+      expect(find.text('Bill 2'), findsOneWidget, reason: 'an older row was dropped');
+      expect(find.text('Bill 1'), findsOneWidget);
     });
   });
 
@@ -481,8 +509,8 @@ void main() {
       await tester.pump();
 
       double x(Finder f) => tester.getTopLeft(f).dx;
-      expect(x(find.text('Check 3')) < x(find.text('LOCAL20')), isTrue);
-      expect(x(find.text('LOCAL20')) < x(find.text('Check 1')), isTrue);
+      expect(x(find.text('Bill 3')) < x(find.text('LOCAL20')), isTrue);
+      expect(x(find.text('LOCAL20')) < x(find.text('Bill 1')), isTrue);
     });
 
     testWidgets('a bill held on this phone never moves when it is opened or filed', (tester) async {
@@ -547,7 +575,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('A'), findsOneWidget);
-      expect(find.text('Check 3'), findsNothing);
+      expect(find.text('Bill 3'), findsNothing);
     });
 
     testWidgets('reports what each box would show, before any box narrows it', (tester) async {
@@ -617,7 +645,7 @@ void main() {
         onOpen: (u) => opened = u,
       )));
       await tester.pump();
-      await tester.tap(find.text('Check 2'));
+      await tester.tap(find.text('Bill 2'));
       await tester.pump();
 
       expect(toggled, ['j:20']);
@@ -633,7 +661,7 @@ void main() {
         onOpen: (u) => opened = u,
       )));
       await tester.pump();
-      await tester.tap(find.text('Check 2'));
+      await tester.tap(find.text('Bill 2'));
       await tester.pump();
 
       expect(opened?.jobId, 20);
@@ -688,14 +716,14 @@ void main() {
     testWidgets('forgetting a bill takes it off at once', (tester) async {
       await tester.pumpWidget(build());
       await tester.pump();
-      expect(find.text('Check 2'), findsOneWidget);
+      expect(find.text('Bill 2'), findsOneWidget);
 
       key.currentState!.forget([20]);
       await tester.pump();
 
-      expect(find.text('Check 2'), findsNothing);
-      expect(find.text('Check 3'), findsOneWidget);
-      expect(find.text('Check 1'), findsOneWidget);
+      expect(find.text('Bill 2'), findsNothing);
+      expect(find.text('Bill 3'), findsOneWidget);
+      expect(find.text('Bill 1'), findsOneWidget);
     });
 
     testWidgets('forgetting several, including ones that are not there, is harmless', (tester) async {
@@ -706,8 +734,8 @@ void main() {
       key.currentState!.forget(const []);
       await tester.pump();
 
-      expect(find.text('Check 2'), findsOneWidget);
-      expect(find.text('Check 3'), findsNothing);
+      expect(find.text('Bill 2'), findsOneWidget);
+      expect(find.text('Bill 3'), findsNothing);
     });
 
     testWidgets('a bill filed elsewhere leaves this folder at once', (tester) async {
@@ -717,8 +745,8 @@ void main() {
       key.currentState!.refile({20: 7});
       await tester.pump();
 
-      expect(find.text('Check 2'), findsNothing, reason: 'it is in folder 7 now');
-      expect(find.text('Check 3'), findsOneWidget);
+      expect(find.text('Bill 2'), findsNothing, reason: 'it is in folder 7 now');
+      expect(find.text('Bill 3'), findsOneWidget);
     });
 
     testWidgets('a bill sent home arrives in the home list', (tester) async {
@@ -728,12 +756,12 @@ void main() {
       ];
       await tester.pumpWidget(build());          // home
       await tester.pump();
-      expect(find.text('Check 2'), findsNothing, reason: 'filed in 7, so not at home yet');
+      expect(find.text('Bill 2'), findsNothing, reason: 'filed in 7, so not at home yet');
 
       key.currentState!.refile({20: null});      // null is home
       await tester.pump();
 
-      expect(find.text('Check 2'), findsOneWidget);
+      expect(find.text('Bill 2'), findsOneWidget);
     });
   });
 

@@ -1,10 +1,13 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gst_bill_app/features/capture/widgets/status_filter_bar.dart';
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
 import 'package:gst_bill_app/features/capture/models/status_filter.dart';
 
-/// DAS-26, mobile half. Mirrors shop_webapp/test/statusFilter.test.js —
-/// the two clients must agree on what each category means, or the same
-/// tickbox shows different bills on a phone and in a browser.
+/// DAS-26, mobile half. The categories mirror shop_webapp/test/statusFilter.test.js
+/// — the two clients must agree on what each category means. The BOXES no
+/// longer match it: since DAS-71 a bill being read and a flagged bill are one
+/// box, "Under processing", and the web app is left as it was for now.
 
 BatchItem _item(BatchItemStatus status, {DateTime? retryAt}) =>
     BatchItem(label: 'Photo 1', pages: const [])
@@ -31,7 +34,7 @@ void main() {
     }
   });
 
-  test('the categories and labels match the web app exactly', () {
+  test('the categories and their labels (the web app\'s) are unchanged underneath the boxes', () {
     expect(kStatusFilters.map((f) => f.key).toList(), [
       'tocrop', 'working', 'check', 'review',
       'saved', 'failed',
@@ -82,5 +85,41 @@ void main() {
     for (final entry in counts.entries) {
       expect(filterByStatus(items, {entry.key}), hasLength(entry.value));
     }
+  });
+
+  group('the boxes (DAS-71)', () {
+    test('every category is in exactly one box, so nothing is lost or counted twice', () {
+      final keys = [for (final b in kFilterBoxes) ...b.keys];
+      expect(keys.toSet(), kStatusFilters.map((f) => f.key).toSet());
+      expect(keys, hasLength(keys.toSet().length));
+    });
+
+    test('a bill being read and a flagged bill share the box "Under processing"', () {
+      final box = kFilterBoxes.singleWhere((b) => b.label == 'Under processing');
+      expect(box.keys, ['working', 'review']);
+      expect(kFilterBoxes.any((b) => b.label == 'Needs review' || b.label == 'Working'), isFalse);
+    });
+
+    Widget bar(Map<String, int> counts, Set<String> selected, ValueChanged<Set<String>> onChanged) => MaterialApp(
+          home: Scaffold(body: StatusFilterBar(items: const [], counts: counts, selected: selected, onChanged: onChanged)),
+        );
+
+    testWidgets('the box adds the two categories together', (tester) async {
+      await tester.pumpWidget(bar({'working': 3, 'review': 4, 'check': 2}, {}, (_) {}));
+      expect(find.text('Under processing 7'), findsOneWidget);
+      expect(find.text('Check & save 2'), findsOneWidget);
+      expect(find.textContaining('Needs review'), findsNothing);
+    });
+
+    testWidgets('ticking it selects both categories, and clearing it removes both', (tester) async {
+      var selected = <String>{};
+      await tester.pumpWidget(bar({'working': 1, 'review': 1}, selected, (next) => selected = next));
+      await tester.tap(find.text('Under processing 2'));
+      expect(selected, {'working', 'review'});
+
+      await tester.pumpWidget(bar({'working': 1, 'review': 1}, selected, (next) => selected = next));
+      await tester.tap(find.text('Under processing 2'));
+      expect(selected, isEmpty);
+    });
   });
 }

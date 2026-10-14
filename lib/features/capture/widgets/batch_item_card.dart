@@ -93,7 +93,12 @@ class BatchItemCard extends StatelessWidget {
                       child: Center(
                         child: item.isRetrying
                             ? RetryLabel(attempt: item.retryAttempt, max: item.retryMax, at: item.retryAt!)
-                            : const CircularProgressIndicator(color: Colors.white),
+                            // No spinner (DAS-71): to the shopkeeper the bill is
+                            // simply with us.
+                            : const Text(
+                                'Under processing',
+                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                              ),
                       ),
                     )
                   : const SizedBox.shrink(key: ValueKey('idle')),
@@ -171,7 +176,9 @@ class BatchItemCard extends StatelessWidget {
       case BatchItemStatus.pendingConfirm:
         return const _Badge(color: AppColors.statusPendingConfirm, icon: Icons.touch_app_rounded);
       case BatchItemStatus.needsReview:
-        return const _Badge(color: AppColors.statusNeedsReview, icon: Icons.priority_high_rounded);
+        // Flagged bills are with our team, so they look like any bill being
+        // read, not like one waiting for the shopkeeper.
+        return const _Badge(color: AppColors.statusReady, icon: Icons.hourglass_empty_rounded);
       case BatchItemStatus.failed:
         return _Badge(color: Theme.of(context).colorScheme.error, icon: Icons.close_rounded);
       case BatchItemStatus.ready:

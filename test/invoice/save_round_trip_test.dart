@@ -6,18 +6,18 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
 import 'package:gst_bill_app/features/invoice/models/invoice.dart';
 import 'package:gst_bill_app/features/invoice/presentation/review_screen.dart';
 
 /// A save sends back what the server sent (AGENTS.md: "the review screen must
 /// round-trip what the server sent").
 ///
-/// Three ways it did not: the review form had no field for the supplier's
-/// phone, so saving erased it; after a revalidate it kept echoing the tax
-/// rates it was opened with rather than the server's new ones; and the grid's
-/// one-tap save of a bill opened from the shop's list sent only its first
-/// page, because this phone knows only that page of it.
+/// Two ways it did not: the review form had no field for the supplier's
+/// phone, so saving erased it; and after a revalidate it kept echoing the tax
+/// rates it was opened with rather than the server's new ones. (The grid's
+/// one-tap save once sent only a bill's first page; since DAS-71 it sends no
+/// values at all — the server saves its own read, every page included — and
+/// that is tested in capture_screen_save_job_test.dart.)
 
 http.Response _json(Object body) =>
     http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
@@ -47,9 +47,6 @@ class _Server {
 
   MockClient get client => MockClient((req) async {
         final path = req.url.path;
-        if (req.method == 'POST' && path == '/invoices/vendor-lookup') {
-          return _json({'needs_confirmation': false, 'vendor_known': true, 'verified': true});
-        }
         if (req.method == 'POST' && path == '/invoices/revalidate') {
           return _json({'invoice': _invoice(cgstPct: 9, sgstPct: 9), 'issues': []});
         }
@@ -150,36 +147,6 @@ void main() {
       final line = ((server.saved!['invoice'] as Map)['line_items'] as List).single as Map;
       expect(line['cgst_pct'], 9);
       expect(line['sgst_pct'], 9);
-    }, () => server.client);
-  });
-
-  testWidgets("a multi-page bill from the shop's list is saved with every page", (tester) async {
-    final original = FlutterError.onError;
-    FlutterError.onError = (details) {
-      if (details.exceptionAsString().contains('overflowed')) return;
-      original?.call(details);
-    };
-    addTearDown(() => FlutterError.onError = original);
-
-    final server = _Server();
-    await http.runWithClient(() async {
-      await tester.binding.setSurfaceSize(const Size(400, 800));
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
-      await _settle(tester);
-
-      await tester.tap(find.byKey(const ValueKey('j:9')));
-      await _settle(tester);
-      await tester.tap(find.text('Looks good — save'));
-      await _settle(tester);
-      await tester.pump(const Duration(seconds: 1)); // the saved tick
-      await _settle(tester);
-
-      final meta = server.saved!['extraction_meta'] as Map;
-      expect(meta['source_image'], '8/9.jpg');
-      expect(meta['extra_source_images'], ['8/9b.jpg', '8/9c.jpg']);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 40));
     }, () => server.client);
   });
 }

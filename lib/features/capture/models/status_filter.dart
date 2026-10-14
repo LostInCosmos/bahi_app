@@ -8,8 +8,11 @@ import 'upload_summary.dart';
 /// disagree with the tickbox above it.
 ///
 /// Mirrors `shop_webapp/src/features/capture/statusFilter.js` — same
-/// keys, same labels, same order — because the two clients must not
-/// drift on what a shopkeeper sees.
+/// keys, in the same order. The labels no longer match it: DAS-71 shows a
+/// bill being read and a bill the machine flagged as one box, "Under
+/// processing", and the web app has not been changed to match yet (it was
+/// left out of that ticket on purpose). The keys are unchanged, so the
+/// server's counts and the web app's own filter keep working.
 ///
 /// `pendingConfirm` deliberately reads "Check & save" rather than
 /// "Done": the bill was read, but nothing is saved until a human taps.
@@ -40,6 +43,27 @@ const List<StatusFilter> kStatusFilters = [
   StatusFilter('review', 'Needs review', {BatchItemStatus.needsReview}),
   StatusFilter('saved', 'Saved', {BatchItemStatus.saved}),
   StatusFilter('failed', 'Failed', {BatchItemStatus.failed}),
+];
+
+/// One tickbox on the filter bar. Usually one category; "Under processing"
+/// is two — a bill still being read and a bill the machine flagged — because
+/// to the shopkeeper both are "with us, nothing for you to do" (DAS-71).
+class FilterBox {
+  final String label;
+  final List<String> keys;
+
+  const FilterBox(this.label, this.keys);
+}
+
+/// What the filter bar draws, in order. Ticking a box ticks every category in
+/// it, so the filter logic above and the server's `category=` request still
+/// speak only in [kStatusFilters] keys.
+const List<FilterBox> kFilterBoxes = [
+  FilterBox('To crop', ['tocrop']),
+  FilterBox('Under processing', ['working', 'review']),
+  FilterBox('Check & save', ['check']),
+  FilterBox('Saved', ['saved']),
+  FilterBox('Failed', ['failed']),
 ];
 
 /// Whether one card belongs in [key].
@@ -105,9 +129,11 @@ String uploadCategory(UploadSummary upload) {
     case 'cancelled':
       return 'failed';
     case 'done':
-      // What separates a bill that wants a person from one that is only
-      // waiting to be saved. A server that does not send the count reads
-      // as 0, which keeps the old behaviour rather than throwing.
+      // What separates a bill our team is looking at from one that is only
+      // waiting to be saved: the server's review state (DAS-71), or, from a
+      // server that predates it, the count of what was flagged — which a
+      // server that sends neither reads as 0, the old behaviour.
+      if (upload.reviewState != null) return upload.isUnderReview ? 'review' : 'check';
       return upload.issueCount > 0 ? 'review' : 'check';
     default:
       return 'check';

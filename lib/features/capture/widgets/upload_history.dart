@@ -780,9 +780,10 @@ class _UploadCard extends StatelessWidget {
                   tooltip: 'Remove this bill',
                 ),
               ),
-            // Read it again — for the bills that want a second look. Above
-            // the date, where this phone's own cards wear theirs.
-            if (onRetry != null && !choosing && (category == 'failed' || category == 'review'))
+            // Read it again — for a bill that failed. A flagged bill is with our
+            // team, and a second read would replace the result they are
+            // checking. Above the date, where this phone's own cards wear theirs.
+            if (onRetry != null && !choosing && category == 'failed')
               Positioned(
                 bottom: 26,
                 right: Spacing.xs,
@@ -807,13 +808,14 @@ class _UploadCard extends StatelessWidget {
       case 'saved':
         return const _Pill(color: AppColors.statusSaved, text: 'Saved');
       case 'review':
-        // The count is the point: it says a person is needed here, and
-        // how much of the bill wants looking at.
-        return _Pill(color: AppColors.statusNeedsReview, text: 'Check ${upload.issueCount}');
+        // A bill the machine flagged is with our team, not the shopkeeper
+        // (DAS-71): the same words as a bill still being read, and no count
+        // of what was flagged.
+        return const _Pill(color: AppColors.statusReady, text: 'Under processing');
       case 'failed':
         return _Pill(color: Theme.of(context).colorScheme.error, text: 'Failed');
       case 'working':
-        return const _Pill(color: AppColors.statusReady, text: 'Working');
+        return const _Pill(color: AppColors.statusReady, text: 'Under processing');
       default:
         return const _Pill(color: AppColors.statusPendingConfirm, text: 'Check & save');
     }

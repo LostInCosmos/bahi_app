@@ -19,7 +19,18 @@ class PurchaseExport {
   /// would have matched the range on the bill date.
   final String? dateBasis;
 
-  const PurchaseExport({required this.bytes, this.folderId, this.billCount, this.dateBasis});
+  /// `X-Export-Excluded-Under-Review` — how many bills were left out because
+  /// they are still being checked (DAS-71). 0 when none, and 0 when the header
+  /// is absent: an older server leaves nothing out.
+  final int excludedUnderReview;
+
+  const PurchaseExport({
+    required this.bytes,
+    this.folderId,
+    this.billCount,
+    this.dateBasis,
+    this.excludedUnderReview = 0,
+  });
 
   /// [headers] is `http.Response.headers`, whose keys are lower case.
   factory PurchaseExport.fromResponse(List<int> bytes, Map<String, String> headers) => PurchaseExport(
@@ -27,6 +38,7 @@ class PurchaseExport {
         folderId: int.tryParse(headers['x-export-folder-id'] ?? ''),
         billCount: int.tryParse(headers['x-export-bill-count'] ?? ''),
         dateBasis: headers['x-export-date-basis'],
+        excludedUnderReview: int.tryParse(headers['x-export-excluded-under-review'] ?? '') ?? 0,
       );
 }
 
@@ -42,3 +54,11 @@ String exportRangeLabel({String? start, String? end, String? vendorGstin}) {
   final gstin = vendorGstin?.trim() ?? '';
   return gstin.isEmpty ? dates : '$dates · supplier $gstin';
 }
+
+/// The sentence for bills an export left out because they are still being
+/// checked, or null when it left none out.
+String? excludedNote(int excluded) => excluded <= 0
+    ? null
+    : excluded == 1
+        ? '1 bill is still being checked and was not included.'
+        : '$excluded bills are still being checked and were not included.';

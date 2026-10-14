@@ -9,7 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
 
-/// Tapping retry on a Needs-review bill.
+/// Tapping retry on a failed bill. (It used to be a Needs-review bill; since
+/// DAS-71 a flagged bill is with our team and has no retry button, so the same
+/// guards are tested on the bills that still have one.)
 ///
 /// Reported: "it retried many". One tap retries exactly one bill — but the retried
 /// bill leaves the box at once and the list closes up, so the NEXT bill is under
@@ -27,10 +29,10 @@ class _Server {
 
   Map<String, dynamic> _row(int id) => {
         'job_id': id,
-        'status': retried.contains(id) ? 'queued' : 'done',
+        'status': retried.contains(id) ? 'queued' : 'failed',
         'source_image': '8/$id.jpg',
         'created_at': '2026-10-08T10:00:00Z',
-        'issue_count': 2,
+        'issue_count': 0,
         'seller_name': 'SHOP $id',
       };
 
@@ -38,13 +40,13 @@ class _Server {
         final path = req.url.path;
         if (req.method == 'GET' && path == '/folders') return _json([]);
         if (req.method == 'GET' && path == '/invoices/extract') {
-          final review = [for (final id in [3, 2, 1]) if (!retried.contains(id)) _row(id)];
+          final failed = [for (final id in [3, 2, 1]) if (!retried.contains(id)) _row(id)];
           final asked = req.url.queryParameters['category'];
           return _json({
-            'jobs': asked == 'review' ? review : [for (final id in [3, 2, 1]) _row(id)],
+            'jobs': asked == 'failed' ? failed : [for (final id in [3, 2, 1]) _row(id)],
             'next_before_id': null,
             'counts': {
-              'root': {'review': review.length, if (retried.isNotEmpty) 'working': retried.length},
+              'root': {'failed': failed.length, if (retried.isNotEmpty) 'working': retried.length},
             },
           });
         }
@@ -134,7 +136,7 @@ void main() {
     final server = _Server()..retryGate = Completer<void>();     // the server has not answered yet
     await http.runWithClient(() async {
       await _open(tester);
-      await tester.tap(find.textContaining('Needs review 3'));
+      await tester.tap(find.textContaining('Failed 3'));
       await _settle(tester);
       expect(find.byKey(const ValueKey('j:3')), findsOneWidget, reason: 'to start with, it is in the box');
 
@@ -143,8 +145,8 @@ void main() {
       await tester.pump();                      // nothing has come back from the server
 
       expect(find.byKey(const ValueKey('j:3')), findsNothing, reason: 'gone from the box at once');
-      expect(find.textContaining('Needs review 2'), findsOneWidget, reason: 'the box counts one fewer');
-      expect(find.textContaining('Working 1'), findsOneWidget, reason: 'and Working one more');
+      expect(find.textContaining('Failed 2'), findsOneWidget, reason: 'the box counts one fewer');
+      expect(find.textContaining('Under processing 1'), findsOneWidget, reason: 'and Under processing one more');
       expect(find.byKey(const ValueKey('j:2')), findsOneWidget, reason: 'the rest stay');
 
       server.retryGate!.complete();
@@ -159,7 +161,7 @@ void main() {
     final server = _Server()..retryGate = Completer<void>();
     await http.runWithClient(() async {
       await _open(tester);
-      await tester.tap(find.textContaining('Needs review 3'));
+      await tester.tap(find.textContaining('Failed 3'));
       await _settle(tester);
 
       final spot = tester.getCenter(_retryOn(3));

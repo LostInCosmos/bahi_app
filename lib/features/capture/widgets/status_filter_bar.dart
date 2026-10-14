@@ -29,6 +29,9 @@ class StatusFilterBar extends StatelessWidget {
     required this.onChanged,
   });
 
+  static int _countOf(FilterBox box, Map<String, int> counts) =>
+      box.keys.fold(0, (sum, key) => sum + (counts[key] ?? 0));
+
   @override
   Widget build(BuildContext context) {
     final counts = this.counts ?? statusCounts(items);
@@ -38,20 +41,18 @@ class StatusFilterBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
-          for (final f in kStatusFilters)
+          for (final box in kFilterBoxes)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
-                label: Text(
-                  (counts[f.key] ?? 0) > 0 ? '${f.label} ${counts[f.key]}' : f.label,
-                ),
-                selected: selected.contains(f.key),
+                label: Text(_countOf(box, counts) > 0 ? '${box.label} ${_countOf(box, counts)}' : box.label),
+                selected: box.keys.any(selected.contains),
                 onSelected: (on) {
                   final next = {...selected};
                   if (on) {
-                    next.add(f.key);
+                    next.addAll(box.keys);
                   } else {
-                    next.remove(f.key);
+                    next.removeAll(box.keys);
                   }
                   onChanged(next);
                 },

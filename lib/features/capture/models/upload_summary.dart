@@ -46,6 +46,11 @@ class UploadSummary {
   final String? sellerName;
   final String? invoiceNo;
 
+  /// `none` | `pending` | `done` — whether our team has to look at this bill
+  /// (DAS-71). Null on a server that predates the field, in which case the
+  /// card falls back to [issueCount] as it always did.
+  final String? reviewState;
+
   const UploadSummary({
     required this.jobId,
     required this.status,
@@ -57,6 +62,7 @@ class UploadSummary {
     this.retryAt,
     this.sellerName,
     this.invoiceNo,
+    this.reviewState,
   });
 
   factory UploadSummary.fromJson(Map<String, dynamic> json) => UploadSummary(
@@ -74,9 +80,14 @@ class UploadSummary {
             : DateTime.parse(json['retry_at'] as String).toLocal(),
         sellerName: _text(json['seller_name']),
         invoiceNo: _text(json['invoice_no']),
+        reviewState: json['review_state'] as String?,
       );
 
   bool get isSaved => invoiceId != null;
+
+  /// Our team still has to look at it. Anything other than `none` / `done` is
+  /// read as pending: the safe reading, since it only withholds a shortcut.
+  bool get isUnderReview => reviewState != null && reviewState != 'none' && reviewState != 'done';
 
   /// The same bill, filed somewhere else. A separate method rather than a
   /// general copyWith because the folder is NULLABLE — null means home — and
@@ -92,6 +103,7 @@ class UploadSummary {
         retryAt: retryAt,
         sellerName: sellerName,
         invoiceNo: invoiceNo,
+        reviewState: reviewState,
       );
 }
 

@@ -98,4 +98,21 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('120 bills'), findsOneWidget);
   });
+
+  testWidgets('a bill being read or flagged says "Under processing" and shows no spinner (DAS-71)', (tester) async {
+    for (final status in [BatchItemStatus.processing, BatchItemStatus.needsReview]) {
+      await tester.pumpWidget(_grid([_item(status)]));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsNothing, reason: '$status');
+    }
+    // Being read: the words sit over the photo; flagged: the same grey badge as
+    // a bill being read, not the amber exclamation mark of one waiting for a person.
+    await tester.pumpWidget(_grid([_item(BatchItemStatus.processing)]));
+    await tester.pumpAndSettle();
+    expect(find.text('Under processing'), findsOneWidget);
+    await tester.pumpWidget(_grid([_item(BatchItemStatus.needsReview)]));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.priority_high_rounded), findsNothing);
+    expect(find.byIcon(Icons.hourglass_empty_rounded), findsOneWidget);
+  });
 }

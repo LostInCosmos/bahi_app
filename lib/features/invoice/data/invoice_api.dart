@@ -150,8 +150,6 @@ extension InvoiceApi on ApiClient {
     InvoiceData invoice,
     ExtractionMeta meta, {
     bool overrideErrors = false,
-    bool gstinConfirmed = false,
-    int? confirmedVendorId,
     int? folderId,
   }) async {
     final res = await _postJson(
@@ -160,28 +158,23 @@ extension InvoiceApi on ApiClient {
           'invoice': invoice.toJson(),
           'extraction_meta': meta.toJson(),
           'override_errors': overrideErrors,
-          'gstin_confirmed': gstinConfirmed,
-          'confirmed_vendor_id': confirmedVendorId,
           'folder_id': folderId,
         },
         timeout: ApiClient.workTimeout);
     return ApiClient._object(res)['invoice_id'] as int;
   }
 
-  /// Who this bill is from, and whether saving will need the shopkeeper to
-  /// confirm the GSTIN. Called while the review screen is still being read so
-  /// that Save opens the confirmation with no wait — the fuzzy vendor search
-  /// is the slow part and does not depend on anything they do on that screen.
-  ///
-  /// Advisory only: the save endpoint runs the same check and is the one that
-  /// decides. A failure here is not an error, just a lost head start.
-  Future<VendorHint?> lookupVendor(InvoiceData invoice) async {
-    try {
-      final res = await _postJson('/invoices/vendor-lookup', invoice.toJson(), timeout: ApiClient.workTimeout);
-      return VendorHint.fromJson(ApiClient._object(res));
-    } catch (_) {
-      return null;
-    }
+  /// Saves what the server read from this bill — its current result, the
+  /// machine's or, if our team has corrected it, theirs (DAS-71). The phone
+  /// sends no values, so it cannot overwrite a correction, and clean and
+  /// flagged bills save the same way. Throws ApiException: 404 (not this
+  /// shop's job, or its folder is gone), 409 (already saved), 422 (not read yet).
+  Future<SavedJob> saveJob(int jobId, {int? folderId}) async {
+    final res = await _postJson(
+        '/invoices/extract/$jobId/save', {if (folderId != null) 'folder_id': folderId},
+        timeout: ApiClient.workTimeout);
+    final body = ApiClient._object(res);
+    return SavedJob(invoiceId: body['invoice_id'] as int, reviewState: body['review_state'] as String?);
   }
 
   Future<List<InvoiceSummary>> listInvoices({
@@ -214,8 +207,12 @@ extension InvoiceApi on ApiClient {
   /// stock it added leaves inventory too (required: never assumed). Throws
   /// ApiException(409) if some of that stock has already been sold, or if
   /// there is no read to go back to — surface `.message`.
-  Future<void> unsaveInvoice(int invoiceId, {required bool removeStock}) =>
-      _postJson('/invoices/$invoiceId/unsave', {'remove_stock': removeStock});
+  Future<bool> unsaveInvoice(int invoiceId, {required bool removeStock}) async {
+    final res = await _postJson('/invoices/$invoiceId/unsave', {'remove_stock': removeStock});
+    // Whether the stock left inventory, as the server says. A server that
+    // predates the field is taken at the shopkeeper's word.
+    return (ApiClient._object(res)['stock_removed'] as bool?) ?? removeStock;
+  }
 
   /// The purchases spreadsheet. A date range selects the bills by the date they
   /// were uploaded. With [folderId], only the bills filed directly

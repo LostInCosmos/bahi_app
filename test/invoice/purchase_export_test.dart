@@ -26,13 +26,16 @@ const _folders = [
 /// A fake server. [echo] is what it says in X-Export-Folder-Id (null: nothing,
 /// as an old server would).
 class _Server {
-  _Server({this.echo, this.exportStatus = 200, this.basisEcho, this.count = '3'});
+  _Server({this.echo, this.exportStatus = 200, this.basisEcho, this.count = '3', this.excluded});
   final String? echo;
   final int exportStatus;
 
   /// What it says in X-Export-Date-Basis (null: nothing, as an old server).
   final String? basisEcho;
   final String count;
+
+  /// What it says in X-Export-Excluded-Under-Review (null: nothing, as an old server).
+  final String? excluded;
   final exports = <Uri>[];
   final lists = <Uri>[];
 
@@ -50,6 +53,7 @@ class _Server {
         if (echo != null) 'x-export-folder-id': echo!,
         'x-export-bill-count': count,
         if (basisEcho != null) 'x-export-date-basis': basisEcho!,
+        if (excluded != null) 'x-export-excluded-under-review': excluded!,
       });
     }
     return _json({'detail': 'unexpected $path'}, 404);
@@ -173,6 +177,23 @@ void main() {
       expect(server.exports.single.queryParameters, isEmpty);
     });
 
+    testWidgets('bills left out because they are under review are mentioned, and an all-excluded export is not shared', (tester) async {
+      final server = _Server(count: '0', excluded: '4');
+      await http.runWithClient(() async {
+        await tester.pumpWidget(const MaterialApp(home: Scaffold(body: PurchasesScreen())));
+        final state = tester.state<PurchasesScreenState>(find.byType(PurchasesScreen));
+        await tester.runAsync(() => state.refresh());
+        await tester.pump();
+        await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('GSTR2 purchase register'));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pumpAndSettle();
+      }, () => MockClient((r) async => server.handle(r)));
+      expect(find.text('4 bills are still being checked and were not included.'), findsOneWidget);
+      expect(find.text('No bills in this range.'), findsNothing);
+    });
+
     testWidgets('the pickers say the range is by upload date', (tester) async {
       await http.runWithClient(() async {
         await tester.pumpWidget(const MaterialApp(home: Scaffold(body: PurchasesScreen())));
@@ -185,6 +206,19 @@ void main() {
       await exportFromMenu(tester, _Server());
       expect(find.text("This server can't export a single folder yet."), findsOneWidget);
     });
+  });
+
+  test('the excluded count is read from the header; absent means none left out', () {
+    expect(PurchaseExport.fromResponse(const [], {'x-export-excluded-under-review': '3'}).excludedUnderReview, 3);
+    expect(PurchaseExport.fromResponse(const [], {'x-export-excluded-under-review': '0'}).excludedUnderReview, 0);
+    expect(PurchaseExport.fromResponse(const [], {}).excludedUnderReview, 0);
+    expect(PurchaseExport.fromResponse(const [], {'x-export-excluded-under-review': 'x'}).excludedUnderReview, 0);
+  });
+
+  test('the note for bills left out', () {
+    expect(excludedNote(0), isNull);
+    expect(excludedNote(1), '1 bill is still being checked and was not included.');
+    expect(excludedNote(12), '12 bills are still being checked and were not included.');
   });
 
   test('the sheet names what the range selects', () {

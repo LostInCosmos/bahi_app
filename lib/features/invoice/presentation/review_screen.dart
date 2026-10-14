@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/api/api_client.dart';
 import '../models/invoice.dart';
-import 'gstin_confirm.dart';
+import '../widgets/saved_tick.dart';
 import '../../../app/theme/app_theme.dart';
 
 String _fmt(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
@@ -202,14 +202,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _overrideErrors = false;
 
   Uint8List? _photoBytes;
-  // Fetched while this screen is being read, so Save can open the GSTIN
-  // confirmation with no round trip. Null means the prefetch has not landed
-  // (or failed) — _save then falls back to the server telling it.
-  VendorHint? _vendorHint;
-  // Set once the shopkeeper has said yes to a GSTIN on this bill, so a retry
-  // (or a second tap) does not ask the same question twice.
-  bool _gstinConfirmed = false;
-  int? _confirmedVendorId;
   bool _photoFailed = false;
   bool _photoMinimized = false;
 
@@ -226,9 +218,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   InputDecoration _decoration(String label, String field) {
-    // The GSTIN is settled by the confirmation step on save, not by flagging
-    // it here (ADR-008). The server already withholds it, but a stale issue
-    // list from an older build must not put the red underline back either.
+    // The supplier's GSTIN is settled by our team, not flagged to the shop
+    // (ADR-008, then DAS-71). The server already withholds it, but a stale
+    // issue list from an older build must not put the red underline back.
     final issue = field == 'seller_gstin' ? null : _headerIssues[field];
     if (issue == null) return InputDecoration(labelText: label);
     if (issue.isError) {
@@ -268,17 +260,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
     roundOff = TextEditingController(text: _fmtNullable(inv.totals.roundOff));
     grandTotal = TextEditingController(text: _fmt(inv.totals.grandTotal));
     _loadPhoto();
-    _prefetchVendor();
-  }
-
-  /// Runs the vendor search now, while the bill is being read, so that Save
-  /// can open the GSTIN confirmation instantly instead of after a round trip.
-  /// Nothing waits on it and a failure is silent — the save call asks the
-  /// same question for itself, so the worst case is the old timing.
-  Future<void> _prefetchVendor() async {
-    final hint = await ApiClient.instance.lookupVendor(_buildInvoiceData());
-    if (!mounted || hint == null) return;
-    setState(() => _vendorHint = hint);
   }
 
   Future<void> _loadPhoto() async {
@@ -475,58 +456,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
     try {
       final invoice = _buildInvoiceData();
       final meta = widget.result.meta.reviewed();
-      // Ask BEFORE the round trip when the prefetch already knows the answer.
-      // The server asks the same question itself and is what actually decides
-      // — this only moves the dialog in front of the wait, so that tapping
-      // Save shows the confirmation at once rather than after a spinner.
-      final hint = _vendorHint;
-      if (hint != null && hint.needsConfirmation && !_gstinConfirmed) {
-        if (!mounted) return;
-        setState(() => _saving = false);
-        final confirmed = await showGstinConfirmDialog(context, hint,
-            photo: _photoBytes, fallbackName: sellerName.text.trim());
-        if (confirmed == null) return;   // backed out; nothing said, nothing saved
-        sellerGstin.text = confirmed;
-        _gstinConfirmed = true;
-        _confirmedVendorId = hint.vendorId;
-        await _save();
-        return;
-      }
-
       final id = await ApiClient.instance.saveInvoice(
         invoice, meta,
         overrideErrors: _overrideErrors,
-        gstinConfirmed: _gstinConfirmed,
-        confirmedVendorId: _confirmedVendorId,
         folderId: widget.folderId,
       );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      // Nothing was asked, so nothing marked the save as done. Show that it
-      // landed before leaving, or a one-tap save looks like a dropped tap.
-      if (!_gstinConfirmed) await showSavedTick(context);
+      // Nothing is asked first, so nothing else marks the save as done. Show
+      // that it landed before leaving, or a one-tap save looks like a dropped tap.
+      await showSavedTick(context);
       if (!mounted) return;
       Navigator.of(context).pop(id);
     } on ApiException catch (e) {
       HapticFeedback.heavyImpact();
-      // The prefetch was stale or never landed — the server asks instead, and
-      // the dialog is the same one, just after the round trip.
-      final question = VendorHint.fromSaveRefusal(e.detail);
-      if (question != null) {
-        if (!mounted) return;
-        setState(() => _saving = false);
-        final confirmed = await showGstinConfirmDialog(context, question,
-            photo: _photoBytes, fallbackName: sellerName.text.trim());
-        if (confirmed == null) {
-          if (mounted) setState(() => _error = 'Saving needs the supplier\'s GSTIN.');
-          return;
-        }
-        sellerGstin.text = confirmed;
-        _gstinConfirmed = true;
-        _confirmedVendorId = question.vendorId;
-        await _save();   // one retry; the server accepts it now the identity is settled
-        return;
-      }
       if (!mounted) return;
       if (e.detail is Map && e.detail['error'] == 'validation_failed') {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
