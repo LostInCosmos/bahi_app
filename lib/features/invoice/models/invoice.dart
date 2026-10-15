@@ -231,6 +231,11 @@ class ExtractionMeta {
   // True when seller_name/address/dl_no were filled in from an already-
   // known Vendor row rather than fresh OCR — informational only.
   bool vendorKnown;
+  // Bumped by the server each time the admin rotates this bill's photo in
+  // place (DAS-72) — the object at [sourceImage] is overwritten under the
+  // same name, so this is what tells a client caching by path to refetch.
+  // See ApiClient.fetchImage / BillImageCache.
+  int imageRev;
 
   ExtractionMeta({
     required this.sourceImage,
@@ -240,6 +245,7 @@ class ExtractionMeta {
     this.confidence,
     this.reviewedByUser = false,
     this.vendorKnown = false,
+    this.imageRev = 0,
   }) : extraSourceImages = extraSourceImages ?? [];
 
   factory ExtractionMeta.fromJson(Map<String, dynamic> json) => ExtractionMeta(
@@ -252,6 +258,7 @@ class ExtractionMeta {
         confidence: (json['confidence'] as num?)?.toDouble(),
         reviewedByUser: json['reviewed_by_user'] as bool? ?? false,
         vendorKnown: json['vendor_known'] as bool? ?? false,
+        imageRev: (json['image_rev'] as num?)?.toInt() ?? 0,
       );
 
   /// What a save sends: this read's meta, marked as checked by a person.
@@ -265,6 +272,7 @@ class ExtractionMeta {
         confidence: confidence,
         reviewedByUser: true,
         vendorKnown: vendorKnown,
+        imageRev: imageRev,
       );
 
   Map<String, dynamic> toJson() => {
@@ -536,6 +544,12 @@ class InvoiceDetail {
   /// `none` | `pending` | `done` (DAS-71); null on a server that predates it.
   final String? reviewState;
 
+  /// Bumped when the admin rotates this bill's photo in place (DAS-72); 0 on
+  /// a server that predates the field. Applies to every path above — the
+  /// admin rotates one page of a bill at a time, but the server has only one
+  /// counter per invoice. See ExtractionMeta.imageRev.
+  final int imageRev;
+
   /// Our team still has to look at this bill (see [UploadSummary.isUnderReview]).
   bool get isUnderReview => reviewState != null && reviewState != 'none' && reviewState != 'done';
 
@@ -565,6 +579,7 @@ class InvoiceDetail {
     required this.validationIssues,
     required this.lineItems,
     this.reviewState,
+    this.imageRev = 0,
   }) : extraSourceImagePaths = extraSourceImagePaths ?? [];
 
   factory InvoiceDetail.fromJson(Map<String, dynamic> json) => InvoiceDetail(
@@ -599,6 +614,7 @@ class InvoiceDetail {
             .map((e) => LineItem.fromJson(e as Map<String, dynamic>))
             .toList(),
         reviewState: json['review_state'] as String?,
+        imageRev: (json['image_rev'] as num?)?.toInt() ?? 0,
       );
 }
 

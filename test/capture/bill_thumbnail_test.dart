@@ -151,4 +151,30 @@ void main() {
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
+
+  testWidgets('a bumped imageRev refetches even though the path did not change (DAS-72 rotation)',
+      (tester) async {
+    var calls = 0;
+    Widget widget(int rev) => MaterialApp(
+          home: Scaffold(
+            body: BillThumbnail(
+              sourceImage: '7/a.jpg',
+              imageRev: rev,
+              loader: (_) async {
+                calls++;
+                return bill;
+              },
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(widget(0));
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+
+    // Same path, bumped rev: the admin rotated this bill's photo in place.
+    await tester.pumpWidget(widget(1));
+    await tester.pumpAndSettle();
+    expect(calls, 2, reason: 'a rotation must not be served from the stale decode');
+  });
 }

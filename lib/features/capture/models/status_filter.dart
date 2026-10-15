@@ -45,6 +45,11 @@ const List<StatusFilter> kStatusFilters = [
   StatusFilter('failed', 'Failed', {BatchItemStatus.failed}),
 ];
 
+/// What a bill being read or flagged by the machine says to the shopkeeper
+/// (DAS-71) — one label, so the tickbox and every card's own badge cannot
+/// drift apart the way a user-visible string has before (see CLAUDE.md).
+const kUnderProcessingLabel = 'Under processing';
+
 /// One tickbox on the filter bar. Usually one category; "Under processing"
 /// is two — a bill still being read and a bill the machine flagged — because
 /// to the shopkeeper both are "with us, nothing for you to do" (DAS-71).
@@ -60,7 +65,7 @@ class FilterBox {
 /// speak only in [kStatusFilters] keys.
 const List<FilterBox> kFilterBoxes = [
   FilterBox('To crop', ['tocrop']),
-  FilterBox('Under processing', ['working', 'review']),
+  FilterBox(kUnderProcessingLabel, ['working', 'review']),
   FilterBox('Check & save', ['check']),
   FilterBox('Saved', ['saved']),
   FilterBox('Failed', ['failed']),

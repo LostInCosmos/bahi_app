@@ -33,7 +33,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       final pages = <Uint8List>[];
       for (final path in allPaths) {
         try {
-          pages.add(await ApiClient.instance.fetchImage(path));
+          pages.add(await ApiClient.instance.fetchImage(path, imageRev: detail.imageRev));
         } catch (_) {
           // one page's image missing shouldn't block showing the rest
         }

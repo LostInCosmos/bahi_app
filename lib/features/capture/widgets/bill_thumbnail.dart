@@ -18,17 +18,24 @@ class BillThumbnail extends StatefulWidget {
   /// Null while the bill is still uploading and has no server path yet.
   final String? sourceImage;
 
+  /// Bumped when the admin rotates this bill's photo (DAS-72) — passed to
+  /// the default loader so a rotated bill is refetched instead of showing
+  /// the stale cached copy. See ApiClient.fetchImage.
+  final int imageRev;
+
   /// The bill itself failed, so a missing picture is not the interesting
   /// part — show the broken state immediately rather than a spinner.
   final bool failed;
 
   /// How to get the bytes. Defaults to the real client; injectable so the
-  /// widget can be tested without a network.
+  /// widget can be tested without a network. Takes only the path — a custom
+  /// loader (tests) has no need of [imageRev].
   final Future<Uint8List> Function(String path)? loader;
 
   const BillThumbnail({
     super.key,
     required this.sourceImage,
+    this.imageRev = 0,
     this.failed = false,
     this.loader,
   });
@@ -49,8 +56,9 @@ class _BillThumbnailState extends State<BillThumbnail> {
   @override
   void didUpdateWidget(BillThumbnail old) {
     super.didUpdateWidget(old);
-    // A re-crop writes a new server path, so the old picture is stale.
-    if (old.sourceImage != widget.sourceImage) _start();
+    // A re-crop writes a new server path; a rotation bumps imageRev instead
+    // of the path. Either makes the old picture stale.
+    if (old.sourceImage != widget.sourceImage || old.imageRev != widget.imageRev) _start();
   }
 
   void _start() {
@@ -62,8 +70,9 @@ class _BillThumbnailState extends State<BillThumbnail> {
   /// card — or the bill — down with it.
   Future<Uint8List?> _fetch(String path) async {
     try {
-      final load = widget.loader ?? ApiClient.instance.fetchImage;
-      return await load(path);
+      final loader = widget.loader;
+      if (loader != null) return await loader(path);
+      return await ApiClient.instance.fetchImage(path, imageRev: widget.imageRev);
     } catch (_) {
       return null;
     }

@@ -69,6 +69,28 @@ void main() {
       expect(uploadCategory(u), 'check');
     });
 
+    test('image_rev defaults to 0 on a server that predates admin photo rotation (DAS-72)', () {
+      final u = UploadSummary.fromJson({
+        'job_id': 1,
+        'status': 'done',
+        'source_image': '8/a.jpg',
+        'created_at': '2026-10-07T14:21:13Z',
+      });
+      expect(u.imageRev, 0);
+    });
+
+    test('a rotated bill carries its bumped image_rev, and withFolder keeps it', () {
+      final u = UploadSummary.fromJson({
+        'job_id': 1,
+        'status': 'done',
+        'source_image': '8/a.jpg',
+        'created_at': '2026-10-07T14:21:13Z',
+        'image_rev': 2,
+      });
+      expect(u.imageRev, 2);
+      expect(u.withFolder(5).imageRev, 2);
+    });
+
     test('a page says where the next one starts', () {
       final page = UploadPage.fromJson({
         'jobs': [

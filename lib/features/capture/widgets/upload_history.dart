@@ -718,6 +718,7 @@ class _UploadCard extends StatelessWidget {
           children: [
             BillThumbnail(
               sourceImage: upload.sourceImage.isEmpty ? null : upload.sourceImage,
+              imageRev: upload.imageRev,
               failed: category == 'failed',
             ),
             Positioned(
@@ -807,15 +808,14 @@ class _UploadCard extends StatelessWidget {
     switch (category) {
       case 'saved':
         return const _Pill(color: AppColors.statusSaved, text: 'Saved');
+      // A bill the machine flagged is with our team, not the shopkeeper
+      // (DAS-71): the same words and badge as a bill still being read, and
+      // no count of what was flagged.
       case 'review':
-        // A bill the machine flagged is with our team, not the shopkeeper
-        // (DAS-71): the same words as a bill still being read, and no count
-        // of what was flagged.
-        return const _Pill(color: AppColors.statusReady, text: 'Under processing');
+      case 'working':
+        return const _Pill(color: AppColors.statusReady, text: kUnderProcessingLabel);
       case 'failed':
         return _Pill(color: Theme.of(context).colorScheme.error, text: 'Failed');
-      case 'working':
-        return const _Pill(color: AppColors.statusReady, text: 'Under processing');
       default:
         return const _Pill(color: AppColors.statusPendingConfirm, text: 'Check & save');
     }

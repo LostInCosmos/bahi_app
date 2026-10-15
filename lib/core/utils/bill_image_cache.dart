@@ -24,10 +24,13 @@ import 'package:path_provider/path_provider.dart';
 /// PendingPhotoStore under Application Support instead.
 ///
 /// What it is keyed by: the server's own source-image path, e.g.
-/// `6/62b7…jpg`. That path already carries the tenant id and a uuid, and a
-/// given path's bytes never change — the server writes a new uuid on re-crop.
-/// That makes an entry safe to keep indefinitely and to serve without
-/// revalidating. Callers only read paths belonging to the signed-in shop (see
+/// `6/62b7…jpg`, plus `?v=<image_rev>` once that is nonzero (DAS-72's photo
+/// rotation overwrites the same path and bumps `image_rev` for exactly this
+/// reason — see ApiClient.fetchImage). A given (path, rev) pair's bytes never
+/// change, so an entry is safe to keep indefinitely and to serve without
+/// revalidating; a rotation is simply a different, always-missing key, and
+/// the stale entry at the old key ages out through the usual LRU trim.
+/// Callers only read paths belonging to the signed-in shop (see
 /// ApiClient.fetchImage), since a hit never reaches the server's check.
 ///
 /// Deliberately NOT cleared on logout: logging out and back in is exactly the

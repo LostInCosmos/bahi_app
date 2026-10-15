@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../app/theme/app_theme.dart';
 import '../models/batch_item.dart';
 import '../models/bill_search.dart';
+import '../models/status_filter.dart' show kUnderProcessingLabel;
 import 'bill_thumbnail.dart';
 import 'retry_label.dart';
 import 'selection_mark.dart';
@@ -60,6 +61,7 @@ class BatchItemCard extends StatelessWidget {
           children: [
             BillThumbnail(
               sourceImage: item.isUploaded ? item.sourceImages.first : null,
+              imageRev: item.result?.meta.imageRev ?? 0,
               failed: item.status == BatchItemStatus.failed,
             ),
             // Bottom scrim so the label stays legible over any photo.
@@ -96,7 +98,7 @@ class BatchItemCard extends StatelessWidget {
                             // No spinner (DAS-71): to the shopkeeper the bill is
                             // simply with us.
                             : const Text(
-                                'Under processing',
+                                kUnderProcessingLabel,
                                 style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                               ),
                       ),
@@ -175,14 +177,13 @@ class BatchItemCard extends StatelessWidget {
         return const _Badge(color: AppColors.statusSaved, icon: Icons.check_rounded);
       case BatchItemStatus.pendingConfirm:
         return const _Badge(color: AppColors.statusPendingConfirm, icon: Icons.touch_app_rounded);
+      // Flagged bills are with our team, so they look like any bill still
+      // waiting to be read, not like one waiting for the shopkeeper.
       case BatchItemStatus.needsReview:
-        // Flagged bills are with our team, so they look like any bill being
-        // read, not like one waiting for the shopkeeper.
+      case BatchItemStatus.ready:
         return const _Badge(color: AppColors.statusReady, icon: Icons.hourglass_empty_rounded);
       case BatchItemStatus.failed:
         return _Badge(color: Theme.of(context).colorScheme.error, icon: Icons.close_rounded);
-      case BatchItemStatus.ready:
-        return const _Badge(color: AppColors.statusReady, icon: Icons.hourglass_empty_rounded);
       case BatchItemStatus.needsCrop:
         // An instruction, not a state: this card is waiting for the
         // shopkeeper to choose its corners, and the crop icon is what

@@ -264,7 +264,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _loadPhoto() async {
     try {
-      final bytes = await ApiClient.instance.fetchImage(widget.result.meta.sourceImage);
+      final bytes = await ApiClient.instance.fetchImage(
+        widget.result.meta.sourceImage,
+        imageRev: widget.result.meta.imageRev,
+      );
       if (!mounted) return;
       setState(() => _photoBytes = bytes);
     } catch (_) {

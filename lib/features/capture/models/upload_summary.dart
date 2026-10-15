@@ -51,6 +51,10 @@ class UploadSummary {
   /// card falls back to [issueCount] as it always did.
   final String? reviewState;
 
+  /// Bumped when the admin rotates this bill's photo in place (DAS-72); 0 on
+  /// a server that predates the field. See ExtractionMeta.imageRev.
+  final int imageRev;
+
   const UploadSummary({
     required this.jobId,
     required this.status,
@@ -63,6 +67,7 @@ class UploadSummary {
     this.sellerName,
     this.invoiceNo,
     this.reviewState,
+    this.imageRev = 0,
   });
 
   factory UploadSummary.fromJson(Map<String, dynamic> json) => UploadSummary(
@@ -81,6 +86,7 @@ class UploadSummary {
         sellerName: _text(json['seller_name']),
         invoiceNo: _text(json['invoice_no']),
         reviewState: json['review_state'] as String?,
+        imageRev: (json['image_rev'] as num?)?.toInt() ?? 0,
       );
 
   bool get isSaved => invoiceId != null;
@@ -104,6 +110,7 @@ class UploadSummary {
         sellerName: sellerName,
         invoiceNo: invoiceNo,
         reviewState: reviewState,
+        imageRev: imageRev,
       );
 }
 

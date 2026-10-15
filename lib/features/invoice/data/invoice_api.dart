@@ -20,22 +20,29 @@ extension InvoiceApi on ApiClient {
   }
 
   /// The corrected bill photo, served from the device if it has been seen
-  /// before. A given source path's bytes never change — the server writes a
-  /// new uuid on re-crop — so a hit needs no revalidation, and this is the
+  /// before. A given source path's bytes never change on their own — the
+  /// server writes a new uuid on re-crop — EXCEPT a photo rotation (DAS-72),
+  /// which overwrites the same path and bumps [imageRev]. So the cache is
+  /// keyed by path alone at rev 0 (the overwhelming majority — keeps every
+  /// cache entry written before this change valid) and by `path?v=rev` once
+  /// rev is bumped, which is a guaranteed miss until the rotated bytes are
+  /// fetched and stored under that key; the server ignores the query string,
+  /// so it changes nothing about what is actually requested. This is the
   /// only place that has to know the cache exists. See [BillImageCache].
   ///
   /// A cache hit never reaches the server's permission check, so it is only
   /// served for the signed-in shop's own paths (`<tenantId>/…`). Anything
   /// else goes to the server, which refuses it the normal way.
-  Future<Uint8List> fetchImage(String sourceImage) async {
+  Future<Uint8List> fetchImage(String sourceImage, {int imageRev = 0}) async {
     final tid = tenantId;
     final ownPath = tid != null && sourceImage.startsWith('$tid/');
+    final key = imageRev > 0 ? '$sourceImage?v=$imageRev' : sourceImage;
     if (ownPath) {
-      final cached = await BillImageCache.read(sourceImage);
+      final cached = await BillImageCache.read(key);
       if (cached != null) return cached;
     }
-    final res = await _get('/invoices/image/$sourceImage', timeout: ApiClient.transferTimeout);
-    await BillImageCache.write(sourceImage, res.bodyBytes);
+    final res = await _get('/invoices/image/$key', timeout: ApiClient.transferTimeout);
+    await BillImageCache.write(key, res.bodyBytes);
     return res.bodyBytes;
   }
 
