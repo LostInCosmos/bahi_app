@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/core/api/api_client.dart';
@@ -26,6 +27,17 @@ void main() {
     addTearDown(() => FlutterError.onError = original);
 
     SharedPreferences.setMockInitialValues({});
+    // Without this, ApiClient.loadAppInfo's PackageInfo.fromPlatform() call
+    // hangs forever under plain tester.pump (no real platform channel round
+    // trip happens on the fake clock), and _StartupGate never leaves its
+    // spinner.
+    PackageInfo.setMockInitialValues(
+      appName: 'Dastavez',
+      packageName: 'com.dastavez.bahi',
+      version: '1.0.0',
+      buildNumber: '2002',
+      buildSignature: '',
+    );
     // A token whose payload names a shop, as a real one does.
     final payload = base64Url.encode(utf8.encode(jsonEncode({'tenant_id': 8}))).replaceAll('=', '');
     FlutterSecureStorage.setMockInitialValues({'token': 'h.$payload.s'});

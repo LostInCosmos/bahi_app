@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/core/api/api_client.dart';
@@ -24,6 +25,9 @@ Future<Object?> _outcome(Future<Object?> call) async {
     return e;
   }
 }
+
+http.Response _ok(Map<String, String> extraHeaders) =>
+    http.Response('{}', 200, headers: {'content-type': 'application/json', ...extraHeaders});
 
 void main() {
   final api = ApiClient.instance;
@@ -98,5 +102,88 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       expect(error, isA<TimeoutException>());
     }, () => client);
+  });
+
+  group('version gate (DAS-74)', () {
+    setUp(() async {
+      PackageInfo.setMockInitialValues(
+        appName: 'Dastavez',
+        packageName: 'com.dastavez.bahi',
+        version: '1.0.0',
+        buildNumber: '2002',
+        buildSignature: '',
+      );
+      await api.loadAppInfo();
+      // ApiClient is a singleton, so the version gate left over from whatever
+      // ran before this test in the same process must not leak in — put it
+      // back at a known baseline (ok, not yet notified) via a real response.
+      final baseline = MockClient((req) async => _ok({}));
+      await http.runWithClient(() => _outcome(api.getAccount()), () => baseline);
+    });
+    tearDown(() => api.onVersionGate = null);
+
+    test('sends its own build and platform on every request', () async {
+      http.Request? seen;
+      final client = MockClient((req) async {
+        seen = req;
+        return _ok({});
+      });
+      await http.runWithClient(() => _outcome(api.getAccount()), () => client);
+      expect(seen?.headers['X-App-Build'], '2002');
+      expect(seen?.headers['X-App-Platform'], isNotEmpty);
+    });
+
+    test('no minimum header means ok, and the callback never fires', () async {
+      var calls = 0;
+      api.onVersionGate = (_) => calls++;
+      final client = MockClient((req) async => _ok({}));
+      await http.runWithClient(() => _outcome(api.getAccount()), () => client);
+      expect(api.versionGate, VersionGateLevel.ok);
+      expect(calls, 0);
+    });
+
+    test('a build below the minimum is a dismissible nudge', () async {
+      VersionGateLevel? seen;
+      api.onVersionGate = (l) => seen = l;
+      final client = MockClient((req) async => _ok({'x-min-app-build': '9999'}));
+      await http.runWithClient(() => _outcome(api.getAccount()), () => client);
+      expect(api.versionGate, VersionGateLevel.nudge);
+      expect(seen, VersionGateLevel.nudge);
+    });
+
+    test('a build below the hard-block threshold blocks, even while also below the soft minimum', () async {
+      final client = MockClient(
+        (req) async => _ok({'x-min-app-build': '2100', 'x-min-app-build-hard': '9999'}),
+      );
+      await http.runWithClient(() => _outcome(api.getAccount()), () => client);
+      expect(api.versionGate, VersionGateLevel.hardBlock);
+    });
+
+    test('the same level is not re-notified on a second request', () async {
+      var calls = 0;
+      api.onVersionGate = (_) => calls++;
+      final client = MockClient((req) async => _ok({'x-min-app-build': '9999'}));
+      await http.runWithClient(() async {
+        await _outcome(api.getAccount());
+        await _outcome(api.getAccount());
+      }, () => client);
+      expect(calls, 1);
+    });
+
+    test('recovering to a current-enough response notifies ok after a nudge', () async {
+      final levels = <VersionGateLevel>[];
+      api.onVersionGate = levels.add;
+      var first = true;
+      final client = MockClient((req) async {
+        final res = _ok(first ? {'x-min-app-build': '9999'} : {});
+        first = false;
+        return res;
+      });
+      await http.runWithClient(() async {
+        await _outcome(api.getAccount());
+        await _outcome(api.getAccount());
+      }, () => client);
+      expect(levels, [VersionGateLevel.nudge, VersionGateLevel.ok]);
+    });
   });
 }

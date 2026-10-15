@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/models/account.dart';
@@ -48,6 +49,12 @@ class Offset2D {
 /// ordinary release build — built WITHOUT this flag — can't be talked into
 /// pointing at an attacker's server.
 const bool kAllowServerOverride = !kReleaseMode || bool.fromEnvironment('ALLOW_SERVER_OVERRIDE');
+
+/// How far behind this installed build is of what the server currently
+/// wants (DAS-74). `nudge` is a dismissible "please update"; `hardBlock` is
+/// a true breaking change, set separately and explicitly on the server —
+/// never the default just from being behind.
+enum VersionGateLevel { ok, nudge, hardBlock }
 
 /// Thin REST client for the FastAPI backend. Holds the base URL and JWT in
 /// memory plus SharedPreferences so both survive app restarts. The base URL
@@ -95,6 +102,24 @@ class ApiClient {
       }
     }
     businessTypeNotifier.value = prefs.getString('business_type') ?? 'medical';
+  }
+
+  int _appBuild = 0;
+  String _appPlatform = 'other';
+
+  /// This installed build's own number and platform, read once at startup
+  /// and sent with every request from here on (DAS-74) so the server can
+  /// tell an old build apart from a current one. Awaited alongside
+  /// [loadFromDisk], before the first screen shows.
+  Future<void> loadAppInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _appBuild = int.tryParse(info.buildNumber) ?? 0;
+    } catch (_) {
+      // A build number of 0 never trips a minimum — fails open, same as the
+      // server's own cache does on its side.
+    }
+    _appPlatform = Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'other');
   }
 
   Future<void> _saveBusinessType(String type) async {
@@ -161,6 +186,35 @@ class ApiClient {
     onSessionEnded?.call();
   }
 
+  /// What the server's last response said about this build (DAS-74).
+  VersionGateLevel get versionGate => _versionGate;
+  VersionGateLevel _versionGate = VersionGateLevel.ok;
+  VersionGateLevel _lastNotifiedVersionGate = VersionGateLevel.ok;
+
+  /// Fires on an actual change of [versionGate], not on every request — a
+  /// dismissed nudge must not reappear just because another request landed,
+  /// and one flaky response must not flicker the UI. Set by the app.
+  void Function(VersionGateLevel level)? onVersionGate;
+
+  /// Read independently of the 401 check below: an outdated build is told
+  /// to update even hitting /auth/login unauthenticated. Checked after the
+  /// 401 so that if both fire on the same response, the version gate's own
+  /// navigation (more useful than "log in again" to a build that will not
+  /// work once logged in) is the one left on screen.
+  void _applyVersionGate(http.Response res) {
+    final minBuild = int.tryParse(res.headers['x-min-app-build'] ?? '');
+    final hardBuild = int.tryParse(res.headers['x-min-app-build-hard'] ?? '');
+    final level = hardBuild != null && _appBuild < hardBuild
+        ? VersionGateLevel.hardBlock
+        : minBuild != null && _appBuild < minBuild
+            ? VersionGateLevel.nudge
+            : VersionGateLevel.ok;
+    _versionGate = level;
+    if (level == _lastNotifiedVersionGate) return;
+    _lastNotifiedVersionGate = level;
+    onVersionGate?.call(level);
+  }
+
   bool get isLoggedIn => token != null;
 
   /// The signed-in shop, read from the JWT's own payload rather than fetched
@@ -218,9 +272,12 @@ class ApiClient {
     final headers = {
       if (sent != null) 'Authorization': 'Bearer $sent',
       if (json) 'Content-Type': 'application/json',
+      'X-App-Build': '$_appBuild',
+      'X-App-Platform': _appPlatform,
     };
     final res = await request(headers).timeout(timeout);
     if (res.statusCode == 401 && sent != null) await _sessionRefused(sent);
+    _applyVersionGate(res);
     _checkOk(res);
     return res;
   }
@@ -267,6 +324,16 @@ class ApiClient {
         ..._dateRange(startDate, endDate),
         if (startDate != null || endDate != null) 'date_basis': _uploadedBasis,
       };
+
+  /// The message to show for the current [versionGate] level (DAS-74),
+  /// fetched only when there is one to show — never on the happy path. No
+  /// store listing exists: distribution is USB-connect install only, so
+  /// this is plain text ("ask the shop owner to reconnect and update"),
+  /// never a tappable link.
+  Future<String?> versionInfo() async {
+    final res = await _get('/app/version-info', query: {'platform': _appPlatform});
+    return _object(res)['message'] as String?;
+  }
 
   static Map<String, dynamic> _object(http.Response res) => jsonDecode(res.body) as Map<String, dynamic>;
   static List<dynamic> _list(http.Response res) => jsonDecode(res.body) as List<dynamic>;

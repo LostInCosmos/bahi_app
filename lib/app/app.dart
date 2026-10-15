@@ -20,11 +20,13 @@ class _GstBillAppState extends State<GstBillApp> {
   void initState() {
     super.initState();
     ApiClient.instance.onSessionEnded = _onSessionEnded;
+    ApiClient.instance.onVersionGate = _onVersionGate;
   }
 
   @override
   void dispose() {
     if (ApiClient.instance.onSessionEnded == _onSessionEnded) ApiClient.instance.onSessionEnded = null;
+    if (ApiClient.instance.onVersionGate == _onVersionGate) ApiClient.instance.onVersionGate = null;
     super.dispose();
   }
 
@@ -39,6 +41,41 @@ class _GstBillAppState extends State<GstBillApp> {
     _messenger.currentState
       ?..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('You were signed out. Please log in again.')));
+  }
+
+  /// This build has fallen behind what the server wants (DAS-74). `nudge` is
+  /// a dismissible banner the shopkeeper can ignore; `hardBlock` takes over
+  /// the whole screen. Nothing to do for `ok` — a dismissed nudge is not
+  /// reshown, and a hard block is left only by logging out.
+  void _onVersionGate(VersionGateLevel level) {
+    switch (level) {
+      case VersionGateLevel.ok:
+        break;
+      case VersionGateLevel.nudge:
+        _showUpdateNudge();
+        break;
+      case VersionGateLevel.hardBlock:
+        _navigator.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const _UpdateRequiredScreen()),
+          (_) => false,
+        );
+        break;
+    }
+  }
+
+  Future<void> _showUpdateNudge() async {
+    final message = await ApiClient.instance.versionInfo().catchError((_) => null);
+    _messenger.currentState
+      ?..hideCurrentMaterialBanner()
+      ..showMaterialBanner(MaterialBanner(
+        content: Text(message ?? 'A new version of this app is available.'),
+        actions: [
+          TextButton(
+            onPressed: () => _messenger.currentState?.hideCurrentMaterialBanner(),
+            child: const Text('Dismiss'),
+          ),
+        ],
+      ));
   }
 
   @override
@@ -77,7 +114,7 @@ class _StartupGateState extends State<_StartupGate> {
   @override
   void initState() {
     super.initState();
-    ApiClient.instance.loadFromDisk().then((_) {
+    Future.wait([ApiClient.instance.loadFromDisk(), ApiClient.instance.loadAppInfo()]).then((_) {
       if (mounted) setState(() => _ready = true);
       // Refreshes the persisted business type (used for theming immediately
       // on launch) against the server in case it changed on another device.
@@ -99,5 +136,64 @@ class _StartupGateState extends State<_StartupGate> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return ApiClient.instance.isLoggedIn ? const HomeScreen() : const LoginScreen();
+  }
+}
+
+/// A true breaking change (DAS-74) — set explicitly and separately from the
+/// dismissible nudge, never the default just from being behind. Takes over
+/// the whole screen; the only way out is logging out, since there is no
+/// store listing to send anyone to (distribution is USB-connect install
+/// only) — someone has to reconnect the device and reinstall.
+class _UpdateRequiredScreen extends StatefulWidget {
+  const _UpdateRequiredScreen();
+
+  @override
+  State<_UpdateRequiredScreen> createState() => _UpdateRequiredScreenState();
+}
+
+class _UpdateRequiredScreenState extends State<_UpdateRequiredScreen> {
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    ApiClient.instance.versionInfo().then((m) {
+      if (mounted) setState(() => _message = m);
+    }).catchError((_) {});
+  }
+
+  Future<void> _logout() async {
+    await ApiClient.instance.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.system_update_rounded, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  _message ?? 'This app needs to be updated before it can be used. Please contact support.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                TextButton(onPressed: _logout, child: const Text('Log out')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
