@@ -159,7 +159,7 @@ class _Server {
             },
           });
         }
-        if (finishes && req.method == 'POST' && path == '/invoices/extract/status') {
+        if (finishes && phase != 'finished' && req.method == 'POST' && path == '/invoices/extract/status') {
           if (statusGate != null) await statusGate!.future;
           phase = 'finished';
           return _json({

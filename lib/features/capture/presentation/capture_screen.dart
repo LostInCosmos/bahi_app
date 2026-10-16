@@ -46,11 +46,13 @@ part 'capture_selection.dart';
 /// through a large batch therefore loses nothing: on the next start, saved
 /// photos are uploaded and in-flight extractions resume polling.
 ///
-/// Nothing saves itself, ever. The backend's validation only catches
-/// internal arithmetic inconsistency — it can't tell whether the vendor or
-/// amount was read correctly. So even a clean result only reaches
-/// `pendingConfirm`, a one-tap summary the user must confirm; anything with
-/// an issue goes to `needsReview` and the full edit form.
+/// A bill saves itself once it is both clean (the backend's validation,
+/// which only catches internal arithmetic inconsistency, found nothing) AND
+/// its supplier is one our team has actually verified — server-side, the
+/// moment that becomes true, with no tap and no wait (DAS-79). Short of
+/// that, a clean-but-unverified result still reaches `pendingConfirm`, a
+/// one-tap summary the user must confirm; anything with a real issue goes to
+/// `needsReview` and the full edit form.
 class CaptureScreen extends StatefulWidget {
   final VoidCallback onBatchFinished;
   const CaptureScreen({super.key, required this.onBatchFinished});
@@ -180,30 +182,51 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   }
 
   /// Public so HomeScreen can ask again when this tab is reopened (DAS-76):
-  /// a card held in needsReview otherwise only rechecks itself once it is
-  /// actually (re)built — reopening the tab alone does not do that, since
-  /// IndexedStack keeps the grid's cards mounted rather than rebuilding them.
+  /// a card held in needsReview or pendingConfirm otherwise only rechecks
+  /// itself once it is actually (re)built — reopening the tab alone does not
+  /// do that, since IndexedStack keeps the grid's cards mounted rather than
+  /// rebuilding them. Covers pendingConfirm too (DAS-79): a clean-but-
+  /// unverified bill can be saved by a vendor verification exactly the way a
+  /// flagged one can be saved by a correction, and either way this phone
+  /// may not have been watching for it (the live loop only started if
+  /// something was already in flight when the screen opened).
   Future<void> recheckNeedsReview() async {
     for (final item in List<BatchItem>.of(_items)) {
       if (!mounted) return;
-      if (item.status == BatchItemStatus.needsReview) {
+      if (item.status == BatchItemStatus.needsReview ||
+          item.status == BatchItemStatus.pendingConfirm) {
         await _recheckNeedsReview(item);
       }
     }
   }
 
-  /// One bill the team might have finished with while nothing was watching
-  /// it (DAS-76) — reuses the exact "is it still flagged" rule the first
-  /// terminal transition already uses, so this never disagrees with it.
-  /// Best-effort: a failure here just means the next ask (another scroll,
-  /// another tab reopen) tries again, same as any other background refresh.
+  /// One bill our team, or a vendor verification, might have resolved while
+  /// nothing was watching it (DAS-76, extended by DAS-79) — reuses the exact
+  /// "is it still flagged" rule the first terminal transition already uses,
+  /// so this never disagrees with it. Best-effort: a failure here just means
+  /// the next ask (another scroll, another tab reopen) tries again, same as
+  /// any other background refresh.
   Future<void> _recheckNeedsReview(BatchItem item) async {
-    if (item.status != BatchItemStatus.needsReview) return;
+    if (item.status != BatchItemStatus.needsReview &&
+        item.status != BatchItemStatus.pendingConfirm) {
+      return;
+    }
     final jobId = item.lastJobId ?? item.jobId;
     if (jobId == null) return;
     try {
       final job = await ApiClient.instance.getExtractionJob(jobId);
       if (!mounted) return;
+      if (job.isAlreadySaved) {
+        setState(() {
+          item.jobId = null;
+          item.status = BatchItemStatus.saved;
+          item.savedInvoiceId = job.invoiceId;
+          if (job.result != null) item.result = job.result;
+        });
+        unawaited(_persistBatch());
+        return;
+      }
+      if (item.status != BatchItemStatus.needsReview) return;
       final result = job.result;
       if (result == null) return;
       final stillFlagged = result.issues.any((i) => i.field != 'seller_gstin');
@@ -270,6 +293,14 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       }
     }
     unawaited(_resumeUploads(toUpload));
+    // A restored pendingConfirm/needsReview bill has nothing above asking
+    // for it: `startupAction` is `none` for both, since nothing needs
+    // (re-)submitting. Without this, a bill our team or a vendor
+    // verification saves while this phone is simply sitting open, having
+    // been launched before that happened, would not be watched for at all
+    // (DAS-79) — only the next explicit recheck (tab reopen, pull) would
+    // find it.
+    _ensureStatusLoop();
   }
 
   /// Photos saved on the device last session that never finished uploading.
@@ -802,9 +833,18 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }));
   }
 
+  /// A bill is watched while it is being read, AND after — a clean-but-
+  /// unverified or flagged bill stays `done` forever as far as [status] is
+  /// concerned, but can still be saved later by an admin action nobody on
+  /// this phone did anything to trigger (DAS-79). [jobId] is only cleared
+  /// once a bill is actually saved or failed, so it keeps its place here
+  /// until then.
   Map<int, BatchItem> get _watching => {
         for (final i in _items)
-          if (i.jobId != null && i.status == BatchItemStatus.processing)
+          if (i.jobId != null &&
+              (i.status == BatchItemStatus.processing ||
+                  i.status == BatchItemStatus.pendingConfirm ||
+                  i.status == BatchItemStatus.needsReview))
             i.jobId!: i,
       };
 
@@ -852,9 +892,18 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         final item = watching[brief.jobId];
         if (item != null) {
           final before = categoryOfItem(item);
-          await _applyStatus(item, brief);
+          if (item.status == BatchItemStatus.processing) {
+            await _applyStatus(item, brief);
+          } else if (brief.saved) {
+            // Already pendingConfirm/needsReview, and the server has now
+            // saved it without this phone doing anything (DAS-79).
+            await _applyAutoSave(item, brief);
+          }
+          // Not `brief.isTerminal`: that stays true for every round of an
+          // unsaved done job, which would schedule a refresh every ~25s for
+          // nothing. Only a genuine move is worth one.
           _noteMove(item, before);
-          if (brief.isTerminal) finished = true;
+          if (categoryOfItem(item) != before) finished = true;
         }
       }
       // A bill finishing changes what the boxes should say, and the list's
@@ -895,6 +944,19 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     try {
       final job = await ApiClient.instance.getExtractionJob(brief.jobId);
       if (!mounted) return;
+      if (job.status == 'done' && job.isAlreadySaved) {
+        // Clean and verified before this phone ever looked at it — the
+        // server saved it already (DAS-79). No tap, no pendingConfirm.
+        setState(() {
+          item.jobId = null;
+          item.retryAt = null;
+          item.processingSince = null;
+          item.status = BatchItemStatus.saved;
+          item.savedInvoiceId = job.invoiceId;
+          item.result = job.result;
+        });
+        return;
+      }
       final ExtractionResult result;
       if (job.status == 'done') {
         result = job.result!;
@@ -912,23 +974,49 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         return;
       }
       setState(() {
-        item.jobId = null;
         item.retryAt = null;
         item.processingSince = null;
         // Zero issues means the numbers are internally consistent, not that
-        // they were read correctly — so this still waits on a human tap.
-        // The supplier's GSTIN is our team's to check, not a reason for the
-        // shop to look at the bill (DAS-71), as the server's own count says.
+        // they were read correctly — so unless the supplier is one our team
+        // has verified, this still waits on a human tap. The supplier's
+        // GSTIN is our team's to check, not a reason for the shop to look at
+        // the bill (DAS-71), as the server's own count says.
         item.status = result.issues.every((i) => i.field == 'seller_gstin')
             ? BatchItemStatus.pendingConfirm
             : BatchItemStatus.needsReview;
         item.recheckedThisReview = false;
         item.result = result;
+        // jobId is deliberately left set: unsaved is not settled (DAS-79) —
+        // _watching keeps asking in case our team saves it from here without
+        // another tap on this phone.
       });
     } catch (_) {
       // Fetching the result failed, but the bill itself is finished. Leave it
       // in flight so the next round picks it up rather than calling a read
       // bill failed over one dropped request.
+    }
+  }
+
+  /// A bill this phone had already filed under pendingConfirm/needsReview
+  /// turned out to be saved on the next ask — an admin's correction or a
+  /// vendor verification cleared the way while nobody here was watching for
+  /// it specifically (DAS-79). `brief.saved` is the signal; refetch for the
+  /// invoice id, the only thing still missing.
+  Future<void> _applyAutoSave(BatchItem item, JobStatusBrief brief) async {
+    try {
+      final job = await ApiClient.instance.getExtractionJob(brief.jobId);
+      if (!mounted || !job.isAlreadySaved) return;
+      setState(() {
+        item.jobId = null;
+        item.retryAt = null;
+        item.processingSince = null;
+        item.status = BatchItemStatus.saved;
+        item.savedInvoiceId = job.invoiceId;
+        if (job.result != null) item.result = job.result;
+      });
+    } catch (_) {
+      // Best-effort — jobId is untouched, so the next round (still watching)
+      // tries again, same as any other dropped request here.
     }
   }
 

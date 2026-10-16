@@ -116,7 +116,7 @@ void main() {
     expect(find.byIcon(Icons.hourglass_empty_rounded), findsOneWidget);
   });
 
-  group('asking again while our team might still have the bill (DAS-76)', () {
+  group('asking again while our team might still have the bill (DAS-76, extended to pendingConfirm by DAS-79)', () {
     testWidgets('a needsReview card asks once when built, and not again on a later rebuild', (tester) async {
       var asked = 0;
       final item = _item(BatchItemStatus.needsReview);
@@ -143,9 +143,35 @@ void main() {
       expect(asked, 1);
     });
 
-    testWidgets('a card that is not needsReview never asks', (tester) async {
+    testWidgets('a pendingConfirm card asks once too — it may be clean but still unverified (DAS-79)',
+        (tester) async {
       var asked = 0;
-      for (final status in BatchItemStatus.values.where((s) => s != BatchItemStatus.needsReview)) {
+      final item = _item(BatchItemStatus.pendingConfirm);
+      Widget card() => MaterialApp(
+            home: Scaffold(
+              body: BatchItemCard(
+                item: item,
+                onTap: () {},
+                onDelete: null,
+                onReprocess: null,
+                onRecheckNeedsReview: (_) => asked++,
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      expect(asked, 1);
+
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      expect(asked, 1, reason: 'same episode, not asked twice');
+    });
+
+    testWidgets('a card that is neither never asks', (tester) async {
+      var asked = 0;
+      for (final status in BatchItemStatus.values.where(
+          (s) => s != BatchItemStatus.needsReview && s != BatchItemStatus.pendingConfirm)) {
         await tester.pumpWidget(MaterialApp(
           home: Scaffold(
             body: BatchItemCard(

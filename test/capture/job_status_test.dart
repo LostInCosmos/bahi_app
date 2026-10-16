@@ -63,6 +63,22 @@ void main() {
       expect(queued.maxAttempts, 3, reason: 'a sensible default, not a crash');
     });
 
+    test('a done job is not settled until it is saved (DAS-79)', () {
+      // A clean-but-unverified or still-flagged bill sits "done" for a long
+      // time; only becoming saved (or truly failing) means nothing more
+      // will happen to it.
+      expect(_brief('done').isSettled, isFalse, reason: 'unsaved');
+      expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done', 'saved': true}).isSettled, isTrue);
+      expect(_brief('failed').isSettled, isTrue, reason: 'saved is irrelevant once it has failed');
+      expect(_brief('cancelled').isSettled, isTrue);
+      expect(_brief('processing').isSettled, isFalse, reason: 'still in flight, not just unsaved');
+    });
+
+    test('`saved` parses from the wire, defaulting to false for an old server', () {
+      expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done', 'saved': true}).saved, isTrue);
+      expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done'}).saved, isFalse);
+    });
+
     test('a batch answer says whether anything actually changed', () {
       final batch = JobStatusBatch.fromJson({
         'jobs': [
@@ -75,6 +91,32 @@ void main() {
       expect(batch.jobs.map((j) => j.jobId), [1, 2]);
 
       expect(JobStatusBatch.fromJson({'jobs': [], 'changed': false}).changed, isFalse);
+    });
+  });
+
+  group('ExtractionJob.isAlreadySaved (DAS-79)', () {
+    test('a job the server saved before this phone asked carries the invoice id', () {
+      final job = ExtractionJob.fromJson({
+        'job_id': 5,
+        'status': 'done',
+        'invoice_id': 55,
+        'review_state': 'none',
+        'result': {
+          'invoice': {'seller_name': 'ACME', 'seller_gstin': '', 'invoice_no': 'A-9', 'invoice_date': '2026-08-01', 'line_items': []},
+          'extraction_meta': {'source_image': '8/5.jpg', 'method': 'llm'},
+          'issues': [],
+        },
+      });
+      expect(job.isAlreadySaved, isTrue);
+      expect(job.invoiceId, 55);
+      expect(job.reviewState, 'none');
+    });
+
+    test('an old server, or one that has not saved it yet, sends neither field', () {
+      final job = ExtractionJob.fromJson({'job_id': 5, 'status': 'done'});
+      expect(job.isAlreadySaved, isFalse);
+      expect(job.invoiceId, isNull);
+      expect(job.reviewState, isNull);
     });
   });
 

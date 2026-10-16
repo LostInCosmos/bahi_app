@@ -390,6 +390,12 @@ class ExtractionJob {
   final int maxAttempts;
   /// When a `retrying` job will next be picked up. UTC.
   final DateTime? retryAt;
+  /// Set once the server has saved this job's bill — on the first read that
+  /// came back clean with a verified supplier, or later, server-side, once
+  /// an admin correction or a vendor verification clears the way (DAS-79).
+  /// Null until then; same meaning as the upload-list rows already carried.
+  final int? invoiceId;
+  final String? reviewState;
 
   ExtractionJob({
     required this.jobId,
@@ -402,6 +408,8 @@ class ExtractionJob {
     this.attempt = 0,
     this.maxAttempts = 3,
     this.retryAt,
+    this.invoiceId,
+    this.reviewState,
   });
 
   /// `cancelled` belongs here too: without it a cancelled job was not
@@ -411,6 +419,11 @@ class ExtractionJob {
   bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
 
   bool get isRetrying => status == 'retrying';
+
+  /// The server already saved this bill by the time we asked — no tap
+  /// needed (DAS-79). Checked before falling back to the pendingConfirm /
+  /// needsReview split, which only applies to what is still unsaved.
+  bool get isAlreadySaved => invoiceId != null;
 
   factory ExtractionJob.fromJson(Map<String, dynamic> json) {
     final error = json['error'] as Map<String, dynamic>?;
@@ -425,6 +438,8 @@ class ExtractionJob {
       attempt: json['attempt'] as int? ?? 0,
       maxAttempts: json['max_attempts'] as int? ?? 3,
       retryAt: json['retry_at'] != null ? DateTime.tryParse(json['retry_at'] as String)?.toUtc() : null,
+      invoiceId: json['invoice_id'] as int?,
+      reviewState: json['review_state'] as String?,
     );
   }
 }
@@ -438,6 +453,10 @@ class JobStatusBrief {
   final int attempt;
   final int maxAttempts;
   final DateTime? retryAt;
+  /// Whether the bill has been saved — a `done` job can sit unsaved for a
+  /// long time (clean but an unverified supplier, or still flagged), so
+  /// this is what actually changes for it later, not [status] (DAS-79).
+  final bool saved;
 
   const JobStatusBrief({
     required this.jobId,
@@ -445,11 +464,18 @@ class JobStatusBrief {
     required this.attempt,
     required this.maxAttempts,
     this.retryAt,
+    this.saved = false,
   });
 
   bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
   bool get isRetrying => status == 'retrying';
   bool get isProcessing => status == 'processing';
+
+  /// Nothing more will ever happen to this job — safe to stop asking about
+  /// it. A `done` job that is not yet [saved] is terminal but NOT settled:
+  /// the server keeps the long-poll open on it rather than answering at
+  /// once, exactly as it does for one still in flight (DAS-79).
+  bool get isSettled => status != 'done' ? isTerminal : saved;
 
   factory JobStatusBrief.fromJson(Map<String, dynamic> json) => JobStatusBrief(
         jobId: json['job_id'] as int,
@@ -457,6 +483,7 @@ class JobStatusBrief {
         attempt: json['attempt'] as int? ?? 0,
         maxAttempts: json['max_attempts'] as int? ?? 3,
         retryAt: json['retry_at'] == null ? null : DateTime.parse(json['retry_at'] as String).toUtc(),
+        saved: json['saved'] as bool? ?? false,
       );
 }
 

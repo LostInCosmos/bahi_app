@@ -4,8 +4,11 @@ import '../../../core/api/api_client.dart';
 import '../../../core/utils/pending_photo_store.dart';
 import '../../invoice/models/invoice.dart';
 
-/// Where one bill is in the capture flow. Nothing saves itself: even a clean
-/// extraction only reaches [pendingConfirm], which still needs a human tap.
+/// Where one bill is in the capture flow. A clean extraction whose supplier
+/// our team has verified saves itself, server-side, with no tap (DAS-79) —
+/// such a bill goes straight to [saved] and never surfaces as
+/// [pendingConfirm] on this phone at all. Short of that (clean but an
+/// unverified supplier), [pendingConfirm] still needs a human tap.
 /// `needsCrop` is a photo picked from the device that nobody has chosen
 /// corners for yet. Distinct from `preparing` because it must NOT be
 /// uploaded on its own: multi-select puts a whole stack in this state
@@ -129,14 +132,15 @@ class BatchItem {
   DateTime? retryAt;
   bool get isRetrying => retryAt != null;
 
-  /// Whether this needsReview episode has already asked the server once
-  /// since our team might have finished (DAS-76): `_statusLoop` stops
-  /// polling a job the moment it reaches needsReview, so nothing else ever
-  /// learns the team cleared it unless something asks again — a card asks
-  /// once when it is actually built (see BatchItemCard), reopening the New
-  /// bills tab asks for every such card at once. Reset to false wherever
-  /// [status] is (re-)assigned needsReview, so a bill flagged again later
-  /// gets its own fresh check. Not persisted: a restart always checks once.
+  /// Whether this needsReview/pendingConfirm episode has already asked the
+  /// server once since our team, or a vendor verification, might have
+  /// resolved it (DAS-76, extended by DAS-79) — a card asks once when it is
+  /// actually built (see BatchItemCard), reopening the New bills tab asks
+  /// for every such card at once, on top of whatever the live status loop
+  /// is separately watching for. Reset to false wherever [status] is
+  /// (re-)assigned needsReview or pendingConfirm, so a bill landing there
+  /// again later gets its own fresh check. Not persisted: a restart always
+  /// checks once.
   bool recheckedThisReview = false;
 
   /// The bill failed: nothing is in flight for it any more. Clears the retry
