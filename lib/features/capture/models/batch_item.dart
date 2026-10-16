@@ -10,7 +10,16 @@ import '../../invoice/models/invoice.dart';
 /// corners for yet. Distinct from `preparing` because it must NOT be
 /// uploaded on its own: multi-select puts a whole stack in this state
 /// and each waits for a human, so the resume pass skips them.
-enum BatchItemStatus { needsCrop, preparing, ready, processing, pendingConfirm, saved, needsReview, failed }
+enum BatchItemStatus {
+  needsCrop,
+  preparing,
+  ready,
+  processing,
+  pendingConfirm,
+  saved,
+  needsReview,
+  failed
+}
 
 /// One captured, cropped photo that has not been uploaded yet. A bill spanning
 /// several photos ("+ Add another page") has several of these.
@@ -57,7 +66,8 @@ class BatchItemPage {
       memoryBytes: null,
       filename: json['filename'] as String? ?? 'bill.jpg',
       corners: (json['corners'] as List<dynamic>)
-          .map((c) => Offset2D((c[0] as num).toDouble(), (c[1] as num).toDouble()))
+          .map((c) =>
+              Offset2D((c[0] as num).toDouble(), (c[1] as num).toDouble()))
           .toList(),
       rotationDegrees: json['rotation'] as int? ?? 0,
     );
@@ -119,6 +129,16 @@ class BatchItem {
   DateTime? retryAt;
   bool get isRetrying => retryAt != null;
 
+  /// Whether this needsReview episode has already asked the server once
+  /// since our team might have finished (DAS-76): `_statusLoop` stops
+  /// polling a job the moment it reaches needsReview, so nothing else ever
+  /// learns the team cleared it unless something asks again — a card asks
+  /// once when it is actually built (see BatchItemCard), reopening the New
+  /// bills tab asks for every such card at once. Reset to false wherever
+  /// [status] is (re-)assigned needsReview, so a bill flagged again later
+  /// gets its own fresh check. Not persisted: a restart always checks once.
+  bool recheckedThisReview = false;
+
   /// The bill failed: nothing is in flight for it any more. Clears the retry
   /// state too — a bill still carrying [retryAt] is counted under Working
   /// whatever its status says, so a read that failed straight after a server
@@ -148,7 +168,8 @@ class BatchItem {
   /// The words on a card an older version of this app gave up on while the
   /// server was still working — see [failedByTimeout]. This version never
   /// gives up on a bill itself, but those cards are still stored on phones.
-  static const timedOutMessage = 'This bill is taking longer than expected — please try again.';
+  static const timedOutMessage =
+      'This bill is taking longer than expected — please try again.';
 
   /// What to do with this bill when the screen starts and finds it saved from
   /// last session.
@@ -158,7 +179,9 @@ class BatchItem {
     if (status == BatchItemStatus.ready) return StartupAction.process;
     // "processing" with a job means one WAS submitted and may already be done
     // server-side — resume polling it rather than paying for another.
-    if (status == BatchItemStatus.processing && jobId != null) return StartupAction.resumeJob;
+    if (status == BatchItemStatus.processing && jobId != null) {
+      return StartupAction.resumeJob;
+    }
     // The phone gave up on it last session, usually while the server was still
     // reading — and the server will have finished by now. Ask it, rather than
     // leave a red card over a bill that is done.
@@ -172,7 +195,9 @@ class BatchItem {
   /// "failed". Trying again should look at that job first, not read the bill
   /// all over again and spend four more calls.
   bool get failedByTimeout =>
-      status == BatchItemStatus.failed && errorMessage == timedOutMessage && lastJobId != null;
+      status == BatchItemStatus.failed &&
+      errorMessage == timedOutMessage &&
+      lastJobId != null;
 
   /// Whether the card offers its ↻ button.
   ///
@@ -184,7 +209,9 @@ class BatchItem {
   /// guessing that the card could be tapped.
   bool canReprocess({required bool choosing}) {
     if (choosing) return false;
-    if (status == BatchItemStatus.preparing || status == BatchItemStatus.processing) return false;
+    if (status == BatchItemStatus.preparing || status == BatchItemStatus.processing) {
+      return false;
+    }
     // A flagged bill is with our team (DAS-71); reading it again would replace
     // the result they are checking.
     if (status == BatchItemStatus.needsReview) return false;
@@ -198,12 +225,18 @@ class BatchItem {
         'label': label,
         'sourceImages': sourceImages,
         // Not-yet-uploaded pages; restored ones are uploaded again on start.
-        'pages': pages.where((p) => p.photoId != null).map((p) => p.toJson()).toList(),
+        'pages': pages
+            .where((p) => p.photoId != null)
+            .map((p) => p.toJson())
+            .toList(),
         // Extraction runs server-side, independent of this app, so a kill
         // mid-extraction loses nothing — "processing" only rewinds to "ready"
         // (forcing a resubmit) in the narrow window where a job was about to
         // be submitted but jobId isn't set yet.
-        'status': (status == BatchItemStatus.processing && jobId == null ? BatchItemStatus.ready : status).name,
+        'status': (status == BatchItemStatus.processing && jobId == null
+                ? BatchItemStatus.ready
+                : status)
+            .name,
         'jobId': jobId,
         'lastJobId': lastJobId,
         'result': result?.toJson(),
@@ -213,7 +246,9 @@ class BatchItem {
       };
 
   static BatchItem? fromJson(Map<String, dynamic> json) {
-    final sourceImages = (json['sourceImages'] as List<dynamic>? ?? []).map((e) => e as String).toList();
+    final sourceImages = (json['sourceImages'] as List<dynamic>? ?? [])
+        .map((e) => e as String)
+        .toList();
     final pages = <BatchItemPage>[];
     for (final p in json['pages'] as List<dynamic>? ?? []) {
       final page = BatchItemPage.fromJson(p as Map<String, dynamic>);
@@ -221,7 +256,9 @@ class BatchItem {
     }
     if (sourceImages.isEmpty && pages.isEmpty) return null;
 
-    final item = BatchItem(label: json['label'] as String? ?? 'Photo', pages: sourceImages.isEmpty ? pages : []);
+    final item = BatchItem(
+        label: json['label'] as String? ?? 'Photo',
+        pages: sourceImages.isEmpty ? pages : []);
     item.sourceImages = sourceImages;
     // A bill that never finished uploading comes back as "preparing",
     // whatever it was when saved — including a failed upload, which is
@@ -234,7 +271,8 @@ class BatchItem {
         ? (json['status'] == BatchItemStatus.needsCrop.name
             ? BatchItemStatus.needsCrop
             : BatchItemStatus.preparing)
-        : BatchItemStatus.values.firstWhere((v) => v.name == json['status'], orElse: () => BatchItemStatus.ready);
+        : BatchItemStatus.values.firstWhere((v) => v.name == json['status'],
+            orElse: () => BatchItemStatus.ready);
     item.jobId = json['jobId'] as int?;
     // Batches saved before lastJobId existed have no key for it — jobId is
     // the same value for any item whose first submission was still running.

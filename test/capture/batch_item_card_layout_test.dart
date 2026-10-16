@@ -115,4 +115,85 @@ void main() {
     expect(find.byIcon(Icons.priority_high_rounded), findsNothing);
     expect(find.byIcon(Icons.hourglass_empty_rounded), findsOneWidget);
   });
+
+  group('asking again while our team might still have the bill (DAS-76)', () {
+    testWidgets('a needsReview card asks once when built, and not again on a later rebuild', (tester) async {
+      var asked = 0;
+      final item = _item(BatchItemStatus.needsReview);
+      Widget card() => MaterialApp(
+            home: Scaffold(
+              body: BatchItemCard(
+                item: item,
+                onTap: () {},
+                onDelete: null,
+                onReprocess: null,
+                onRecheckNeedsReview: (_) => asked++,
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      expect(asked, 1);
+
+      // Rebuilt again (e.g. a sibling card's state changed) — still the
+      // same needsReview episode, so it must not ask a second time.
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      expect(asked, 1);
+    });
+
+    testWidgets('a card that is not needsReview never asks', (tester) async {
+      var asked = 0;
+      for (final status in BatchItemStatus.values.where((s) => s != BatchItemStatus.needsReview)) {
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: BatchItemCard(
+              item: _item(status),
+              onTap: () {},
+              onDelete: null,
+              onReprocess: null,
+              onRecheckNeedsReview: (_) => asked++,
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+      }
+      expect(asked, 0);
+    });
+
+    testWidgets('a bill flagged again after being cleared asks again, once', (tester) async {
+      var asked = 0;
+      final item = _item(BatchItemStatus.needsReview);
+      Widget card() => MaterialApp(
+            home: Scaffold(
+              body: BatchItemCard(
+                item: item,
+                onTap: () {},
+                onDelete: null,
+                onReprocess: null,
+                onRecheckNeedsReview: (_) => asked++,
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      expect(asked, 1);
+
+      // Cleared, then flagged again — a fresh episode, so it is asked about
+      // once more, same as if it had never been checked before. Production
+      // code resets the flag at the exact point it (re-)assigns needsReview
+      // (see capture_screen.dart); simulated here the same way.
+      item.status = BatchItemStatus.pendingConfirm;
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      item
+        ..status = BatchItemStatus.needsReview
+        ..recheckedThisReview = false;
+      await tester.pumpWidget(card());
+      await tester.pumpAndSettle();
+      expect(asked, 2);
+    });
+  });
 }

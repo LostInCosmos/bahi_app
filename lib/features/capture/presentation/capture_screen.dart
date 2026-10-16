@@ -99,7 +99,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       i.status == BatchItemStatus.needsReview ||
       i.status == BatchItemStatus.failed ||
       i.status == BatchItemStatus.pendingConfirm);
-  bool get _allResolved => _items.isNotEmpty && _items.every((i) => i.status == BatchItemStatus.saved);
+  bool get _allResolved =>
+      _items.isNotEmpty &&
+      _items.every((i) => i.status == BatchItemStatus.saved);
 
   @override
   void initState() {
@@ -125,7 +127,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   // The search box. Entirely on the phone: it filters the bills that are
   // loaded as letters are typed, and the list loads the rest while it is used.
   final TextEditingController _searchController = TextEditingController();
-  String _query = '';   // normalised: trimmed, lower-cased; empty is no search
+  String _query = ''; // normalised: trimmed, lower-cased; empty is no search
 
   // Retries are locked for a moment after each one. In a filtered list the
   // retried bill leaves the box at once and the list closes up, so the NEXT
@@ -175,6 +177,45 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     if (!mounted) return;
     _foldersLoaded = _foldersLoaded || _folders.loadError == null;
     _reconcileItemFolders();
+  }
+
+  /// Public so HomeScreen can ask again when this tab is reopened (DAS-76):
+  /// a card held in needsReview otherwise only rechecks itself once it is
+  /// actually (re)built — reopening the tab alone does not do that, since
+  /// IndexedStack keeps the grid's cards mounted rather than rebuilding them.
+  Future<void> recheckNeedsReview() async {
+    for (final item in List<BatchItem>.of(_items)) {
+      if (!mounted) return;
+      if (item.status == BatchItemStatus.needsReview) {
+        await _recheckNeedsReview(item);
+      }
+    }
+  }
+
+  /// One bill the team might have finished with while nothing was watching
+  /// it (DAS-76) — reuses the exact "is it still flagged" rule the first
+  /// terminal transition already uses, so this never disagrees with it.
+  /// Best-effort: a failure here just means the next ask (another scroll,
+  /// another tab reopen) tries again, same as any other background refresh.
+  Future<void> _recheckNeedsReview(BatchItem item) async {
+    if (item.status != BatchItemStatus.needsReview) return;
+    final jobId = item.lastJobId ?? item.jobId;
+    if (jobId == null) return;
+    try {
+      final job = await ApiClient.instance.getExtractionJob(jobId);
+      if (!mounted) return;
+      final result = job.result;
+      if (result == null) return;
+      final stillFlagged = result.issues.any((i) => i.field != 'seller_gstin');
+      if (stillFlagged) return;
+      setState(() {
+        item.result = result;
+        item.status = BatchItemStatus.pendingConfirm;
+      });
+      unawaited(_persistBatch());
+    } catch (_) {
+      // ignored — see doc comment
+    }
   }
 
   /// A bill whose folder no longer exists (deleted on another device) goes
@@ -275,7 +316,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       final bytes = await file.readAsBytes();
       // Written to the device as it is picked, before any cropping:
       // these bytes exist nowhere else.
-      final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
+      final photoId = tenantId == null
+          ? null
+          : await PendingPhotoStore.save(tenantId, bytes);
       made.add(BatchItem(
         label: 'Photo ${_items.length + made.length + 1}',
         pages: [
@@ -283,7 +326,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
             photoId: photoId,
             memoryBytes: photoId == null ? bytes : null,
             filename: file.name,
-            corners: const [],      // chosen when the shopkeeper crops it
+            corners: const [], // chosen when the shopkeeper crops it
             rotationDegrees: 0,
           )
         ],
@@ -305,11 +348,13 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     final bytes = await file.readAsBytes();
     if (!mounted) return;
     final crop = await Navigator.of(context).push<CropResult>(
-      MaterialPageRoute(builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
+      MaterialPageRoute(
+          builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
     );
     if (crop == null || crop.corners.length != 4 || !mounted) return;
 
-    final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
+    final photoId =
+        tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
     final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: [
       BatchItemPage(
         photoId: photoId,
@@ -354,7 +399,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       final rendered = await renderPdf(
         path,
         onProgress: (done, total) {
-          if (mounted) setState(() => _pdfProgress = 'Reading $name — page $done of $total');
+          if (mounted) {
+            setState(() => _pdfProgress = 'Reading $name — page $done of $total');
+          }
         },
       );
       if (rendered.isEmpty || !mounted) return;
@@ -362,11 +409,14 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       final pages = <BatchItemPage>[];
       for (var i = 0; i < rendered.length; i++) {
         final r = rendered[i];
-        final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, r.bytes);
+        final photoId = tenantId == null
+            ? null
+            : await PendingPhotoStore.save(tenantId, r.bytes);
         pages.add(BatchItemPage(
           photoId: photoId,
           memoryBytes: photoId == null ? r.bytes : null,
-          filename: '${name.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '')}-p${i + 1}.jpg',
+          filename:
+              '${name.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '')}-p${i + 1}.jpg',
           // The whole page. A rendered PDF page needs no crop, and
           // anything less would cut the bill's edges off.
           corners: [
@@ -392,7 +442,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       // act on, not a silent no-op that looks like the app ignored them.
       setState(() => _pdfProgress = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e is TooManyPdfPages ? e.toString() : 'Could not read $name'),
+        content:
+            Text(e is TooManyPdfPages ? e.toString() : 'Could not read $name'),
       ));
     }
   }
@@ -405,7 +456,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   Future<void> _cropPending(BatchItem item) async {
     final page = item.pages.first;
     final bytes = page.memoryBytes ??
-        (page.photoId == null ? null : await PendingPhotoStore.read(page.photoId!));
+        (page.photoId == null
+            ? null
+            : await PendingPhotoStore.read(page.photoId!));
     if (!mounted) return;
     if (bytes == null) {
       setState(() => item.markFailed('that photo is no longer on this device'));
@@ -413,7 +466,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       return;
     }
     final crop = await Navigator.of(context).push<CropResult>(
-      MaterialPageRoute(builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
+      MaterialPageRoute(
+          builder: (_) => CropScreen(imageBytes: bytes, pageNumber: 1)),
     );
     if (crop == null || crop.corners.length != 4 || !mounted) return;
     setState(() {
@@ -440,7 +494,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     final folderId = _folders.currentId;
     final pages = <BatchItemPage>[];
     while (true) {
-      final file = await ImagePicker().pickImage(source: source, imageQuality: 95);
+      final file =
+          await ImagePicker().pickImage(source: source, imageQuality: 95);
       if (file == null) {
         if (pages.isEmpty) return;
         break; // cancelled a continuation page — keep what's already queued
@@ -449,14 +504,18 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       if (!mounted) return;
 
       final cropResult = await Navigator.of(context).push<CropResult>(
-        MaterialPageRoute(builder: (_) => CropScreen(imageBytes: bytes, pageNumber: pages.length + 1)),
+        MaterialPageRoute(
+            builder: (_) =>
+                CropScreen(imageBytes: bytes, pageNumber: pages.length + 1)),
       );
       if (cropResult == null || cropResult.corners.length != 4) {
         if (pages.isEmpty) return;
         break;
       }
 
-      final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
+      final photoId = tenantId == null
+          ? null
+          : await PendingPhotoStore.save(tenantId, bytes);
       pages.add(BatchItemPage(
         photoId: photoId,
         // Kept in memory only if the disk write failed — this page then
@@ -471,7 +530,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }
     if (!mounted) return;
 
-    final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: pages)..folderId = folderId;
+    final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: pages)
+      ..folderId = folderId;
     setState(() => _items.add(item));
     // Recorded before the upload starts, so a logout mid-upload still finds
     // this bill next time.
@@ -496,7 +556,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       for (final page in item.pages) {
         final bytes = await page.loadBytes();
         if (bytes == null) {
-          throw StateError('This photo is no longer on the device — please delete it and capture the bill again.');
+          throw StateError(
+              'This photo is no longer on the device — please delete it and capture the bill again.');
         }
         sourceImages.add(await ApiClient.instance.preprocess(
           imageBytes: bytes,
@@ -544,14 +605,18 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   Future<void> _removeItem(BatchItem item) async {
     if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) {
       final invoiceId = item.savedInvoiceId;
-      return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId, item: item);
+      return invoiceId == null
+          ? _say(_savedNoId)
+          : _unsave(invoiceId, item: item);
     }
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId != null) {
       try {
         // One bill is a batch of one: there is no single-bill discard.
         final reply = await ApiClient.instance.bulkDiscard([jobId]);
-        if (!reply.discarded.contains(jobId)) throw 'it is saved or still being read';
+        if (!reply.discarded.contains(jobId)) {
+          throw 'it is saved or still being read';
+        }
       } catch (e) {
         if (!mounted) return;
         // Left on screen deliberately: a bill that is still on the server
@@ -575,7 +640,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   /// back with it (the server does that whatever is sent), so there is nothing
   /// to ask, and the dialog says so. [underReview] comes from the shop's list
   /// when the caller has the row; otherwise it is read from the bill itself.
-  Future<void> _unsave(int invoiceId, {BatchItem? item, bool? underReview}) async {
+  Future<void> _unsave(int invoiceId,
+      {BatchItem? item, bool? underReview}) async {
     underReview ??= await _isUnderReview(invoiceId);
     if (!mounted) return;
     final bool removeStock;
@@ -589,7 +655,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }
     final bool removed;
     try {
-      removed = await ApiClient.instance.unsaveInvoice(invoiceId, removeStock: removeStock);
+      removed = await ApiClient.instance
+          .unsaveInvoice(invoiceId, removeStock: removeStock);
     } on ApiException catch (e) {
       // Stock already sold, or no read to go back to: nothing changed.
       if (mounted) _say("Couldn't move it back: ${e.message}");
@@ -615,7 +682,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   /// (the server decides either way).
   Future<bool> _isUnderReview(int invoiceId) async {
     try {
-      return (await ApiClient.instance.getInvoiceDetail(invoiceId)).isUnderReview;
+      return (await ApiClient.instance.getInvoiceDetail(invoiceId))
+          .isUnderReview;
     } catch (_) {
       return false;
     }
@@ -629,13 +697,17 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     final category = uploadCategory(upload);
     if (category == 'saved') {
       final invoiceId = upload.invoiceId;
-      return invoiceId == null ? _say(_savedNoId) : _unsave(invoiceId, underReview: upload.isUnderReview);
+      return invoiceId == null
+          ? _say(_savedNoId)
+          : _unsave(invoiceId, underReview: upload.isUnderReview);
     }
     final history = _uploadHistory.currentState;
     history?.forget([upload.jobId]);
     try {
       final reply = await ApiClient.instance.bulkDiscard([upload.jobId]);
-      if (!reply.discarded.contains(upload.jobId)) throw 'the server would not discard it';
+      if (!reply.discarded.contains(upload.jobId)) {
+        throw 'the server would not discard it';
+      }
     } catch (e) {
       history?.restore([upload]);
       if (mounted) _say("Couldn't remove that bill: $e");
@@ -732,7 +804,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
 
   Map<int, BatchItem> get _watching => {
         for (final i in _items)
-          if (i.jobId != null && i.status == BatchItemStatus.processing) i.jobId!: i,
+          if (i.jobId != null && i.status == BatchItemStatus.processing)
+            i.jobId!: i,
       };
 
   Future<void> _statusLoop() async {
@@ -750,7 +823,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
 
       // A bill the server is backing off on is not worth asking about until
       // it is due; it would only return "retrying" again.
-      final due = watching.entries.where((e) => !e.value.isBackingOff(_retrySweepMargin)).toList();
+      final due = watching.entries
+          .where((e) => !e.value.isBackingOff(_retrySweepMargin))
+          .toList();
       if (due.isEmpty) {
         await Future<void>.delayed(const Duration(seconds: 5));
         continue;
@@ -758,7 +833,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
 
       final JobStatusBatch batch;
       try {
-        batch = await ApiClient.instance.jobStatuses(due.map((e) => e.key).toList());
+        batch = await ApiClient.instance
+            .jobStatuses(due.map((e) => e.key).toList());
       } catch (_) {
         // A dropped connection is expected on mobile and is NOT a failed
         // bill: the server holds the request open for ~25s, so a tunnel or a
@@ -825,11 +901,14 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       } else if (job.errorKind == 'structural_validation_failed') {
         result = ExtractionResult.blank(
           job.sourceImage ?? item.sourceImages.first,
-          job.errorMessage ?? "Automatic extraction couldn't read this bill — please enter its details by hand.",
-          extraSourceImages: job.extraSourceImages ?? item.sourceImages.skip(1).toList(),
+          job.errorMessage ??
+              "Automatic extraction couldn't read this bill — please enter its details by hand.",
+          extraSourceImages:
+              job.extraSourceImages ?? item.sourceImages.skip(1).toList(),
         );
       } else {
-        setState(() => item.markFailed(job.errorMessage ?? 'extraction failed'));
+        setState(
+            () => item.markFailed(job.errorMessage ?? 'extraction failed'));
         return;
       }
       setState(() {
@@ -843,6 +922,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         item.status = result.issues.every((i) => i.field == 'seller_gstin')
             ? BatchItemStatus.pendingConfirm
             : BatchItemStatus.needsReview;
+        item.recheckedThisReview = false;
         item.result = result;
       });
     } catch (_) {
@@ -857,7 +937,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   /// any other is a fresh read.
   Future<void> _reprocessItem(BatchItem item) async {
     if (!_mayRetry()) return;
-    return item.status == BatchItemStatus.failed ? _retryFailed(item) : _processOne(item);
+    return item.status == BatchItemStatus.failed
+        ? _retryFailed(item)
+        : _processOne(item);
   }
 
   // ==================== review & save ====================
@@ -869,7 +951,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         return;
       case BatchItemStatus.saved:
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoiceId: item.savedInvoiceId!)),
+          MaterialPageRoute(
+              builder: (_) =>
+                  InvoiceDetailScreen(invoiceId: item.savedInvoiceId!)),
         );
         return;
       case BatchItemStatus.failed:
@@ -877,7 +961,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         return;
       case BatchItemStatus.pendingConfirm:
         final result = item.result!;
-        final action = await showConfirmBillDialog(context, item.label, result.invoice);
+        final action =
+            await showConfirmBillDialog(context, item.label, result.invoice);
         if (!mounted) return;
         if (action == ConfirmBillAction.save) {
           await _saveBill(item);
@@ -893,7 +978,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
           _say('That bill has not finished being read yet.');
           return;
         }
-        final action = await showConfirmBillDialog(context, item.label, result.invoice, allowEdit: false);
+        final action = await showConfirmBillDialog(
+            context, item.label, result.invoice,
+            allowEdit: false);
         if (!mounted) return;
         if (action == ConfirmBillAction.save) await _saveBill(item);
         return;
@@ -910,8 +997,12 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         title: Text(title),
         content: Text(message ?? 'Something went wrong processing this bill.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Close')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Retry')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Close')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Retry')),
         ],
       ),
     );
@@ -960,7 +1051,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
           onRevalidated: (updatedResult, hasErrors) {
             setState(() {
               item.result = updatedResult;
-              item.status = hasErrors ? BatchItemStatus.needsReview : BatchItemStatus.pendingConfirm;
+              item.status = hasErrors
+                  ? BatchItemStatus.needsReview
+                  : BatchItemStatus.pendingConfirm;
+              item.recheckedThisReview = false;
             });
             _persistBatch();
           },
@@ -984,7 +1078,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   Future<void> _saveBill(BatchItem item) async {
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId == null) {
-      setState(() => item.markFailed('This bill has not been read yet.', atSave: true));
+      setState(() =>
+          item.markFailed('This bill has not been read yet.', atSave: true));
       await _persistBatch();
       return;
     }
@@ -992,7 +1087,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     // the bill was filed.
     for (var round = 0; round < 2; round++) {
       try {
-        final saved = await ApiClient.instance.saveJob(jobId, folderId: item.folderId);
+        final saved =
+            await ApiClient.instance.saveJob(jobId, folderId: item.folderId);
         if (!mounted) return;
         setState(() {
           item.status = BatchItemStatus.saved;
@@ -1006,7 +1102,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         if (!mounted) return;
         // Its folder was deleted since the bill was filed. Not worth failing
         // the save over: file it at home and say so.
-        if (e.statusCode == 404 && e.message.contains('folder') && item.folderId != null) {
+        if (e.statusCode == 404 &&
+            e.message.contains('folder') &&
+            item.folderId != null) {
           setState(() => item.folderId = null);
           _say('That folder no longer exists — saving to Home.');
           continue;
@@ -1071,12 +1169,15 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
           invoiceIds: saved ? [savedId] : const [],
           folderId: choice.folderId,
         );
-        final moved = saved ? reply.movedInvoices.contains(savedId) : reply.movedJobs.contains(jobId);
+        final moved = saved
+            ? reply.movedInvoices.contains(savedId)
+            : reply.movedJobs.contains(jobId);
         if (!moved) throw 'it is saved, discarded or no longer in this shop';
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
       return;
     }
     if (!mounted) return;
@@ -1095,44 +1196,59 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
 
   @override
   Widget build(BuildContext context) {
-    final inFolder = _items.where((i) => i.folderId == _folders.currentId).toList();
+    final inFolder =
+        _items.where((i) => i.folderId == _folders.currentId).toList();
     // Filtering composes with the folder rather than replacing it:
     // ticking a status narrows what is in this folder, it does not
     // leave it.
     final byStatus = filterByStatus(inFolder, _statusFilter);
-    final here = _query.isEmpty ? byStatus : byStatus.where((i) => i.matchesSearch(_query)).toList();
+    final here = _query.isEmpty
+        ? byStatus
+        : byStatus.where((i) => i.matchesSearch(_query)).toList();
     final subfolders = _folders.children;
     final filtering = _statusFilter.isNotEmpty || _query.isNotEmpty;
     return SafeArea(
       child: Column(
         children: [
-          FolderBar(controller: _folders, onNewFolder: () => showNewFolderDialog(context, _folders)),
+          FolderBar(
+              controller: _folders,
+              onNewFolder: () => showNewFolderDialog(context, _folders)),
           if (_folders.loadError != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
               child: Row(children: [
                 Expanded(
                   child: Text("Couldn't load folders",
-                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 12)),
                 ),
-                TextButton(onPressed: refreshFolders, child: const Text('Retry')),
+                TextButton(
+                    onPressed: refreshFolders, child: const Text('Retry')),
               ]),
             ),
           if (_pdfProgress != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Spacing.m, vertical: Spacing.s),
-              child: Align(alignment: Alignment.centerLeft, child: Text(_pdfProgress!)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.m, vertical: Spacing.s),
+              child: Align(
+                  alignment: Alignment.centerLeft, child: Text(_pdfProgress!)),
             ),
           // Search by shop or invoice number. Shown with the status boxes, since
           // both are about narrowing a list that is there.
-          if (_items.isNotEmpty || filtering || _visible.isNotEmpty || _choosing)
+          if (_items.isNotEmpty ||
+              filtering ||
+              _visible.isNotEmpty ||
+              _choosing)
             Padding(
-              padding: const EdgeInsets.fromLTRB(Spacing.m, Spacing.xs, Spacing.m, 0),
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.m, Spacing.xs, Spacing.m, 0),
               child: TextField(
                 key: const ValueKey('bill-search'),
                 controller: _searchController,
                 textInputAction: TextInputAction.search,
-                onChanged: (typed) => setState(() => _query = normaliseSearch(typed)),
+                onChanged: (typed) =>
+                    setState(() => _query = normaliseSearch(typed)),
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: 'Search by shop or invoice number',
@@ -1148,7 +1264,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
                             setState(() => _query = '');
                           },
                         ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.card)),
                 ),
               ),
             ),
@@ -1156,7 +1273,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
           // signed-in phone means the shop's bills, not this device's. It
           // used to be gated on this device's bills alone, so exactly the
           // phone with the longest history had no way to filter it.
-          if (_items.isNotEmpty || filtering || _visible.isNotEmpty || _choosing)
+          if (_items.isNotEmpty ||
+              filtering ||
+              _visible.isNotEmpty ||
+              _choosing)
             Row(
               children: [
                 Expanded(
@@ -1168,7 +1288,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
                   ),
                 ),
                 TextButton(
-                  onPressed: _choosing ? _stopChoosing : () => setState(() => _choosing = true),
+                  onPressed: _choosing
+                      ? _stopChoosing
+                      : () => setState(() => _choosing = true),
                   child: Text(_choosing ? 'Done' : 'Select'),
                 ),
               ],
@@ -1181,7 +1303,11 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
               subfolders,
               // Not while more bills are still to be fetched: the ones that
               // match may be on a page that has not loaded.
-              empty: here.isEmpty && subfolders.isEmpty && _visible.isEmpty && _listSettled && !_visibleMore,
+              empty: here.isEmpty &&
+                  subfolders.isEmpty &&
+                  _visible.isEmpty &&
+                  _listSettled &&
+                  !_visibleMore,
               filtering: filtering,
             ),
           ),
@@ -1217,16 +1343,20 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     // include every bill this phone has sent, so only the ones that have not
     // reached the server are added; otherwise the phone's bills are added to
     // the shop's bills that are not on it.
-    final covered = _uploadHistory.currentState?.countsCoverDeviceBills ?? false;
+    final covered =
+        _uploadHistory.currentState?.countsCoverDeviceBills ?? false;
     final counts = {
-      ...statusCounts(covered ? inFolder.where((i) => (i.jobId ?? i.lastJobId) == null).toList() : inFolder),
+      ...statusCounts(covered
+          ? inFolder.where((i) => (i.jobId ?? i.lastJobId) == null).toList()
+          : inFolder),
     };
     _serverCounts.forEach((key, n) => counts[key] = (counts[key] ?? 0) + n);
     return counts;
   }
 
   @override
-  final GlobalKey<UploadHistoryState> _uploadHistory = GlobalKey<UploadHistoryState>();
+  final GlobalKey<UploadHistoryState> _uploadHistory =
+      GlobalKey<UploadHistoryState>();
 
   // ---- what each folder tile says ----
   //
@@ -1252,7 +1382,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       }
     }
     final onServer = ids.fold(0, (n, f) => n + (_folderTotals[f] ?? 0));
-    final onlyHere = _items.where((i) => (i.jobId ?? i.lastJobId) == null && ids.contains(i.folderId)).length;
+    final onlyHere = _items
+        .where(
+            (i) => (i.jobId ?? i.lastJobId) == null && ids.contains(i.folderId))
+        .length;
     return onServer + onlyHere;
   }
 
@@ -1273,7 +1406,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   /// being in upload order. A bill's place is where it was uploaded, and
   /// looking at it must not move it.
   Future<void> _adoptAndOpen(UploadSummary upload) async {
-    final existing = _items.where((i) => i.sourceImages.contains(upload.sourceImage));
+    final existing =
+        _items.where((i) => i.sourceImages.contains(upload.sourceImage));
     if (existing.isNotEmpty) {
       await _openItem(existing.first);
       return;
@@ -1287,10 +1421,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..jobId = upload.jobId
-      ..lastJobId = upload.jobId                // what Save is addressed to
+      ..lastJobId = upload.jobId // what Save is addressed to
       ..folderId = upload.folderId
       ..savedInvoiceId = upload.invoiceId
-      ..status = BatchItemStatus.processing;   // until the result is in
+      ..status = BatchItemStatus.processing; // until the result is in
 
     try {
       // The result is fetched for this one bill only — the list itself
@@ -1300,18 +1434,20 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       if (result == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That bill has not finished being read yet.')),
+          const SnackBar(
+              content: Text('That bill has not finished being read yet.')),
         );
         return;
       }
       item
         ..result = result
-        ..jobId = null                          // it is finished; nothing to poll
+        ..jobId = null // it is finished; nothing to poll
         ..status = upload.invoiceId != null
             ? BatchItemStatus.saved
             : (uploadCategory(upload) == 'review'
                 ? BatchItemStatus.needsReview
-                : BatchItemStatus.pendingConfirm);
+                : BatchItemStatus.pendingConfirm)
+        ..recheckedThisReview = false;
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1338,7 +1474,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   Future<void> _offerRetryForUpload(UploadSummary upload) async {
     String? why;
     try {
-      why = (await ApiClient.instance.getExtractionJob(upload.jobId)).errorMessage;
+      why = (await ApiClient.instance.getExtractionJob(upload.jobId))
+          .errorMessage;
     } catch (_) {
       // Not worth refusing a retry over: the dialog just says less.
     }
@@ -1355,7 +1492,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     if (!_mayRetry()) return;
     // The server counts this bill in the box it is in now; it is about to be
     // read again, so one moves from that box to Working at once.
-    _uploadHistory.currentState?.shiftCategory(upload.folderId, uploadCategory(upload), 'working');
+    _uploadHistory.currentState
+        ?.shiftCategory(upload.folderId, uploadCategory(upload), 'working');
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..lastJobId = upload.jobId
@@ -1369,7 +1507,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
 
   /// ONE list: this device's bills and the shop's, three across, in the order
   /// they were uploaded. Folder tiles sit above them.
-  Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders, {required bool empty, required bool filtering}) {
+  Widget _buildGrid(List<BatchItem> items, List<Folder> subfolders,
+      {required bool empty, required bool filtering}) {
     // This device's bills as cards on the shared list. Each carries the place
     // it sits — its upload order — so it lands among the shop's bills
     // rather than above them all.
@@ -1393,11 +1532,18 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
               // ways to do the same thing on one screen.
               // Processed bills only — failed ones included, none still being
               // read.
-              onDelete: !_choosing && !matchesStatusFilter(item, 'working') ? () => _removeItem(item) : null,
-              onReprocess: item.canReprocess(choosing: _choosing) ? () => _reprocessItem(item) : null,
+              onDelete: !_choosing && !matchesStatusFilter(item, 'working')
+                  ? () => _removeItem(item)
+                  : null,
+              onReprocess: item.canReprocess(choosing: _choosing)
+                  ? () => _reprocessItem(item)
+                  : null,
+              onRecheckNeedsReview: _recheckNeedsReview,
               // Not while an upload or extraction is in flight; its folder
               // is read when it is saved, so it can be moved any time after.
-              onMove: !_choosing && item.status != BatchItemStatus.preparing && item.status != BatchItemStatus.processing
+              onMove: !_choosing &&
+                      item.status != BatchItemStatus.preparing &&
+                      item.status != BatchItemStatus.processing
                   ? () => _moveItem(item)
                   : null,
             ),
@@ -1405,56 +1551,67 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
         }(),
     ];
 
-    return CustomScrollView(
-      slivers: [
-        // Shown only when the screen is empty of EVERYTHING — this
-        // device's bills and the shop's alike, and only once the shop's
-        // list has actually answered. It used to depend on the local grid
-        // alone, so a new phone greeted a shop of 214 bills with an advert
-        // for the feature it was already using.
-        if (empty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: filtering
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(_query.isNotEmpty
-                          ? 'No bill matches that search'
-                          : 'Nothing here matches those statuses'),
+    return RefreshIndicator(
+      // An explicit pull means "give me the truth now" (DAS-76): a full
+      // resync of the shop's list — reload(), not refresh(), since refresh()
+      // only touches the newest page — plus every locally-held bill still
+      // sitting in needsReview, which reload() alone would not touch (its
+      // card is drawn from the local copy, not the shop list; see
+      // UploadHistory's own doc comment on why).
+      onRefresh: () => Future.wait([
+        _uploadHistory.currentState?.reload() ?? Future.value(),
+        recheckNeedsReview(),
+      ]),
+      child: CustomScrollView(
+        slivers: [
+          // Shown only when the screen is empty of EVERYTHING — this
+          // device's bills and the shop's alike, and only once the shop's
+          // list has actually answered. It used to depend on the local grid
+          // alone, so a new phone greeted a shop of 214 bills with an advert
+          // for the feature it was already using.
+          if (empty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: filtering
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(_query.isNotEmpty
+                            ? 'No bill matches that search'
+                            : 'Nothing here matches those statuses'),
+                      ),
+                    )
+                  : CaptureEmptyState(
+                      onTakePhoto: () => _addPhoto(ImageSource.camera),
+                      onPickFromGallery: _pickManyFromGallery,
+                      onPickPdf: _pickPdf,
                     ),
-                  )
-                : CaptureEmptyState(
-                    onTakePhoto: () => _addPhoto(ImageSource.camera),
-                    onPickFromGallery: _pickManyFromGallery,
-                    onPickPdf: _pickPdf,
-                  ),
+            ),
+          if (subfolders.isNotEmpty)
+            folderTileGrid(
+              folders: subfolders,
+              onOpen: (f) => _folders.open(f.id),
+              onMenu: _openFolderMenu,
+              subtitleOf: _folderSubtitle,
+            ),
+          UploadHistory(
+            key: _uploadHistory,
+            onFolderTotals: _onFolderTotals,
+            query: _query,
+            onRetry: _retryUpload,
+            onDelete: _discardUpload,
+            localItems: _items,
+            localEntries: localEntries,
+            folderId: _folders.currentId,
+            selected: _statusFilter,
+            choosing: _choosing,
+            chosen: _chosen,
+            onToggle: _toggleChosen,
+            onOpen: _adoptAndOpen,
+            onEntries: _onEntries,
           ),
-        if (subfolders.isNotEmpty)
-          folderTileGrid(
-            folders: subfolders,
-            onOpen: (f) => _folders.open(f.id),
-            onMenu: _openFolderMenu,
-            subtitleOf: _folderSubtitle,
-          ),
-        UploadHistory(
-          key: _uploadHistory,
-          onFolderTotals: _onFolderTotals,
-          query: _query,
-          onRetry: _retryUpload,
-          onDelete: _discardUpload,
-          localItems: _items,
-          localEntries: localEntries,
-          folderId: _folders.currentId,
-          selected: _statusFilter,
-          choosing: _choosing,
-          chosen: _chosen,
-          onToggle: _toggleChosen,
-          onOpen: _adoptAndOpen,
-          onEntries: _onEntries,
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
-

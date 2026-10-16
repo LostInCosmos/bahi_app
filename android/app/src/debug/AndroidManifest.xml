@@ -4,4 +4,10 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android blocks plain http:// to any host by default since API 28.
+         Debug-only (this manifest never merges into a release build, so the
+         production app stays unable to be pointed anywhere but https) — lets
+         a debug build log in against a local backend over the LAN, the same
+         case iOS needs NSAppTransportSecurity for (see the vault). -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

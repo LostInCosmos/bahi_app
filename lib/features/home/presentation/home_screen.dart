@@ -19,7 +19,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const _titles = ['New bills', 'Purchases', 'Inventory', 'New sale', 'Sales'];
+  static const _titles = [
+    'New bills',
+    'Purchases',
+    'Inventory',
+    'New sale',
+    'Sales'
+  ];
 
   int _tab = 0;
   final _captureKey = GlobalKey<CaptureScreenState>();
@@ -31,15 +37,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     await ApiClient.instance.logout();
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   void _openAccount() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const AccountScreen()));
   }
 
   void _openVoiceCommand() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const VoiceCommandScreen()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const VoiceCommandScreen()));
   }
 
   void _goToPurchases() {
@@ -52,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (i) {
       case 0:
         _captureKey.currentState?.refreshFolders();
+        _captureKey.currentState?.recheckNeedsReview();
         break;
       case 1:
         _purchasesKey.currentState?.refresh();
@@ -88,9 +98,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          IconButton(onPressed: _openVoiceCommand, icon: const Icon(Icons.record_voice_over_outlined), tooltip: 'Voice command'),
-          IconButton(onPressed: _openAccount, icon: const Icon(Icons.storefront_outlined), tooltip: 'Account'),
-          IconButton(onPressed: _logout, icon: const Icon(Icons.logout), tooltip: 'Log out'),
+          IconButton(
+              onPressed: _openVoiceCommand,
+              icon: const Icon(Icons.record_voice_over_outlined),
+              tooltip: 'Voice command'),
+          IconButton(
+              onPressed: _openAccount,
+              icon: const Icon(Icons.storefront_outlined),
+              tooltip: 'Account'),
+          IconButton(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout),
+              tooltip: 'Log out'),
         ],
       ),
       body: IndexedStack(index: _tab, children: screens),
@@ -98,11 +117,26 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _tab,
         onDestinationSelected: _selectTab,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.camera_alt_outlined), selectedIcon: Icon(Icons.camera_alt), label: 'Capture'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Purchases'),
-          NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: 'Inventory'),
-          NavigationDestination(icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart), label: 'Sell'),
-          NavigationDestination(icon: Icon(Icons.receipt_outlined), selectedIcon: Icon(Icons.receipt), label: 'Sales'),
+          NavigationDestination(
+              icon: Icon(Icons.camera_alt_outlined),
+              selectedIcon: Icon(Icons.camera_alt),
+              label: 'Capture'),
+          NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined),
+              selectedIcon: Icon(Icons.receipt_long),
+              label: 'Purchases'),
+          NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              selectedIcon: Icon(Icons.inventory_2),
+              label: 'Inventory'),
+          NavigationDestination(
+              icon: Icon(Icons.shopping_cart_outlined),
+              selectedIcon: Icon(Icons.shopping_cart),
+              label: 'Sell'),
+          NavigationDestination(
+              icon: Icon(Icons.receipt_outlined),
+              selectedIcon: Icon(Icons.receipt),
+              label: 'Sales'),
         ],
       ),
     );
