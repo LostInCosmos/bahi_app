@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
+import 'folder_api.dart';
 import '../models/folder.dart';
 
 /// The folder tree plus where a screen currently is in it. Each screen that

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../data/capture_api.dart';
 import '../models/batch_item.dart';
 import '../models/bill_search.dart';
 import '../models/list_entry.dart';

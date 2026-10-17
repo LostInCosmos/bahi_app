@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/dastavez_logo.dart';
 
-import '../../../core/api/api_client.dart';
 import '../../auth/presentation/account_screen.dart';
 import '../../capture/presentation/capture_screen.dart';
 import '../../inventory/presentation/inventory_screen.dart';
-import '../../auth/presentation/login_screen.dart';
+import '../../auth/presentation/sign_out.dart';
 import '../../invoice/presentation/purchases_screen.dart';
 import '../../sales/presentation/sales_history_screen.dart';
 import '../../sales/presentation/sales_screen.dart';
@@ -33,13 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _inventoryKey = GlobalKey<InventoryScreenState>();
   final _salesKey = GlobalKey<SalesScreenState>();
   final _salesHistoryKey = GlobalKey<SalesHistoryScreenState>();
-
-  Future<void> _logout() async {
-    await ApiClient.instance.logout();
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginScreen()));
-  }
 
   void _openAccount() {
     Navigator.of(context)
@@ -107,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: const Icon(Icons.storefront_outlined),
               tooltip: 'Account'),
           IconButton(
-              onPressed: _logout,
+              onPressed: () => signOut(context),
               icon: const Icon(Icons.logout),
               tooltip: 'Log out'),
         ],

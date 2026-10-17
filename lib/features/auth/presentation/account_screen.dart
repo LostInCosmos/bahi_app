@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/auth_api.dart';
 import '../models/account.dart';
 import '../../../app/theme/app_theme.dart';
 

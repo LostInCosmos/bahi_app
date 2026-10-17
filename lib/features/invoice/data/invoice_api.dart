@@ -1,4 +1,24 @@
-part of '../../../core/api/api_client.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+
+import '../../../core/api/api_client.dart';
+import '../../../core/utils/bill_image_cache.dart';
+import '../../../core/utils/offset_2d.dart';
+import '../models/invoice.dart';
+import '../models/job_status.dart';
+import '../models/purchase_export.dart';
+
+/// What the purchase range means: bills by the date they were UPLOADED, not
+/// the date printed on them. Sent only with a date, because without one the
+/// basis changes nothing; the sales range stays on [ApiClient.dateRange].
+const _uploadedBasis = 'uploaded';
+
+Map<String, String> _purchaseDateRange(String? startDate, String? endDate) => {
+      ...ApiClient.dateRange(startDate, endDate),
+      if (startDate != null || endDate != null) 'date_basis': _uploadedBasis,
+    };
 
 extension InvoiceApi on ApiClient {
   /// Uploads the raw photo plus the four corners the user dragged onto the
@@ -10,13 +30,13 @@ extension InvoiceApi on ApiClient {
     required List<Offset2D> corners,
     required int rotationDegrees,
   }) async {
-    final res = await _multipart('/invoices/preprocess', (request) {
+    final res = await multipart('/invoices/preprocess', (request) {
       request
         ..fields['corners'] = jsonEncode(corners.map((c) => {'x': c.x, 'y': c.y}).toList())
         ..fields['rotation_degrees'] = rotationDegrees.toString()
         ..files.add(http.MultipartFile.fromBytes('file', imageBytes, filename: filename));
     });
-    return ApiClient._object(res)['source_image'] as String;
+    return ApiClient.jsonObject(res)['source_image'] as String;
   }
 
   /// The corrected bill photo, served from the device if it has been seen
@@ -41,7 +61,7 @@ extension InvoiceApi on ApiClient {
       final cached = await BillImageCache.read(key);
       if (cached != null) return cached;
     }
-    final res = await _get('/invoices/image/$key', timeout: ApiClient.transferTimeout);
+    final res = await get('/invoices/image/$key', timeout: ApiClient.transferTimeout);
     await BillImageCache.write(key, res.bodyBytes);
     return res.bodyBytes;
   }
@@ -55,13 +75,13 @@ extension InvoiceApi on ApiClient {
   /// background worker, not inline in this request — so the caller polls
   /// getExtractionJob() until it reaches a terminal status.
   Future<int> submitExtraction(String sourceImage, {List<String> extraSourceImages = const []}) async {
-    final res = await _multipart('/invoices/extract', (request) {
+    final res = await multipart('/invoices/extract', (request) {
       request.fields['source_image'] = sourceImage;
       for (final img in extraSourceImages) {
         request.files.add(http.MultipartFile.fromString('extra_source_images', img));
       }
     }, timeout: ApiClient.readTimeout);
-    return ApiClient._object(res)['job_id'] as int;
+    return ApiClient.jsonObject(res)['job_id'] as int;
   }
 
   /// Re-queues an already-submitted job for another Gemini attempt — the
@@ -71,7 +91,7 @@ extension InvoiceApi on ApiClient {
   /// count and Gemini cost across several admin-dashboard entries instead
   /// of one honest total). Same submit-then-poll shape as submitExtraction.
   Future<int> retryExtraction(int jobId) async =>
-      ApiClient._object(await _post('/invoices/extract/$jobId/retry'))['job_id'] as int;
+      ApiClient.jsonObject(await post('/invoices/extract/$jobId/retry'))['job_id'] as int;
 
   /// Status for every bill still in flight, in ONE request the server holds
   /// open until something changes.
@@ -87,70 +107,20 @@ extension InvoiceApi on ApiClient {
   /// one. A throw here means "ask again", never "the bill failed": every
   /// request re-reads current state, so nothing is missed by reconnecting.
   Future<JobStatusBatch> jobStatuses(List<int> jobIds, {bool wait = true}) async {
-    final res = await _postJson(
+    final res = await postJson(
       '/invoices/extract/status',
       {'job_ids': jobIds, 'wait': wait},
       timeout: ApiClient.heldTimeout,
     );
-    return JobStatusBatch.fromJson(ApiClient._object(res));
-  }
-
-  /// Every bill this SHOP has uploaded, newest first — not just the ones
-  /// this device is holding. Without it a reinstall or a second phone
-  /// shows an empty capture screen however long the shop's history is.
-  ///
-  /// Keyset paging on [beforeId], replayed from the previous page's
-  /// `nextBeforeId`; the server caps [limit] at 200.
-  ///
-  /// [categories] (status boxes: working, check, review, saved, failed) and
-  /// [folder] (`root` for home, or a folder id) narrow the list on the server
-  /// before it is paged, so a filtered list finds its bills on any page.
-  Future<UploadPage> listUploads({
-    int limit = 50,
-    int? beforeId,
-    Set<String> categories = const {},
-    String? folder,
-  }) async {
-    final res = await _get('/invoices/extract', query: {
-      'limit': '$limit',
-      if (beforeId != null) 'before_id': '$beforeId',
-      if (categories.isNotEmpty) 'category': (categories.toList()..sort()).join(','),
-      if (folder != null) 'folder': folder,
-    });
-    return UploadPage.fromJson(ApiClient._object(res));
-  }
-
-  /// File many bills at once: unsaved uploads by job id, saved bills by
-  /// invoice id. One request, and the only way to file an upload — a single
-  /// bill is a batch of one. Bills the server could not move are simply
-  /// missing from the reply.
-  Future<BulkMoveReply> bulkMove({
-    List<int> jobIds = const [],
-    List<int> invoiceIds = const [],
-    required int? folderId,
-  }) async {
-    final res = await _postJson(
-      '/invoices/bulk-move',
-      {'job_ids': jobIds, 'invoice_ids': invoiceIds, 'folder_id': folderId},
-      timeout: ApiClient.workTimeout,
-    );
-    return BulkMoveReply.fromJson(ApiClient._object(res));
-  }
-
-  /// Take many uploads out of this shop's list in one request. Bills the
-  /// server would not discard (saved, still being read) are missing from the
-  /// reply.
-  Future<BulkDiscardReply> bulkDiscard(List<int> jobIds) async {
-    final res = await _postJson('/invoices/bulk-discard', {'job_ids': jobIds}, timeout: ApiClient.workTimeout);
-    return BulkDiscardReply.fromJson(ApiClient._object(res));
+    return JobStatusBatch.fromJson(ApiClient.jsonObject(res));
   }
 
   Future<ExtractionJob> getExtractionJob(int jobId) async =>
-      ExtractionJob.fromJson(ApiClient._object(await _get('/invoices/extract/$jobId')));
+      ExtractionJob.fromJson(ApiClient.jsonObject(await get('/invoices/extract/$jobId')));
 
   Future<RevalidateResult> revalidateInvoice(InvoiceData invoice) async {
-    final res = await _postJson('/invoices/revalidate', invoice.toJson(), timeout: ApiClient.workTimeout);
-    return RevalidateResult.fromJson(ApiClient._object(res));
+    final res = await postJson('/invoices/revalidate', invoice.toJson(), timeout: ApiClient.workTimeout);
+    return RevalidateResult.fromJson(ApiClient.jsonObject(res));
   }
 
   Future<int> saveInvoice(
@@ -159,7 +129,7 @@ extension InvoiceApi on ApiClient {
     bool overrideErrors = false,
     int? folderId,
   }) async {
-    final res = await _postJson(
+    final res = await postJson(
         '/invoices',
         {
           'invoice': invoice.toJson(),
@@ -168,7 +138,7 @@ extension InvoiceApi on ApiClient {
           'folder_id': folderId,
         },
         timeout: ApiClient.workTimeout);
-    return ApiClient._object(res)['invoice_id'] as int;
+    return ApiClient.jsonObject(res)['invoice_id'] as int;
   }
 
   /// Saves what the server read from this bill — its current result, the
@@ -177,10 +147,10 @@ extension InvoiceApi on ApiClient {
   /// flagged bills save the same way. Throws ApiException: 404 (not this
   /// shop's job, or its folder is gone), 409 (already saved), 422 (not read yet).
   Future<SavedJob> saveJob(int jobId, {int? folderId}) async {
-    final res = await _postJson(
+    final res = await postJson(
         '/invoices/extract/$jobId/save', {if (folderId != null) 'folder_id': folderId},
         timeout: ApiClient.workTimeout);
-    final body = ApiClient._object(res);
+    final body = ApiClient.jsonObject(res);
     return SavedJob(invoiceId: body['invoice_id'] as int, reviewState: body['review_state'] as String?);
   }
 
@@ -191,22 +161,22 @@ extension InvoiceApi on ApiClient {
     int? folderId,
     bool unfiled = false,
   }) async {
-    final res = await _get('/invoices', query: {
-      ...ApiClient._purchaseDateRange(startDate, endDate),
+    final res = await get('/invoices', query: {
+      ..._purchaseDateRange(startDate, endDate),
       if (vendorGstin != null && vendorGstin.isNotEmpty) 'vendor_gstin': vendorGstin,
       // Neither given = every bill, in any folder. `unfiled` is home.
       if (folderId != null) 'folder_id': '$folderId' else if (unfiled) 'unfiled': 'true',
     });
-    return ApiClient._list(res).map((e) => InvoiceSummary.fromJson(e as Map<String, dynamic>)).toList();
+    return ApiClient.jsonList(res).map((e) => InvoiceSummary.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<InvoiceDetail> getInvoiceDetail(int invoiceId) async =>
-      InvoiceDetail.fromJson(ApiClient._object(await _get('/invoices/$invoiceId')));
+      InvoiceDetail.fromJson(ApiClient.jsonObject(await get('/invoices/$invoiceId')));
 
   /// Reverses the stock this invoice added to inventory, then removes it.
   /// Throws ApiException(409) if some of that stock has already been sold —
   /// the caller should surface `.message` rather than retry.
-  Future<void> deleteInvoice(int invoiceId) => _delete('/invoices/$invoiceId');
+  Future<void> deleteInvoice(int invoiceId) => delete('/invoices/$invoiceId');
 
   /// Send a saved bill back to Not saved — or Needs review, if its read had
   /// issues — in the folder it was filed in. The bill's read stays; the
@@ -215,10 +185,10 @@ extension InvoiceApi on ApiClient {
   /// ApiException(409) if some of that stock has already been sold, or if
   /// there is no read to go back to — surface `.message`.
   Future<bool> unsaveInvoice(int invoiceId, {required bool removeStock}) async {
-    final res = await _postJson('/invoices/$invoiceId/unsave', {'remove_stock': removeStock});
+    final res = await postJson('/invoices/$invoiceId/unsave', {'remove_stock': removeStock});
     // Whether the stock left inventory, as the server says. A server that
     // predates the field is taken at the shopkeeper's word.
-    return (ApiClient._object(res)['stock_removed'] as bool?) ?? removeStock;
+    return (ApiClient.jsonObject(res)['stock_removed'] as bool?) ?? removeStock;
   }
 
   /// The purchases spreadsheet. A date range selects the bills by the date they
@@ -231,9 +201,9 @@ extension InvoiceApi on ApiClient {
     String? vendorGstin,
     int? folderId,
   }) async {
-    final res = await _get('/export/excel',
+    final res = await get('/export/excel',
         query: {
-          ...ApiClient._purchaseDateRange(startDate, endDate),
+          ..._purchaseDateRange(startDate, endDate),
           if (vendorGstin != null && vendorGstin.isNotEmpty) 'vendor_gstin': vendorGstin,
           if (folderId != null) 'folder_id': '$folderId',
         },
@@ -245,7 +215,7 @@ extension InvoiceApi on ApiClient {
     // A range was sent as "uploaded between": a server that ignored that
     // would have matched the bill dates, and the file would not be the set
     // the screen shows.
-    if ((startDate != null || endDate != null) && export.dateBasis != ApiClient._uploadedBasis) {
+    if ((startDate != null || endDate != null) && export.dateBasis != _uploadedBasis) {
       throw ApiException(res.statusCode, "This server can't export by upload date yet.");
     }
     return export;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/voice_api.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/utils/recording_error.dart';
 import '../widgets/recording.dart';

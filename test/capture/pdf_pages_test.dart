@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gst_bill_app/core/api/api_client.dart';
+import 'package:gst_bill_app/core/utils/offset_2d.dart';
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
 import 'package:gst_bill_app/features/capture/models/pdf_pages.dart';
 

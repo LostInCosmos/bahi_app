@@ -1,13 +1,14 @@
-part of '../../../core/api/api_client.dart';
+import '../../../core/api/api_client.dart';
+import '../models/product.dart';
 
 extension InventoryApi on ApiClient {
   Future<List<ProductSummary>> searchProducts({String? q}) async {
-    final res = await _get('/inventory/products', query: {if (q != null && q.isNotEmpty) 'q': q});
-    return ApiClient._list(res).map((e) => ProductSummary.fromJson(e as Map<String, dynamic>)).toList();
+    final res = await get('/inventory/products', query: {if (q != null && q.isNotEmpty) 'q': q});
+    return ApiClient.jsonList(res).map((e) => ProductSummary.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<ProductDetail> getProductDetail(int productId) async =>
-      ProductDetail.fromJson(ApiClient._object(await _get('/inventory/products/$productId')));
+      ProductDetail.fromJson(ApiClient.jsonObject(await get('/inventory/products/$productId')));
 
   /// Creates a product that doesn't exist yet, plus its first batch — for a
   /// screen (like voice order "Add item") that expected to just pick an
@@ -21,13 +22,13 @@ extension InventoryApi on ApiClient {
     required String unit,
     double gstPct = 0,
   }) async {
-    final res = await _postJson('/inventory/products', {
+    final res = await postJson('/inventory/products', {
       'name': name,
       'mrp': mrp,
       'quantity': quantity,
       'unit': unit,
       'gst_pct': gstPct,
     });
-    return ProductSummary.fromJson(ApiClient._object(res));
+    return ProductSummary.fromJson(ApiClient.jsonObject(res));
   }
 }
