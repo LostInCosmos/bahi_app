@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/auth_api.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/widgets/dastavez_logo.dart';
-import '../../home/presentation/home_screen.dart';
+import '../../../core/navigation/app_routes.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -58,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      Navigator.of(context).pushReplacementNamed(AppRoutes.home);
     } catch (e) {
       HapticFeedback.heavyImpact();
       if (mounted) setState(() => _error = e.toString());

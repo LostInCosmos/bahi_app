@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/sale_api.dart';
 import '../models/sale.dart';
 
 /// Completing the sale is the one moment stock actually leaves inventory —

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/inventory_api.dart';
 import '../models/product.dart';
 import '../../../app/theme/app_theme.dart';
 import 'product_detail_screen.dart';

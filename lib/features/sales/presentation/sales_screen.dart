@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../inventory/data/inventory_api.dart';
+import '../../voice/data/voice_api.dart';
 import '../../inventory/models/product.dart';
 import '../models/sale.dart';
 import '../../voice/models/voice.dart';

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/invoice_api.dart';
 import '../models/invoice.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {

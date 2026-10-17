@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
 import 'package:gst_bill_app/features/invoice/models/invoice.dart';
+import 'package:gst_bill_app/features/invoice/models/job_status.dart';
 
 // DAS-19. One held request now watches the whole batch instead of a 2-second
 // timer per bill, so what the card believes comes from a JobStatusBrief

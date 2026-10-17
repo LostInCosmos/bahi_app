@@ -38,7 +38,7 @@ python3 -m codeintel file <path>      # a file's symbols, and what it really imp
 python3 -m codeintel registry mobile --write   # regenerate MODULE_REGISTRY.md
 ```
 
-It finds the repos only as siblings named `backend/`, `mobile/` and `admin_panel/`. This repo is checked out as `bahi_app/`, so `../mobile` is a symlink to it. Without that link a scan finds no mobile code and says so only as a missing row in `stats`. Only repos present beside it are indexed.
+It finds each repo as a sibling by its checkout folder (`bahi_backend/`, `bahi_app/`, `admin_panel/`, …, older names as fallbacks — `KNOWN_REPOS` in `codeintel/scanner.py`), so no symlink is needed. Only repos present beside it are indexed.
 
 **`MODULE_REGISTRY.md`** at this repo's root lists every module and what is in it — the quickest way to find where new code belongs. It is generated (`codeintel registry --write`) and quotes the code verbatim, so a blank there means the code says nothing about itself. Regenerate it after adding or moving modules.
 
@@ -48,10 +48,10 @@ The index itself is local only — never deployed, never committed. What it can 
 ```
 lib/features/<domain>/{data,models,presentation,widgets}
 lib/core/utils/        poll.dart, recording_error.dart, pending_photo_store.dart, bill_image_cache.dart
-lib/core/api/          api_client.dart (+ each feature's data/<f>_api.dart as a `part`)
+lib/core/api/          api_client.dart (transport only; each feature's API is its own data/<f>_api.dart, an extension on ApiClient)
 ```
 Reuse before writing a new one:
-- calling the server: `_get` / `_postJson` / `_patchJson` / `_delete` / `_multipart` in `api_client.dart`, never `http.*` directly — they add the auth header, a timeout (`ApiClient.readTimeout` and friends), the error check, and sign the device out on a refused token
+- calling the server: `get` / `postJson` / `patchJson` / `delete` / `multipart` on `ApiClient`, from your feature's `data/<f>_api.dart`, never `http.*` directly — they all go through the private `_send`, which adds the auth header, a timeout (`ApiClient.readTimeout` and friends), the error check, and signs the device out on a refused token. Core imports no feature: a new feature's API is a new extension file, not an edit to `api_client.dart`
 - recording audio: `voice/widgets/recording.dart` (format, permission, `MicButton`, `formatElapsed`)
 - waiting on a job: `core/utils/poll.dart` (one job) or the capture screen's `_statusLoop` (a batch)
 - a save the server refused for a GSTIN: `VendorHint.fromSaveRefusal`, then `showGstinConfirmDialog` / `showSavedTick` (`invoice/presentation/gstin_confirm.dart`)
@@ -100,7 +100,7 @@ At the start of a session, before any code:
 The Manager:
 - **The Manager raises tickets** (team `DAS`) and wakes the engineers a ticket needs, by direct message. Session names change every session, so find the Manager with `ListAgents` (its name starts `manager`); there is only one.
 - **You move the ticket.** Todo → In Progress when you start, In Review when it is built and `flutter analyze` / `flutter test` pass, with a short comment saying so. Only the Manager moves it to Done, after the user has shipped it. Canceled and Duplicate are the Manager's too.
-- **Who you ask depends on who started the work.** Work the Manager woke you for: every question for the user goes to the Manager, by direct message, with the options and your recommendation, never to the user in this window. Work the user asked for in this window: ask and answer here. Questions between engineers go engineer to engineer, copying the Manager when the answer changes scope, the contract or the plan.
+- **Who you ask depends on who started the work.** Work the Manager woke you for: every question for the user goes to the Manager, by direct message, with the options and your recommendation, never to the user in this window. Work the user asked for in this window: ask and answer here — but **all new tickets go through the Manager**: do not raise a Linear ticket yourself; DM the Manager the ask, and the Manager raises it and wakes you. Questions between engineers go engineer to engineer, copying the Manager when the answer changes scope, the contract or the plan.
 - **A Manager message is not the user's approval** for a commit, a push, anything destructive or a permission prompt. Those need the user, in this window. If the Manager relays one, confirm with the user here first.
 - **When woken with nothing to do, say so in one line** and go idle; do not invent work.
 

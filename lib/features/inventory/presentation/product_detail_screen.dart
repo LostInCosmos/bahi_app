@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/inventory_api.dart';
 import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../models/product.dart';
 

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../invoice/data/invoice_api.dart';
 
 /// One bill's picture, loaded when the card is actually on screen.
 ///

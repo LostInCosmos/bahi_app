@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import '../../../core/api/api_client.dart';
+import '../../../core/utils/offset_2d.dart';
 import '../../../core/utils/pending_photo_store.dart';
 import '../../invoice/models/invoice.dart';
 

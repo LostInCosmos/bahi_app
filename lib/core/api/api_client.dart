@@ -5,38 +5,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../features/auth/models/account.dart';
-import '../../features/capture/models/bulk.dart';
-import '../../features/capture/models/upload_summary.dart';
-import '../../features/folders/models/folder.dart';
-import '../../features/invoice/models/invoice.dart';
-import '../../features/invoice/models/purchase_export.dart';
-import '../../features/inventory/models/product.dart';
-import '../../features/sales/models/sale.dart';
-import '../../features/voice/models/voice.dart';
-import '../utils/bill_image_cache.dart';
 import 'api_exception.dart';
 
 export 'api_exception.dart';
 
-part '../../features/auth/data/auth_api.dart';
-part '../../features/invoice/data/invoice_api.dart';
-part '../../features/folders/data/folder_api.dart';
-part '../../features/inventory/data/inventory_api.dart';
-part '../../features/sales/data/sale_api.dart';
-part '../../features/voice/data/voice_api.dart';
-
-/// Minimal (x, y) pair — avoids pulling in dart:ui's Offset in a file that
-/// otherwise has no Flutter widget dependency.
-class Offset2D {
-  final double x;
-  final double y;
-  const Offset2D(this.x, this.y);
-}
 
 /// True in any non-release build (debug/profile), where the server-address
 /// field has always been shown — OR in a release build explicitly compiled
@@ -62,14 +37,18 @@ enum VersionGateLevel { ok, nudge, hardBlock }
 /// things on an emulator (10.0.2.2), a physical device (the host's LAN IP),
 /// and a desktop build.
 ///
-/// The actual endpoint methods live in extensions on this class, split by
-/// domain into api/*.dart (auth, invoices, inventory, sales, voice) via the
-/// `part` directives above — they're still one library and one effective
-/// class, so every call site keeps using `ApiClient.instance.someMethod()`
-/// exactly as before regardless of which file someMethod is physically in.
-/// This class itself holds only the shared transport plumbing every domain
-/// needs (base URL/token state, the auth header, URI building, error
-/// decoding).
+/// The endpoint methods live in each feature's own `data/<feature>_api.dart`,
+/// as an `extension` on this class — a caller imports that file and keeps
+/// writing `ApiClient.instance.someMethod()`. This class holds only the
+/// shared transport every feature needs (base URL and token state, the auth
+/// header, timeouts, error decoding) and knows nothing about any feature:
+/// core imports no feature, so adding one never edits this file (DAS-86).
+///
+/// The request helpers ([get], [postJson], …) are public so those extensions
+/// can live in their own libraries. Every one still goes through [_send],
+/// which stays private — so every request keeps its auth header, timeout,
+/// version check and 401 handling. Call the server through them, never
+/// through `http.*` directly.
 class ApiClient {
   ApiClient._internal();
   static final ApiClient instance = ApiClient._internal();
@@ -122,7 +101,7 @@ class ApiClient {
     _appPlatform = Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'other');
   }
 
-  Future<void> _saveBusinessType(String type) async {
+  Future<void> saveBusinessType(String type) async {
     businessTypeNotifier.value = type;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('business_type', type);
@@ -134,7 +113,9 @@ class ApiClient {
     await prefs.setString('base_url', url);
   }
 
-  Future<void> _saveToken(String token) async {
+  /// Public only so the auth feature's login and signup can call it. The
+  /// server checks every token, so a bad one costs a 401 and a sign-out.
+  Future<void> saveToken(String token) async {
     this.token = token;
     await _secureStorage.write(key: 'token', value: token);
   }
@@ -282,22 +263,22 @@ class ApiClient {
     return res;
   }
 
-  Future<http.Response> _get(String path, {Map<String, String>? query, Duration timeout = readTimeout}) =>
+  Future<http.Response> get(String path, {Map<String, String>? query, Duration timeout = readTimeout}) =>
       _send((h) => http.get(_uri(path, query), headers: h), timeout: timeout);
 
-  Future<http.Response> _post(String path, {Duration timeout = readTimeout}) =>
+  Future<http.Response> post(String path, {Duration timeout = readTimeout}) =>
       _send((h) => http.post(_uri(path), headers: h), timeout: timeout);
 
-  Future<http.Response> _postJson(String path, Object body, {bool auth = true, Duration timeout = readTimeout}) =>
+  Future<http.Response> postJson(String path, Object body, {bool auth = true, Duration timeout = readTimeout}) =>
       _send((h) => http.post(_uri(path), headers: h, body: jsonEncode(body)), auth: auth, json: true, timeout: timeout);
 
-  Future<http.Response> _patchJson(String path, Object body) =>
+  Future<http.Response> patchJson(String path, Object body) =>
       _send((h) => http.patch(_uri(path), headers: h, body: jsonEncode(body)), json: true);
 
-  Future<http.Response> _delete(String path) => _send((h) => http.delete(_uri(path), headers: h));
+  Future<http.Response> delete(String path) => _send((h) => http.delete(_uri(path), headers: h));
 
   /// A multipart form, built by [build] — photos and recordings.
-  Future<http.Response> _multipart(
+  Future<http.Response> multipart(
     String path,
     FutureOr<void> Function(http.MultipartRequest request) build, {
     Map<String, String>? query,
@@ -310,19 +291,9 @@ class ApiClient {
       }, timeout: timeout);
 
   /// The date filter purchases and sales share, keeping only the ends that are set.
-  static Map<String, String> _dateRange(String? startDate, String? endDate) => {
+  static Map<String, String> dateRange(String? startDate, String? endDate) => {
         if (startDate != null) 'start_date': startDate,
         if (endDate != null) 'end_date': endDate,
-      };
-
-  /// What the purchase range means: bills by the date they were UPLOADED, not
-  /// the date printed on them. Sent only with a date, because without one the
-  /// basis changes nothing; the sales range stays on [_dateRange].
-  static const _uploadedBasis = 'uploaded';
-
-  static Map<String, String> _purchaseDateRange(String? startDate, String? endDate) => {
-        ..._dateRange(startDate, endDate),
-        if (startDate != null || endDate != null) 'date_basis': _uploadedBasis,
       };
 
   /// The message to show for the current [versionGate] level (DAS-74),
@@ -331,12 +302,12 @@ class ApiClient {
   /// this is plain text ("ask the shop owner to reconnect and update"),
   /// never a tappable link.
   Future<String?> versionInfo() async {
-    final res = await _get('/app/version-info', query: {'platform': _appPlatform});
-    return _object(res)['message'] as String?;
+    final res = await get('/app/version-info', query: {'platform': _appPlatform});
+    return jsonObject(res)['message'] as String?;
   }
 
-  static Map<String, dynamic> _object(http.Response res) => jsonDecode(res.body) as Map<String, dynamic>;
-  static List<dynamic> _list(http.Response res) => jsonDecode(res.body) as List<dynamic>;
+  static Map<String, dynamic> jsonObject(http.Response res) => jsonDecode(res.body) as Map<String, dynamic>;
+  static List<dynamic> jsonList(http.Response res) => jsonDecode(res.body) as List<dynamic>;
 
   void _checkOk(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) return;

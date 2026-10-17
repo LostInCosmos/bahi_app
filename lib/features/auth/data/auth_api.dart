@@ -1,4 +1,5 @@
-part of '../../../core/api/api_client.dart';
+import '../../../core/api/api_client.dart';
+import '../models/account.dart';
 
 extension AuthApi on ApiClient {
   Future<void> signup({
@@ -7,7 +8,7 @@ extension AuthApi on ApiClient {
     required String password,
     String? businessType,
   }) async {
-    final res = await _postJson(
+    final res = await postJson(
         '/auth/signup',
         {
           'tenant_name': tenantName,
@@ -16,20 +17,20 @@ extension AuthApi on ApiClient {
           'business_type': businessType,
         },
         auth: false);
-    await _saveToken(ApiClient._object(res)['access_token'] as String);
-    await _saveBusinessType(businessType ?? 'medical');
+    await saveToken(ApiClient.jsonObject(res)['access_token'] as String);
+    await saveBusinessType(businessType ?? 'medical');
   }
 
   Future<void> login({required String email, required String password}) async {
     // No token sent, so a 401 here is a wrong password, not a session ending.
-    final res = await _postJson('/auth/login', {'email': email, 'password': password}, auth: false);
-    await _saveToken(ApiClient._object(res)['access_token'] as String);
+    final res = await postJson('/auth/login', {'email': email, 'password': password}, auth: false);
+    await saveToken(ApiClient.jsonObject(res)['access_token'] as String);
     await getAccount(); // picks up business_type for theming
   }
 
   Future<AccountInfo> getAccount() async {
-    final account = AccountInfo.fromJson(ApiClient._object(await _get('/account')));
-    await _saveBusinessType(account.businessType);
+    final account = AccountInfo.fromJson(ApiClient.jsonObject(await get('/account')));
+    await saveBusinessType(account.businessType);
     return account;
   }
 
@@ -39,14 +40,14 @@ extension AuthApi on ApiClient {
     String? address,
     String? businessType,
   }) async {
-    final res = await _patchJson('/account', {
+    final res = await patchJson('/account', {
       if (tenantName != null) 'tenant_name': tenantName,
       if (gstin != null) 'gstin': gstin,
       if (address != null) 'address': address,
       if (businessType != null) 'business_type': businessType,
     });
-    final account = AccountInfo.fromJson(ApiClient._object(res));
-    await _saveBusinessType(account.businessType);
+    final account = AccountInfo.fromJson(ApiClient.jsonObject(res));
+    await saveBusinessType(account.businessType);
     return account;
   }
 }

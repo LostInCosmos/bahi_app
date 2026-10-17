@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_client.dart';
+import '../data/sale_api.dart';
 import '../models/sale.dart';
 import '../../../app/theme/app_theme.dart';
 import 'sale_receipt_screen.dart';

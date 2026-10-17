@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../core/api/api_client.dart';
+import '../features/auth/data/auth_api.dart';
+import '../core/navigation/app_routes.dart';
+import '../features/auth/presentation/sign_out.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import 'theme/app_theme.dart';
@@ -93,6 +96,7 @@ class _GstBillAppState extends State<GstBillApp> {
           theme: theme,
           darkTheme: theme,
           home: const _StartupGate(),
+          routes: {AppRoutes.home: (_) => const HomeScreen()},
         );
       },
     );
@@ -162,15 +166,6 @@ class _UpdateRequiredScreenState extends State<_UpdateRequiredScreen> {
     }).catchError((_) {});
   }
 
-  Future<void> _logout() async {
-    await ApiClient.instance.logout();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -188,7 +183,7 @@ class _UpdateRequiredScreenState extends State<_UpdateRequiredScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                TextButton(onPressed: _logout, child: const Text('Log out')),
+                TextButton(onPressed: () => signOut(context), child: const Text('Log out')),
               ],
             ),
           ),
