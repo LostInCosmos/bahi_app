@@ -150,9 +150,17 @@ class UploadHistoryState extends State<UploadHistory> {
   static const _serverBoxes = {'working', 'check', 'review', 'saved', 'failed'};
   Set<String> get _categories => widget.selected.intersection(_serverBoxes);
 
-  /// While a box is ticked the list holds only what the server returned for
-  /// it, so what it holds is NOT the shop — counts must come from the tally.
-  bool get _narrowed => _categories.isNotEmpty;
+  /// The list always holds what the server returned for THIS folder (and the
+  /// ticked boxes, if any), never the whole shop — so counts always come from
+  /// the tally, which the server computes unnarrowed.
+  ///
+  /// The folder used to be applied here instead, to whichever pages happened
+  /// to be loaded, and only sent to the server while a box was ticked. A
+  /// folder whose bills were all older than the loaded window then drew
+  /// nothing at all — and could never reach them, because the "fetch the next
+  /// page" trigger lives in the grid's item builder and an empty grid builds
+  /// no items. A shop with ~300 older bills in one folder saw it permanently
+  /// blank while its tile correctly read 309 (DAS-83).
 
   /// The view still on screen while the answer to a NEW one is awaited: the
   /// boxes and folder it was drawn for. Without it, ticking a box blanked the
@@ -199,11 +207,11 @@ class UploadHistoryState extends State<UploadHistory> {
     super.didUpdateWidget(oldWidget);
     final before = oldWidget.selected.intersection(_serverBoxes);
     final after = _categories;
-    // A different set of boxes starts over, asked of the server. A different
-    // folder does too, but only while narrowed: unnarrowed, the whole shop is
-    // held and a folder is just a view of it.
+    // A different set of boxes starts over, asked of the server — and so does
+    // a different folder, which is now narrowed by the server too, so its
+    // bills are found on any page rather than only the loaded ones.
     final changed = before.length != after.length || !before.containsAll(after) ||
-        (after.isNotEmpty && oldWidget.folderId != widget.folderId);
+        oldWidget.folderId != widget.folderId;
     if (changed) {
       // Keep drawing what was drawn; remember the EARLIEST view if the shop
       // keeps ticking before the first answer is back.
@@ -365,17 +373,25 @@ class UploadHistoryState extends State<UploadHistory> {
   }
 
   Future<UploadPage> _fetchPage({int? beforeId}) {
-    if (_narrowed) {
-      final fetch = widget.fetchFiltered ?? ApiClient.instance.listUploads;
-      return fetch(
+    final filtered = widget.fetchFiltered;
+    if (filtered != null) {
+      return filtered(
         limit: _pageSize,
         beforeId: beforeId,
         categories: _categories,
-        folder: widget.folderId == null ? 'root' : '${widget.folderId}',
+        folder: _folderKey(widget.folderId),
       );
     }
-    final fetch = widget.fetch ?? ApiClient.instance.listUploads;
-    return fetch(limit: _pageSize, beforeId: beforeId);
+    // A test that injects only the plain fetcher still gets every row; the
+    // folder filter below the fold ([_rowsNotCoveredBy]) narrows them.
+    final plain = widget.fetch;
+    if (plain != null) return plain(limit: _pageSize, beforeId: beforeId);
+    return ApiClient.instance.listUploads(
+      limit: _pageSize,
+      beforeId: beforeId,
+      categories: _categories,
+      folder: _folderKey(widget.folderId),
+    );
   }
 
   Future<void> _loadMore() async {
@@ -437,7 +453,12 @@ class UploadHistoryState extends State<UploadHistory> {
   /// arrived, since until then it may simply be on a page not fetched. A card
   /// with no job yet is the phone's alone and follows its own status.
   List<ListEntry> get _drawnCards {
-    if (!_narrowed || !_loadedOnce || _nextBeforeId != null || _held != null) return widget.localEntries;
+    // Only a ticked BOX defers to the server this way. Which folder a card is
+    // in is the phone's own knowledge (BatchItem.folderId), so folder
+    // narrowing must not hide a card the server has not listed yet.
+    if (_categories.isEmpty || !_loadedOnce || _nextBeforeId != null || _held != null) {
+      return widget.localEntries;
+    }
     final onServer = {for (final u in _uploads) u.jobId};
     // One card per job. The phone can hold two cards that now point at the same
     // job (a card for a copy that was discarded, retried, and handed the
@@ -501,7 +522,10 @@ class UploadHistoryState extends State<UploadHistory> {
   /// opposed to counting the bills held here. The tally already includes
   /// every bill this phone has sent to the server, so nothing held here may
   /// be added to it a second time — see [countsCoverDeviceBills].
-  bool get _tallyMode => !((!_narrowed && _loadedOnce && _nextBeforeId == null) || _tally == null);
+  /// Box numbers can still be counted from the rows once this FOLDER is fully
+  /// paged — the rows are exactly its bills, which is what a box here means.
+  /// (Folder totals cannot: see [_folderTotals].)
+  bool get _tallyMode => !((_categories.isEmpty && _loadedOnce && _nextBeforeId == null) || _tally == null);
 
   /// True when the counts this list reports already include this phone's
   /// bills that have reached the server (their `jobId`). The screen adds only
@@ -523,12 +547,15 @@ class UploadHistoryState extends State<UploadHistory> {
     return tally;
   }
 
-  /// Bills per folder: the held bills counted one by one once every page is
-  /// in (exact, live), the server's whole-shop tally until then.
+  /// Bills per folder, over the whole shop — always the server's tally when
+  /// there is one. The rows held here are only the CURRENT folder's (the
+  /// server narrows by folder now), so counting them would leave every other
+  /// folder's tile reading zero. Moves and discards keep the tally in step
+  /// ([_shift]), so it stays live.
   Map<int?, int> get _folderTotals {
     final totals = <int?, int>{};
     final tally = _tally;
-    if ((!_narrowed && _loadedOnce && _nextBeforeId == null) || tally == null) {
+    if (tally == null) {
       for (final u in _uploads) {
         totals[u.folderId] = (totals[u.folderId] ?? 0) + 1;
       }

@@ -231,13 +231,17 @@ void main() {
       expect(seenTotals, {null: 70, 5: 204});   // not {null: 1, 5: 2}
     });
 
-    testWidgets('counts the bills it holds once every page is in', (tester) async {
+    testWidgets('still the tally once every page is in, not the rows held', (tester) async {
+      // The rows held are only the CURRENT folder's now (the server narrows
+      // by folder), so counting them would leave every other folder's tile
+      // reading zero. Moves and discards keep the tally in step instead —
+      // the two tests below.
       var seenTotals = <int?, int>{};
       await tester.pumpWidget(totalsList((t) => seenTotals = t, morePages: false));
       await tester.pump();
       await tester.pump();
 
-      expect(seenTotals, {null: 1, 5: 2});
+      expect(seenTotals, {null: 70, 5: 204});
     });
 
     testWidgets('a discarded bill the server refused is counted again when it comes back', (tester) async {
@@ -302,22 +306,33 @@ void main() {
               shown = [for (final e in entries) e.upload!.jobId];
               shownCounts = counts;
             },
-            fetch: ({int limit = 50, int? beforeId}) {
-              // One page, then every later page held open, as a slow server
-              // would. Answering the first page again would put the same
-              // bills in the list twice. Only first pages are recorded: the
-              // list asking for the next one as it nears the end is not what
-              // these tests are about.
-              if (beforeId != null) return Completer<UploadPage>().future;
-              asked.add('all');
-              return Future.value(UploadPage(
-                uploads: [_bill(3), _bill(2), _bill(1)],
-                nextBeforeId: 1,
-                counts: const {'root': {'check': 70, 'failed': 1}},
-              ));
-            },
+            // Every fetch is narrowed now — by the folder alone when no box is
+            // ticked — so one fake server answers both, by what it was asked
+            // for rather than by which hook was called.
+            //
+            // One page, then every later page held open, as a slow server
+            // would. Answering the first page again would put the same bills
+            // in the list twice. Only first pages are recorded: the list
+            // asking for the next one as it nears the end is not what these
+            // tests are about.
             fetchFiltered: ({int limit = 50, int? beforeId, Set<String> categories = const {}, String? folder}) {
+              if (beforeId != null) return Completer<UploadPage>().future;
               asked.add('${(categories.toList()..sort()).join('+')}@$folder');
+              if (categories.isEmpty) {
+                // Folder 5's bill is older than every page root ever loads —
+                // only asking the server for that folder can reach it.
+                if (folder == '5') {
+                  return Future.value(UploadPage(
+                    uploads: [_bill(7, folderId: 5)],
+                    counts: const {'root': {'check': 70, 'failed': 1}},
+                  ));
+                }
+                return Future.value(UploadPage(
+                  uploads: [_bill(3), _bill(2), _bill(1)],
+                  nextBeforeId: 1,
+                  counts: const {'root': {'check': 70, 'failed': 1}},
+                ));
+              }
               if (filteredAnswer != null) return filteredAnswer();
               return Future.value(UploadPage(
                 uploads: [_bill(0, status: 'failed')],
@@ -343,7 +358,7 @@ void main() {
       selected.value = {'failed'};
       await settle(tester);
 
-      expect(asked, ['all', 'failed@root']);
+      expect(asked, ['@root', 'failed@root']);
       expect(shown, [0], reason: 'bill 0 was never in the pages that were loaded');
     });
 
@@ -356,7 +371,7 @@ void main() {
       selected.value = {};
       await settle(tester);
 
-      expect(asked, ['all', 'failed@root', 'all']);
+      expect(asked, ['@root', 'failed@root', '@root']);
       expect(shown, [3, 2, 1]);
     });
 
@@ -367,7 +382,7 @@ void main() {
       selected.value = {'tocrop'};
       await settle(tester);
 
-      expect(asked, ['all'], reason: "'to crop' exists only on this phone");
+      expect(asked, ['@root'], reason: "'to crop' exists only on this phone");
     });
 
     testWidgets('the numbers on the boxes stay the whole shops while the list is narrowed', (tester) async {
@@ -382,19 +397,42 @@ void main() {
       expect(shownCounts, {'check': 70, 'failed': 1});
     });
 
-    testWidgets('changing folders while narrowed asks again; unnarrowed it does not', (tester) async {
+    testWidgets('opening a folder finds its bills on a page nobody loaded', (tester) async {
+      // The reported bug (DAS-83): a folder's tile read "309 bills" and the
+      // folder opened blank, because its bills were older than the pages
+      // loaded and nothing could ever page to them from an empty grid.
+      // Ticking any status box made them appear — that was the clue, since
+      // only a ticked box sent the folder to the server.
+      await tester.pumpWidget(host());
+      await settle(tester);
+      expect(shown, [3, 2, 1]);
+
+      folder.value = 5;
+      await settle(tester);
+
+      expect(shown, [7], reason: 'bill 7 was never in the pages root had loaded');
+    });
+
+    testWidgets('changing folders asks the server again, box ticked or not', (tester) async {
+      // The bug this guards (DAS-83): with no box ticked the folder was not
+      // sent, and the folder was applied on the phone to whichever pages
+      // happened to be loaded. A folder whose bills were all older than that
+      // window drew nothing — and could never reach them, because the "fetch
+      // the next page" trigger lives in the grid's item builder and an empty
+      // grid builds no items. A shop saw ~300 bills in a folder that read
+      // "309 bills" on its tile and was blank when opened.
       await tester.pumpWidget(host());
       await settle(tester);
       folder.value = 5;
       await settle(tester);
-      expect(asked, ['all'], reason: 'unnarrowed, a folder is only a view of what is held');
+      expect(asked, ['@root', '@5'], reason: 'the folder is asked of the server, not filtered here');
 
       selected.value = {'failed'};
       await settle(tester);
       folder.value = 9;
       await settle(tester);
 
-      expect(asked, ['all', 'failed@5', 'failed@9']);
+      expect(asked, ['@root', '@5', 'failed@5', 'failed@9']);
     });
 
     testWidgets('the numbers hold still while a ticked box is being fetched', (tester) async {
