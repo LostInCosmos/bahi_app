@@ -7,12 +7,23 @@ class ProductSummary {
   final String? pack;
   final double quantityOnHand;
 
+  /// Net rate, MRP and expiry of this product's soonest-expiring in-stock
+  /// batch (DAS-81) — the same batch a sale would actually draw from.
+  /// Null together when no batch qualifies (no stock, or everything left is
+  /// expired): never a mix from different batches.
+  final double? netRate;
+  final double? mrp;
+  final String? expiryDate; // YYYY-MM-DD, already stripped of any time component
+
   ProductSummary({
     required this.id,
     required this.name,
     this.hsnCode,
     this.pack,
     required this.quantityOnHand,
+    this.netRate,
+    this.mrp,
+    this.expiryDate,
   });
 
   factory ProductSummary.fromJson(Map<String, dynamic> json) => ProductSummary(
@@ -21,6 +32,9 @@ class ProductSummary {
         hsnCode: json['hsn_code'] as String?,
         pack: json['pack'] as String?,
         quantityOnHand: (json['quantity_on_hand'] as num).toDouble(),
+        netRate: (json['net_rate'] as num?)?.toDouble(),
+        mrp: (json['mrp'] as num?)?.toDouble(),
+        expiryDate: (json['expiry_date'] as String?)?.split('T').first,
       );
 }
 

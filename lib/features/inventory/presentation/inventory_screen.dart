@@ -52,6 +52,16 @@ class InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
+  /// Net rate / MRP / expiry of a product's soonest-expiring in-stock batch,
+  /// as short labels — only whichever of the three the server sent (DAS-81);
+  /// all three are null together for a product with nothing in stock to
+  /// price, so this is "if any", never a partial/misleading row.
+  List<String> _batchDetails(ProductSummary p) => [
+        if (p.netRate != null) 'Net ₹${p.netRate!.toStringAsFixed(2)}',
+        if (p.mrp != null) 'MRP ₹${p.mrp!.toStringAsFixed(2)}',
+        if (p.expiryDate != null) 'Exp ${p.expiryDate}',
+      ];
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -143,6 +153,14 @@ class InventoryScreenState extends State<InventoryScreen> {
                             Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
                             if (p.pack != null && p.pack!.isNotEmpty)
                               Text(p.pack!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+                            if (_batchDetails(p).isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _batchDetails(p).join('  ·  '),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ],
                         ),
                       ),
