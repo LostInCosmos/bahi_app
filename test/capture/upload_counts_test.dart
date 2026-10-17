@@ -9,7 +9,7 @@ import 'package:gst_bill_app/features/capture/widgets/upload_history.dart';
 
 /// The number on a status box is the shop's, not "whatever has loaded".
 ///
-/// It read "Check & save 29", then 74, as the shopkeeper scrolled, because
+/// It read "Not saved 29", then 74, as the shopkeeper scrolled, because
 /// it was tallied from the pages that had arrived. A short fixture hides
 /// that completely — the loaded bills ARE all the bills — so here the shop
 /// has far more bills than the list holds, and the server says so.

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// What to do about the stock a saved bill added when it goes back to Check &
-/// save. Never assumed: the shopkeeper is asked every time, because inventory
+/// What to do about the stock a saved bill added when it goes back to Not
+/// saved. Never assumed: the shopkeeper is asked every time, because inventory
 /// is theirs to decide about.
 enum UnsaveChoice { keepStock, removeStock }
 
-/// Asks whether to move a saved bill back to Check & save, and whether to take
+/// Asks whether to move a saved bill back to Not saved, and whether to take
 /// its stock out of inventory too. Null if they cancel.
 Future<UnsaveChoice?> showUnsaveDialog(BuildContext context) {
   return showDialog<UnsaveChoice>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Move back to Check & save?'),
+      title: const Text('Move back to Not saved?'),
       content: const Text(
         'The bill stays as it was read and can be checked and saved again.\n\n'
         'Do you also want to take the stock this bill added out of inventory?',
@@ -44,7 +44,7 @@ Future<bool> showUnsaveUnderReviewDialog(BuildContext context) async {
   final go = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Move back to Check & save?'),
+      title: const Text('Move back to Not saved?'),
       content: const Text(
         'The bill stays as it was read and can be checked and saved again.\n\n'
         'The stock this bill added will be taken out of inventory.',

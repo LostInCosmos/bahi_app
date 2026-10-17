@@ -113,7 +113,7 @@ void main() {
       expect(before, 1500);
 
       // Open a bill that has something to check: the review screen.
-      final card = find.textContaining('Check ').hitTestable().first;
+      final card = find.textContaining('Not saved').hitTestable().first;
       await tester.tap(card);
       await _settle(tester);
       expect(find.byType(CaptureScreen).hitTestable(), findsNothing, reason: 'a bill should have opened over the list');
@@ -144,7 +144,7 @@ void main() {
       final before = tester.state<ScrollableState>(_scroller).position.pixels;
       expect(before, 1500);
 
-      await tester.tap(find.textContaining('Check ').hitTestable().first);
+      await tester.tap(find.textContaining('Not saved').hitTestable().first);
       await _settle(tester);
       expect(find.byType(CaptureScreen).hitTestable(), findsNothing);
 
@@ -180,7 +180,7 @@ void main() {
       final before = tester.state<ScrollableState>(_scroller).position.pixels;
       expect(before, closeTo(target, 1));
 
-      await tester.tap(find.textContaining('Check ').hitTestable().first);
+      await tester.tap(find.textContaining('Not saved').hitTestable().first);
       await _settle(tester);
       expect(find.byType(CaptureScreen).hitTestable(), findsNothing, reason: 'a bill should have opened');
 

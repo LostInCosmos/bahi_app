@@ -78,7 +78,7 @@ class UploadSummary {
         invoiceId: json['invoice_id'] as int?,
         folderId: json['folder_id'] as int?,
         // Absent on a server older than the field; absent means none, not
-        // unknown, so the card reads "Check & save" exactly as it used to.
+        // unknown, so the card reads "Not saved" exactly as it used to.
         issueCount: (json['issue_count'] as num?)?.toInt() ?? 0,
         retryAt: json['retry_at'] == null
             ? null

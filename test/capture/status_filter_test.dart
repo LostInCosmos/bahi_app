@@ -7,7 +7,7 @@ import 'package:gst_bill_app/features/capture/models/status_filter.dart';
 /// DAS-26, mobile half. The categories mirror shop_webapp/test/statusFilter.test.js
 /// — the two clients must agree on what each category means. The BOXES no
 /// longer match it: since DAS-71 a bill being read and a flagged bill are one
-/// box, "Under processing", and the web app is left as it was for now.
+/// box, "Processing", and the web app is left as it was for now.
 
 BatchItem _item(BatchItemStatus status, {DateTime? retryAt}) =>
     BatchItem(label: 'Photo 1', pages: const [])
@@ -40,7 +40,7 @@ void main() {
       'saved', 'failed',
     ]);
     expect(kStatusFilters.map((f) => f.label).toList(), [
-      'To crop', 'Working', 'Check & save', 'Needs review', 'Saved', 'Failed',
+      'To crop', 'Working', 'Not saved', 'Needs review', 'Saved', 'Failed',
     ]);
   });
 
@@ -94,8 +94,8 @@ void main() {
       expect(keys, hasLength(keys.toSet().length));
     });
 
-    test('a bill being read and a flagged bill share the box "Under processing"', () {
-      final box = kFilterBoxes.singleWhere((b) => b.label == 'Under processing');
+    test('a bill being read and a flagged bill share the box "Processing"', () {
+      final box = kFilterBoxes.singleWhere((b) => b.label == 'Processing');
       expect(box.keys, ['working', 'review']);
       expect(kFilterBoxes.any((b) => b.label == 'Needs review' || b.label == 'Working'), isFalse);
     });
@@ -106,19 +106,19 @@ void main() {
 
     testWidgets('the box adds the two categories together', (tester) async {
       await tester.pumpWidget(bar({'working': 3, 'review': 4, 'check': 2}, {}, (_) {}));
-      expect(find.text('Under processing 7'), findsOneWidget);
-      expect(find.text('Check & save 2'), findsOneWidget);
+      expect(find.text('Processing 7'), findsOneWidget);
+      expect(find.text('Not saved 2'), findsOneWidget);
       expect(find.textContaining('Needs review'), findsNothing);
     });
 
     testWidgets('ticking it selects both categories, and clearing it removes both', (tester) async {
       var selected = <String>{};
       await tester.pumpWidget(bar({'working': 1, 'review': 1}, selected, (next) => selected = next));
-      await tester.tap(find.text('Under processing 2'));
+      await tester.tap(find.text('Processing 2'));
       expect(selected, {'working', 'review'});
 
       await tester.pumpWidget(bar({'working': 1, 'review': 1}, selected, (next) => selected = next));
-      await tester.tap(find.text('Under processing 2'));
+      await tester.tap(find.text('Processing 2'));
       expect(selected, isEmpty);
     });
   });

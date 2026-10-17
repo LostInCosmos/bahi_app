@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
 
-/// Sending a saved bill back to Check & save, from the ✕ on its card.
+/// Sending a saved bill back to Not saved, from the ✕ on its card.
 ///
 /// The ask: an option on a saved bill to move it back to the status it had
 /// before saving, asking whether to take its stock out of inventory too. The
@@ -96,7 +96,7 @@ void main() {
       expect(_on('Saved'), findsOneWidget);
       await _openDialog(tester);
 
-      expect(find.text('Move back to Check & save?'), findsOneWidget);
+      expect(find.text('Move back to Not saved?'), findsOneWidget);
       expect(find.textContaining('stock'), findsWidgets);
       expect(server.unsaves, isEmpty);
     }, () => server.client);
@@ -116,7 +116,7 @@ void main() {
       ]);
       expect(find.textContaining('Its stock stays in inventory'), findsOneWidget);
       expect(_on('Saved'), findsNothing, reason: 'it is no longer saved');
-      expect(_on('Check & save'), findsOneWidget, reason: 'it is back in Check & save');
+      expect(_on('Not saved'), findsOneWidget, reason: 'it is back in Not saved');
     }, () => server.client);
   });
 

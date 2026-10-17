@@ -99,7 +99,7 @@ void main() {
     expect(find.text('120 bills'), findsOneWidget);
   });
 
-  testWidgets('a bill being read or flagged says "Under processing" and shows no spinner (DAS-71)', (tester) async {
+  testWidgets('a bill being read or flagged says "Processing" and shows no spinner (DAS-71)', (tester) async {
     for (final status in [BatchItemStatus.processing, BatchItemStatus.needsReview]) {
       await tester.pumpWidget(_grid([_item(status)]));
       await tester.pump();
@@ -109,7 +109,7 @@ void main() {
     // a bill being read, not the amber exclamation mark of one waiting for a person.
     await tester.pumpWidget(_grid([_item(BatchItemStatus.processing)]));
     await tester.pumpAndSettle();
-    expect(find.text('Under processing'), findsOneWidget);
+    expect(find.text('Processing'), findsOneWidget);
     await tester.pumpWidget(_grid([_item(BatchItemStatus.needsReview)]));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.priority_high_rounded), findsNothing);
@@ -143,7 +143,7 @@ void main() {
       expect(asked, 1);
     });
 
-    testWidgets('a pendingConfirm card asks once too — it may be clean but still unverified (DAS-79)',
+    testWidgets('a pendingConfirm card asks once too — it may be clean but its own save attempt failed (DAS-79)',
         (tester) async {
       var asked = 0;
       final item = _item(BatchItemStatus.pendingConfirm);

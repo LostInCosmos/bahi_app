@@ -9,10 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
 import 'package:gst_bill_app/features/capture/widgets/batch_item_card.dart';
 
-/// DAS-79: a bill with zero validation issues and a verified supplier is now
-/// saved by the server itself, with no tap on this phone — at the first
-/// read, or later, once an admin correction or a vendor verification clears
-/// the way while this phone was already sitting on it as pendingConfirm.
+/// DAS-79: a bill with zero validation issues is now saved by the server
+/// itself, with no tap on this phone — at the first read, or later, once an
+/// admin's retried extraction saves what the first attempt couldn't, while
+/// this phone was already sitting on it as pendingConfirm ("Not saved").
 /// These pin the two places that learn about it: the very first status
 /// fetch after a read finishes, and a later ask while the bill is still
 /// being watched.
@@ -43,8 +43,8 @@ Map<String, dynamic> _result({List<Map<String, dynamic>> issues = const []}) => 
 class _Server {
   _Server({this.saved = false});
 
-  /// Ground truth the test flips directly — standing in for an admin
-  /// correction or a vendor verification happening entirely server-side,
+  /// Ground truth the test flips directly — standing in for an admin's
+  /// retried extraction saving this bill cleanly, entirely server-side,
   /// independent of how many times anything on this phone has asked.
   bool saved;
   var statusAsks = 0;
@@ -143,7 +143,7 @@ Finder get _pendingConfirmIcon =>
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('clean and already verified by the time this phone first asks: lands Saved, no dialog ever shown',
+  testWidgets('clean and saved by the time this phone first asks: lands Saved, no dialog ever shown',
       (tester) async {
     _ignoreOverflow();
     final server = _Server(saved: true);
@@ -152,15 +152,14 @@ void main() {
       await _retry(tester);
       await _advanceOneRound(tester);
 
-      expect(find.text('Looks good — save'), findsNothing, reason: 'no tap for a clean, verified bill');
-      expect(find.text('Save'), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing, reason: 'no tap for a bill that already saved itself');
       expect(_savedIcon, findsOneWidget, reason: 'the card shows Saved directly');
-      expect(_pendingConfirmIcon, findsNothing, reason: 'never passes through Check & save');
+      expect(_pendingConfirmIcon, findsNothing, reason: 'never passes through Not saved');
       await _finish(tester);
     }, () => server.client);
   });
 
-  testWidgets('clean but unverified: sits as Check & save, then is picked up live once the server saves it',
+  testWidgets('clean but its own save attempt failed: sits as Not saved, then is picked up live once a retry saves it',
       (tester) async {
     _ignoreOverflow();
     final server = _Server(saved: false);
@@ -169,8 +168,9 @@ void main() {
       await _retry(tester);
       await _advanceOneRound(tester);
 
-      // First ask: clean, but not yet saved — the unverified-supplier case
-      // still waits on a human tap.
+      // First ask: clean, but its own save attempt failed (a duplicate
+      // invoice number, a FEFO surprise) — the one case left where a clean
+      // bill still waits on a human tap.
       expect(_pendingConfirmIcon, findsOneWidget, reason: 'pendingConfirm — nobody tapped it');
       expect(_savedIcon, findsNothing);
       // The status loop does not stop at one round just because this bill
@@ -179,7 +179,7 @@ void main() {
       // "terminal" the way a needsReview/pendingConfirm bill used to.
       expect(server.statusAsks, greaterThanOrEqualTo(2));
 
-      // An admin correction or a vendor verification happens entirely
+      // An admin retries extraction and it saves cleanly this time, entirely
       // server-side — nothing on this phone does anything from here. That
       // ongoing watch is what lets the next round ever learn about it.
       server.saved = true;

@@ -208,7 +208,7 @@ extension InvoiceApi on ApiClient {
   /// the caller should surface `.message` rather than retry.
   Future<void> deleteInvoice(int invoiceId) => _delete('/invoices/$invoiceId');
 
-  /// Send a saved bill back to Check & save — or Needs review, if its read had
+  /// Send a saved bill back to Not saved — or Needs review, if its read had
   /// issues — in the folder it was filed in. The bill's read stays; the
   /// invoice goes. [removeStock] is the shopkeeper's answer to whether the
   /// stock it added leaves inventory too (required: never assumed). Throws

@@ -400,16 +400,16 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('the box numbers move live: a retry starts (Failed -1, Under processing +1) and the read finishes', (tester) async {
-    // When a retry starts the bill leaves Failed and joins Under processing at
-    // once, as it happens, not on the next fetch. Under processing is Working
+  testWidgets('the box numbers move live: a retry starts (Failed -1, Processing +1) and the read finishes', (tester) async {
+    // When a retry starts the bill leaves Failed and joins Processing at
+    // once, as it happens, not on the next fetch. Processing is Working
     // and the flagged boxes together (DAS-71), so a read that ends flagged stays
     // in it: nothing is counted twice or dropped.
     _ignoreOverflow();
     final server = _Server(filed: true, finishes: true, job8Failed: true)
       ..statusGate = Completer<void>()
       ..retryGate = Completer<void>();
-    // The boxes only: bills on the list wear "Under processing" badges too.
+    // The boxes only: bills on the list wear "Processing" badges too.
     Finder box(String text) => find.descendant(of: find.byType(FilterChip), matching: find.textContaining(text));
     await http.runWithClient(() async {
       await tester.binding.setSurfaceSize(const Size(1400, 800));
@@ -420,30 +420,30 @@ void main() {
       await tester.tap(box('Failed 2'));         // the server's tally now
       await _settle(tester);
       expect(box('Failed 2'), findsOneWidget);
-      expect(box('Under processing'), findsOneWidget);
-      expect(box('Under processing 1'), findsNothing);
+      expect(box('Processing'), findsOneWidget);
+      expect(box('Processing 1'), findsNothing);
 
       final failed = find.byKey(const ValueKey('j:8'));
       await tester.tap(find.descendant(of: failed, matching: find.byIcon(Icons.refresh_rounded)));
       await tester.pump();
       await tester.pump();                                       // the server has not answered the retry
-      expect(box('Under processing 1'), findsOneWidget, reason: 'a retry began: +1 at once');
+      expect(box('Processing 1'), findsOneWidget, reason: 'a retry began: +1 at once');
       expect(box('Failed 1'), findsOneWidget, reason: 'and Failed -1');
-      expect(box('Under processing 2'), findsNothing);
+      expect(box('Processing 2'), findsNothing);
 
       server.retryGate!.complete();                              // the server agrees (queued)
       await _settle(tester);
-      expect(box('Under processing 1'), findsOneWidget);
+      expect(box('Processing 1'), findsOneWidget);
 
       server.statusGate!.complete();                             // the read finishes, flagged
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));       // well inside the 800 ms before any refetch
-      expect(box('Under processing 1'), findsOneWidget, reason: 'flagged still counts as with us, once');
+      expect(box('Processing 1'), findsOneWidget, reason: 'flagged still counts as with us, once');
       expect(box('Failed 1'), findsOneWidget);
 
       await _settle(tester);                                     // the refetch confirms it
-      expect(box('Under processing 1'), findsOneWidget);
+      expect(box('Processing 1'), findsOneWidget);
       expect(box('Failed 1'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
@@ -511,7 +511,7 @@ void main() {
         await tester.tap(cross('j:10'));
         await _settle(tester);
         expect(server.discarded, isEmpty);
-        expect(find.text('Move back to Check & save?'), findsOneWidget);
+        expect(find.text('Move back to Not saved?'), findsOneWidget);
         expect(find.byKey(const ValueKey('j:10')), findsOneWidget);
       }, () => server.client);
     });

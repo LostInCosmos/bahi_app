@@ -202,9 +202,9 @@ void main() {
       expect(find.text('Earlier uploads'), findsNothing);
       expect(find.text('Bill 3'), findsOneWidget);
       // A flagged bill is with our team: no count of what was flagged.
-      expect(find.text('Under processing'), findsOneWidget);
+      expect(find.text('Processing'), findsOneWidget);
       expect(find.textContaining('Check 3'), findsNothing);
-      expect(find.text('Check & save'), findsOneWidget);
+      expect(find.text('Not saved'), findsOneWidget);
       expect(find.text('Saved'), findsOneWidget);
     });
 
@@ -228,7 +228,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Bill 3'), findsNothing, reason: 'drawn twice');
-      expect(find.text('Check & save'), findsOneWidget);
+      expect(find.text('Not saved'), findsOneWidget);
     });
 
     testWidgets('two reads of one photo are two bills: a card hides only its own job', (tester) async {
@@ -283,9 +283,9 @@ void main() {
       expect(find.text('Bills in this folder'), findsNothing);
       expect(find.text('Saved'), findsOneWidget);
       // Only this folder's bill. The fixture also holds an unfiled bill
-      // (which would read "Check & save") and one filed elsewhere (a second
+      // (which would read "Not saved") and one filed elsewhere (a second
       // "Saved"); neither may be in the way.
-      expect(find.text('Check & save'), findsNothing);
+      expect(find.text('Not saved'), findsNothing);
     });
 
     testWidgets('tells the screen how many it is showing', (tester) async {
@@ -436,7 +436,7 @@ void main() {
       await key.currentState!.refresh();
       await tester.pump();
 
-      expect(find.text('Under processing'), findsNWidgets(2), reason: 'the saved bill is no longer with our team');
+      expect(find.text('Processing'), findsNWidgets(2), reason: 'the saved bill is no longer with our team');
       expect(find.text('Saved'), findsOneWidget);
       // Its neighbours kept their places: the saved card is still in the
       // middle column where it was (told apart by who it is from).

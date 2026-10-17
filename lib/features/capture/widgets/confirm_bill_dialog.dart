@@ -4,10 +4,11 @@ import '../../invoice/models/invoice.dart';
 
 enum ConfirmBillAction { save, edit }
 
-/// The one-tap summary shown for a bill whose extraction came back with no
-/// validation issues. Clean numbers are still not proof the bill was read
-/// correctly, so it is the user who confirms — nothing saves on its own.
-/// Returns null for "Not now" or a dismissed dialog.
+/// The manual-save summary for a bill that isn't saved. A clean bill saves
+/// itself automatically now (DAS-79); this only shows for the bill whose own
+/// save attempt failed (a duplicate invoice number, a FEFO surprise), or
+/// one the shopkeeper deliberately moved back from Saved — not a routine
+/// step any more. Returns null for "Not now" or a dismissed dialog.
 ///
 /// [allowEdit] is false for a bill the machine flagged (DAS-71): it is with our
 /// team, so the shopkeeper can save what was read but not correct it.
@@ -43,7 +44,7 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
           OutlinedButton(onPressed: () => Navigator.pop(context, ConfirmBillAction.edit), child: const Text('Edit')),
         FilledButton(
           onPressed: () => Navigator.pop(context, ConfirmBillAction.save),
-          child: Text(allowEdit ? 'Looks good — save' : 'Save'),
+          child: const Text('Save'),
         ),
       ],
     ),

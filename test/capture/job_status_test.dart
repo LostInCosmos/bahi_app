@@ -64,9 +64,9 @@ void main() {
     });
 
     test('a done job is not settled until it is saved (DAS-79)', () {
-      // A clean-but-unverified or still-flagged bill sits "done" for a long
-      // time; only becoming saved (or truly failing) means nothing more
-      // will happen to it.
+      // A clean bill whose own save attempt failed, or a still-flagged one,
+      // sits "done" for a long time; only becoming saved (or truly failing)
+      // means nothing more will happen to it.
       expect(_brief('done').isSettled, isFalse, reason: 'unsaved');
       expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done', 'saved': true}).isSettled, isTrue);
       expect(_brief('failed').isSettled, isTrue, reason: 'saved is irrelevant once it has failed');

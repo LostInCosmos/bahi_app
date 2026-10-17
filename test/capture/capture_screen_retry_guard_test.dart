@@ -146,7 +146,7 @@ void main() {
 
       expect(find.byKey(const ValueKey('j:3')), findsNothing, reason: 'gone from the box at once');
       expect(find.textContaining('Failed 2'), findsOneWidget, reason: 'the box counts one fewer');
-      expect(find.textContaining('Under processing 1'), findsOneWidget, reason: 'and Under processing one more');
+      expect(find.textContaining('Processing 1'), findsOneWidget, reason: 'and Processing one more');
       expect(find.byKey(const ValueKey('j:2')), findsOneWidget, reason: 'the rest stay');
 
       server.retryGate!.complete();

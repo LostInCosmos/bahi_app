@@ -9,13 +9,17 @@ import 'upload_summary.dart';
 ///
 /// Mirrors `shop_webapp/src/features/capture/statusFilter.js` — same
 /// keys, in the same order. The labels no longer match it: DAS-71 shows a
-/// bill being read and a bill the machine flagged as one box, "Under
-/// processing", and the web app has not been changed to match yet (it was
-/// left out of that ticket on purpose). The keys are unchanged, so the
-/// server's counts and the web app's own filter keep working.
+/// bill being read and a bill the machine flagged as one box, "Processing",
+/// and the web app has not been changed to match yet (it was left out of
+/// that ticket on purpose). The keys are unchanged, so the server's counts
+/// and the web app's own filter keep working.
 ///
-/// `pendingConfirm` deliberately reads "Check & save" rather than
-/// "Done": the bill was read, but nothing is saved until a human taps.
+/// `pendingConfirm` reads "Not saved" (DAS-79, widened 2026-10-17): a clean
+/// bill now saves itself automatically, so this is reached only when that
+/// save was attempted and failed (a duplicate invoice number, a FEFO
+/// surprise), or when the shopkeeper deliberately moved a saved bill back —
+/// "Check & save" implied a routine step every clean bill needed, which is
+/// no longer true.
 class StatusFilter {
   final String key;
   final String label;
@@ -39,7 +43,7 @@ const List<StatusFilter> kStatusFilters = [
     BatchItemStatus.ready,
     BatchItemStatus.processing,
   }),
-  StatusFilter('check', 'Check & save', {BatchItemStatus.pendingConfirm}),
+  StatusFilter('check', 'Not saved', {BatchItemStatus.pendingConfirm}),
   StatusFilter('review', 'Needs review', {BatchItemStatus.needsReview}),
   StatusFilter('saved', 'Saved', {BatchItemStatus.saved}),
   StatusFilter('failed', 'Failed', {BatchItemStatus.failed}),
@@ -48,9 +52,9 @@ const List<StatusFilter> kStatusFilters = [
 /// What a bill being read or flagged by the machine says to the shopkeeper
 /// (DAS-71) — one label, so the tickbox and every card's own badge cannot
 /// drift apart the way a user-visible string has before (see CLAUDE.md).
-const kUnderProcessingLabel = 'Under processing';
+const kUnderProcessingLabel = 'Processing';
 
-/// One tickbox on the filter bar. Usually one category; "Under processing"
+/// One tickbox on the filter bar. Usually one category; "Processing"
 /// is two — a bill still being read and a bill the machine flagged — because
 /// to the shopkeeper both are "with us, nothing for you to do" (DAS-71).
 class FilterBox {
@@ -66,7 +70,7 @@ class FilterBox {
 const List<FilterBox> kFilterBoxes = [
   FilterBox('To crop', ['tocrop']),
   FilterBox(kUnderProcessingLabel, ['working', 'review']),
-  FilterBox('Check & save', ['check']),
+  FilterBox('Not saved', ['check']),
   FilterBox('Saved', ['saved']),
   FilterBox('Failed', ['failed']),
 ];

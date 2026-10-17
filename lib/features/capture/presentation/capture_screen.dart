@@ -49,10 +49,12 @@ part 'capture_selection.dart';
 /// A bill saves itself once it is clean (the backend's validation, which
 /// only catches internal arithmetic inconsistency, found nothing) —
 /// server-side, the moment that becomes true, with no tap and no wait
-/// (DAS-79). `pendingConfirm` is reached only when that save was attempted
-/// and failed (a duplicate invoice number, a FEFO surprise) — a one-tap
-/// summary the user must confirm to try again; anything with a real issue
-/// goes to `needsReview` and the full edit form.
+/// (DAS-79). `pendingConfirm` ("Not saved") is reached only when that save
+/// was attempted and failed (a duplicate invoice number, a FEFO surprise,
+/// a missing stored subtotal) or the shopkeeper deliberately unsaved a
+/// bill — never as a routine step for an ordinary clean bill any more. A
+/// one-tap summary lets them save (or edit) it from there; anything with a
+/// real issue goes to `needsReview` and the full edit form.
 class CaptureScreen extends StatefulWidget {
   final VoidCallback onBatchFinished;
   const CaptureScreen({super.key, required this.onBatchFinished});
@@ -665,7 +667,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
 
   static const _savedNoId = 'This bill is saved. Open it to change it.';
 
-  /// The ✕ on a SAVED bill: send it back to Check & save, asking whether its
+  /// The ✕ on a SAVED bill: send it back to Not saved, asking whether its
   /// stock leaves inventory too. It is not thrown away from here — the bill
   /// comes back to be checked again — and the stock is the shopkeeper's call.
   ///
@@ -703,8 +705,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     // shows the bill again, unsaved, once it is asked.
     if (item != null) _dropLocal(item);
     _say(removed
-        ? 'Moved back to Check & save. Its stock was taken out of inventory.'
-        : 'Moved back to Check & save. Its stock stays in inventory.');
+        ? 'Moved back to Not saved. Its stock was taken out of inventory.'
+        : 'Moved back to Not saved. Its stock stays in inventory.');
     unawaited(_uploadHistory.currentState?.refresh());
     unawaited(_folders.load());
   }

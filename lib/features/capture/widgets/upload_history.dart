@@ -817,7 +817,7 @@ class _UploadCard extends StatelessWidget {
       case 'failed':
         return _Pill(color: Theme.of(context).colorScheme.error, text: 'Failed');
       default:
-        return const _Pill(color: AppColors.statusPendingConfirm, text: 'Check & save');
+        return const _Pill(color: AppColors.statusPendingConfirm, text: 'Not saved');
     }
   }
 }

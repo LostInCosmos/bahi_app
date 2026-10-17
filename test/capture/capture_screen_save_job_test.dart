@@ -167,7 +167,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('j:9')));
       await _settle(tester);
       expect(find.text('Edit'), findsOneWidget, reason: 'a clean bill keeps the review form');
-      await tester.tap(find.text('Looks good — save'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
       await tester.pump(const Duration(seconds: 1)); // the saved tick
       await _settle(tester);
@@ -190,7 +190,6 @@ void main() {
       await _settle(tester);
 
       expect(find.text('Edit'), findsNothing, reason: 'it is with our team, not the shopkeeper');
-      expect(find.text('Looks good — save'), findsNothing, reason: 'nobody is asked to vouch for it');
       expect(find.text('Review & save'), findsNothing, reason: 'the review form does not open');
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await _settle(tester);
@@ -210,7 +209,7 @@ void main() {
       await _open(tester);
       await tester.tap(find.byKey(const ValueKey('j:9')));
       await _settle(tester);
-      await tester.tap(find.text('Looks good — save'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
 
       expect(find.text('This bill is already saved.'), findsOneWidget);
