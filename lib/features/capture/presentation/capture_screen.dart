@@ -46,13 +46,13 @@ part 'capture_selection.dart';
 /// through a large batch therefore loses nothing: on the next start, saved
 /// photos are uploaded and in-flight extractions resume polling.
 ///
-/// A bill saves itself once it is both clean (the backend's validation,
-/// which only catches internal arithmetic inconsistency, found nothing) AND
-/// its supplier is one our team has actually verified — server-side, the
-/// moment that becomes true, with no tap and no wait (DAS-79). Short of
-/// that, a clean-but-unverified result still reaches `pendingConfirm`, a
-/// one-tap summary the user must confirm; anything with a real issue goes to
-/// `needsReview` and the full edit form.
+/// A bill saves itself once it is clean (the backend's validation, which
+/// only catches internal arithmetic inconsistency, found nothing) —
+/// server-side, the moment that becomes true, with no tap and no wait
+/// (DAS-79). `pendingConfirm` is reached only when that save was attempted
+/// and failed (a duplicate invoice number, a FEFO surprise) — a one-tap
+/// summary the user must confirm to try again; anything with a real issue
+/// goes to `needsReview` and the full edit form.
 class CaptureScreen extends StatefulWidget {
   final VoidCallback onBatchFinished;
   const CaptureScreen({super.key, required this.onBatchFinished});
@@ -185,11 +185,12 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   /// a card held in needsReview or pendingConfirm otherwise only rechecks
   /// itself once it is actually (re)built — reopening the tab alone does not
   /// do that, since IndexedStack keeps the grid's cards mounted rather than
-  /// rebuilding them. Covers pendingConfirm too (DAS-79): a clean-but-
-  /// unverified bill can be saved by a vendor verification exactly the way a
-  /// flagged one can be saved by a correction, and either way this phone
-  /// may not have been watching for it (the live loop only started if
-  /// something was already in flight when the screen opened).
+  /// rebuilding them. Covers pendingConfirm too (DAS-79): a clean bill whose
+  /// own save attempt once failed can be saved by an admin's retried
+  /// extraction exactly the way a flagged one can be saved by a correction,
+  /// and either way this phone may not have been watching for it (the live
+  /// loop only started if something was already in flight when the screen
+  /// opened).
   Future<void> recheckNeedsReview() async {
     for (final item in List<BatchItem>.of(_items)) {
       if (!mounted) return;
@@ -200,8 +201,9 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }
   }
 
-  /// One bill our team, or a vendor verification, might have resolved while
-  /// nothing was watching it (DAS-76, extended by DAS-79) — reuses the exact
+  /// One bill our team, or an admin's retried extraction, might have
+  /// resolved while nothing was watching it (DAS-76, extended by DAS-79) —
+  /// reuses the exact
   /// "is it still flagged" rule the first terminal transition already uses,
   /// so this never disagrees with it. Best-effort: a failure here just means
   /// the next ask (another scroll, another tab reopen) tries again, same as
@@ -833,12 +835,12 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
     }));
   }
 
-  /// A bill is watched while it is being read, AND after — a clean-but-
-  /// unverified or flagged bill stays `done` forever as far as [status] is
-  /// concerned, but can still be saved later by an admin action nobody on
-  /// this phone did anything to trigger (DAS-79). [jobId] is only cleared
-  /// once a bill is actually saved or failed, so it keeps its place here
-  /// until then.
+  /// A bill is watched while it is being read, AND after — a pendingConfirm
+  /// (its own save attempt failed) or flagged bill stays `done` forever as
+  /// far as [status] is concerned, but can still be saved later by an admin
+  /// action nobody on this phone did anything to trigger (DAS-79). [jobId]
+  /// is only cleared once a bill is actually saved or failed, so it keeps
+  /// its place here until then.
   Map<int, BatchItem> get _watching => {
         for (final i in _items)
           if (i.jobId != null &&
@@ -945,8 +947,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       final job = await ApiClient.instance.getExtractionJob(brief.jobId);
       if (!mounted) return;
       if (job.status == 'done' && job.isAlreadySaved) {
-        // Clean and verified before this phone ever looked at it — the
-        // server saved it already (DAS-79). No tap, no pendingConfirm.
+        // Clean before this phone ever looked at it — the server saved it
+        // already (DAS-79). No tap, no pendingConfirm.
         setState(() {
           item.jobId = null;
           item.retryAt = null;
@@ -976,11 +978,11 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
       setState(() {
         item.retryAt = null;
         item.processingSince = null;
-        // Zero issues means the numbers are internally consistent, not that
-        // they were read correctly — so unless the supplier is one our team
-        // has verified, this still waits on a human tap. The supplier's
-        // GSTIN is our team's to check, not a reason for the shop to look at
-        // the bill (DAS-71), as the server's own count says.
+        // Reaching here with every issue on seller_gstin (the server's own
+        // "clean" count ignores it, same as DAS-71) means the server
+        // already tried to auto-save this bill and the attempt itself
+        // failed (a duplicate invoice number, a FEFO surprise) — the one
+        // case left where a clean bill still waits on a human tap (DAS-79).
         item.status = result.issues.every((i) => i.field == 'seller_gstin')
             ? BatchItemStatus.pendingConfirm
             : BatchItemStatus.needsReview;
@@ -998,10 +1000,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection {
   }
 
   /// A bill this phone had already filed under pendingConfirm/needsReview
-  /// turned out to be saved on the next ask — an admin's correction or a
-  /// vendor verification cleared the way while nobody here was watching for
-  /// it specifically (DAS-79). `brief.saved` is the signal; refetch for the
-  /// invoice id, the only thing still missing.
+  /// turned out to be saved on the next ask — an admin's correction, or a
+  /// retried extraction saving a previously-failed clean bill, happened
+  /// without any tap on this phone (DAS-79). `brief.saved` is the signal;
+  /// refetch for the invoice id, the only thing still missing.
   Future<void> _applyAutoSave(BatchItem item, JobStatusBrief brief) async {
     try {
       final job = await ApiClient.instance.getExtractionJob(brief.jobId);

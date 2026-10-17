@@ -19,10 +19,10 @@ class BatchItemCard extends StatelessWidget {
   final VoidCallback? onMove;
 
   /// Asks the server once whether our team has finished with this bill, or
-  /// its supplier is now verified (DAS-76, extended by DAS-79), the moment
-  /// this card is actually built in a needsReview or pendingConfirm state —
-  /// scrolling it into view included. Never called more than once per
-  /// episode: see [BatchItem.recheckedThisReview].
+  /// a retried extraction has since saved it cleanly (DAS-76, extended by
+  /// DAS-79), the moment this card is actually built in a needsReview or
+  /// pendingConfirm state — scrolling it into view included. Never called
+  /// more than once per episode: see [BatchItem.recheckedThisReview].
   final void Function(BatchItem item)? onRecheckNeedsReview;
 
   /// Bills are being chosen: a tap picks this one, and the card wears a ring

@@ -4,11 +4,12 @@ import '../../../core/api/api_client.dart';
 import '../../../core/utils/pending_photo_store.dart';
 import '../../invoice/models/invoice.dart';
 
-/// Where one bill is in the capture flow. A clean extraction whose supplier
-/// our team has verified saves itself, server-side, with no tap (DAS-79) —
-/// such a bill goes straight to [saved] and never surfaces as
-/// [pendingConfirm] on this phone at all. Short of that (clean but an
-/// unverified supplier), [pendingConfirm] still needs a human tap.
+/// Where one bill is in the capture flow. A clean extraction (0 issues)
+/// saves itself, server-side, with no tap (DAS-79) — such a bill goes
+/// straight to [saved] and never surfaces as [pendingConfirm] on this phone
+/// at all. [pendingConfirm] is reached only when that save was attempted and
+/// failed (a duplicate invoice number, a FEFO surprise) — the one case left
+/// where a clean bill still needs a human tap.
 /// `needsCrop` is a photo picked from the device that nobody has chosen
 /// corners for yet. Distinct from `preparing` because it must NOT be
 /// uploaded on its own: multi-select puts a whole stack in this state
@@ -133,11 +134,13 @@ class BatchItem {
   bool get isRetrying => retryAt != null;
 
   /// Whether this needsReview/pendingConfirm episode has already asked the
-  /// server once since our team, or a vendor verification, might have
-  /// resolved it (DAS-76, extended by DAS-79) — a card asks once when it is
-  /// actually built (see BatchItemCard), reopening the New bills tab asks
-  /// for every such card at once, on top of whatever the live status loop
-  /// is separately watching for. Reset to false wherever [status] is
+  /// server once since our team might have resolved it — flagged bills by
+  /// correcting them, pendingConfirm ones by an admin retrying extraction
+  /// and the fresh read saving cleanly this time (DAS-76, extended by
+  /// DAS-79) — a card asks once when it is actually built (see
+  /// BatchItemCard), reopening the New bills tab asks for every such card
+  /// at once, on top of whatever the live status loop is separately
+  /// watching for. Reset to false wherever [status] is
   /// (re-)assigned needsReview or pendingConfirm, so a bill landing there
   /// again later gets its own fresh check. Not persisted: a restart always
   /// checks once.
