@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../models/product.dart';
 
 /// Batches sort soonest-expiry first (FEFO) — the same order the sale
@@ -18,6 +19,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   ProductDetail? _detail;
   bool _loading = true;
   String? _error;
+
+  /// The rate/discount/free-goods scheme this batch was bought on, as one
+  /// line — null when the server hasn't sent any of it (DAS-82, widened).
+  static String? _dealLine(ProductBatchInfo b) {
+    final parts = [
+      if (b.rate != null) 'Rate ₹${b.rate!.toStringAsFixed(2)}',
+      if (b.discountPct != null) '${b.discountPct!.toStringAsFixed(b.discountPct == b.discountPct!.roundToDouble() ? 0 : 2)}% off',
+      if (b.discountAmount != null && b.discountPct == null) '₹${b.discountAmount!.toStringAsFixed(2)} off',
+      if (b.freeQty != null && b.freeQty! > 0)
+        '${b.freeQty!.toStringAsFixed(0)} free${b.freeScheme != null ? ' (${b.freeScheme})' : ''}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   @override
   void initState() {
@@ -61,7 +75,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                       const SizedBox(height: 12),
                       if (_detail!.batches.isEmpty) const Text('No batches in stock.'),
-                      ..._detail!.batches.map((b) => Card(
+                      ..._detail!.batches.map((b) {
+                        final purchase = b.sourceInvoiceId != null;
+                        return Card(
+                          child: InkWell(
+                            onTap: purchase
+                                ? () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => InvoiceDetailScreen(invoiceId: b.sourceInvoiceId!),
+                                      ),
+                                    )
+                                : null,
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: Column(
@@ -87,10 +111,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   Text('Expiry: ${b.expiryDate ?? "—"}'),
                                   Text('Quantity: ${b.quantityOnHand.toStringAsFixed(0)}'),
                                   if (b.mrp != null) Text('MRP: ₹${b.mrp!.toStringAsFixed(2)}'),
+                                  Text('GST: ${b.gstPct.toStringAsFixed(b.gstPct == b.gstPct.roundToDouble() ? 0 : 2)}%'),
+                                  if (b.netRate != null) Text('Net rate: ₹${b.netRate!.toStringAsFixed(2)}'),
+                                  if (_dealLine(b) != null) Text(_dealLine(b)!),
+                                  if (b.vendorName != null || b.invoiceNo != null) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            [
+                                              if (b.vendorName != null) 'Bought from ${b.vendorName}',
+                                              if (b.invoiceNo != null) 'Invoice ${b.invoiceNo}',
+                                            ].join(' · '),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                          ),
+                                        ),
+                                        if (purchase)
+                                          Icon(Icons.chevron_right,
+                                              size: 18, color: Theme.of(context).colorScheme.outline),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
-                          )),
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),

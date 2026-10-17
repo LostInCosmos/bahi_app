@@ -47,6 +47,27 @@ class ProductBatchInfo {
   final double gstPct;
   final bool isExpired;
 
+  /// Where this batch came from (DAS-82) — null together for a batch with
+  /// no linked purchase (added by hand, or predates this tracking).
+  /// `sourceInvoiceId` is enough to open the full bill (InvoiceDetailScreen);
+  /// name/no are just for the at-a-glance line here.
+  final int? sourceInvoiceId;
+  final String? vendorName;
+  final String? invoiceNo;
+
+  /// The deal this batch was actually bought on (DAS-82, widened) — `rate`
+  /// through `freeScheme` come from the originating purchase line, same
+  /// field names `GET /invoices/{id}` uses for a line item; `netRate` comes
+  /// straight off the batch itself (its `purchase_rate`), so it can be
+  /// present even in the shouldn't-happen case where no matching line is
+  /// found — never assume it's null together with the other five.
+  final double? netRate;
+  final double? rate;
+  final double? discountPct;
+  final double? discountAmount;
+  final double? freeQty;
+  final String? freeScheme;
+
   ProductBatchInfo({
     required this.id,
     this.batchNo,
@@ -55,6 +76,15 @@ class ProductBatchInfo {
     this.mrp,
     required this.gstPct,
     required this.isExpired,
+    this.sourceInvoiceId,
+    this.vendorName,
+    this.invoiceNo,
+    this.netRate,
+    this.rate,
+    this.discountPct,
+    this.discountAmount,
+    this.freeQty,
+    this.freeScheme,
   });
 
   factory ProductBatchInfo.fromJson(Map<String, dynamic> json) => ProductBatchInfo(
@@ -65,6 +95,15 @@ class ProductBatchInfo {
         mrp: (json['mrp'] as num?)?.toDouble(),
         gstPct: (json['gst_pct'] as num).toDouble(),
         isExpired: json['is_expired'] as bool,
+        sourceInvoiceId: json['source_invoice_id'] as int?,
+        vendorName: json['vendor_name'] as String?,
+        invoiceNo: json['invoice_no'] as String?,
+        netRate: (json['net_rate'] as num?)?.toDouble(),
+        rate: (json['rate'] as num?)?.toDouble(),
+        discountPct: (json['discount_pct'] as num?)?.toDouble(),
+        discountAmount: (json['discount_amount'] as num?)?.toDouble(),
+        freeQty: (json['free_qty'] as num?)?.toDouble(),
+        freeScheme: json['free_scheme'] as String?,
       );
 }
 
