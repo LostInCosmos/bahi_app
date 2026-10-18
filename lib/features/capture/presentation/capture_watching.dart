@@ -13,6 +13,11 @@ mixin _Watching on State<CaptureScreen> {
   void _noteMove(BatchItem item, String? before);
   void _scheduleListRefresh();
 
+  /// Bills this phone handed over to the shop's list unsaved (DAS-62): no
+  /// card any more, but still watched by job until saved, so a save by our
+  /// team refreshes the list without waiting for a pull (DAS-79).
+  Set<int> get _watchedRows;
+
   // There is NO client-side limit on how long a bill may be read. The phone
   // used to give up after a fixed time and mark the bill failed, and the
   // server went on to finish it: first at 120 s (set when a bill was one model
@@ -37,6 +42,9 @@ mixin _Watching on State<CaptureScreen> {
   /// loop only started if something was already in flight when the screen
   /// opened).
   Future<void> recheckNeedsReview() async {
+    // The shop's rows — every bill this phone no longer holds a card for —
+    // are brought up to date the same way.
+    _scheduleListRefresh();
     for (final item in List<BatchItem>.of(_items)) {
       if (!mounted) return;
       if (item.status == BatchItemStatus.needsReview ||
@@ -71,6 +79,7 @@ mixin _Watching on State<CaptureScreen> {
           if (job.result != null) item.result = job.result;
         });
         unawaited(_persistBatch());
+        _scheduleListRefresh();
         return;
       }
       if (item.status != BatchItemStatus.needsReview) return;
@@ -83,6 +92,7 @@ mixin _Watching on State<CaptureScreen> {
         item.status = BatchItemStatus.pendingConfirm;
       });
       unawaited(_persistBatch());
+      _scheduleListRefresh();
     } catch (_) {
       // ignored — see doc comment
     }
@@ -147,7 +157,9 @@ mixin _Watching on State<CaptureScreen> {
       // A bill submitted while the loop was winding down saw the flag still
       // set and did not start one. Without this it would be watched by
       // nobody and spin for ever.
-      if (mounted && _watching.isNotEmpty) _ensureStatusLoop();
+      if (mounted && (_watching.isNotEmpty || _watchedRows.isNotEmpty)) {
+        _ensureStatusLoop();
+      }
     }));
   }
 
@@ -170,7 +182,8 @@ mixin _Watching on State<CaptureScreen> {
     var idleRounds = 0;
     while (mounted) {
       final watching = _watching;
-      if (watching.isEmpty) {
+      final rows = _watchedRows.difference(watching.keys.toSet());
+      if (watching.isEmpty && rows.isEmpty) {
         // Nothing to ask about. Costs no request at all; a few local ticks
         // then stop, and the next submission starts the loop again.
         if (++idleRounds > 3) return;
@@ -181,9 +194,11 @@ mixin _Watching on State<CaptureScreen> {
 
       // A bill the server is backing off on is not worth asking about until
       // it is due; it would only return "retrying" again.
-      final due = watching.entries
-          .where((e) => !e.value.isBackingOff(_retrySweepMargin))
-          .toList();
+      final due = [
+        for (final e in watching.entries)
+          if (!e.value.isBackingOff(_retrySweepMargin)) e.key,
+        ...rows,
+      ];
       if (due.isEmpty) {
         await Future<void>.delayed(const Duration(seconds: 5));
         continue;
@@ -192,7 +207,7 @@ mixin _Watching on State<CaptureScreen> {
       final JobStatusBatch batch;
       try {
         batch = await ApiClient.instance
-            .jobStatuses(due.map((e) => e.key).toList());
+            .jobStatuses(due);
       } catch (_) {
         // A dropped connection is expected on mobile and is NOT a failed
         // bill: the server holds the request open for ~25s, so a tunnel or a
@@ -208,7 +223,11 @@ mixin _Watching on State<CaptureScreen> {
       var finished = false;
       for (final brief in batch.jobs) {
         final item = watching[brief.jobId];
-        if (item != null) {
+        if (item == null && brief.saved && _watchedRows.remove(brief.jobId)) {
+          // Saved by our team after this phone handed the bill over: the
+          // shop's row says so once the list is asked.
+          finished = true;
+        } else if (item != null) {
           final before = categoryOfItem(item);
           if (item.status == BatchItemStatus.processing) {
             await _applyStatus(item, brief);

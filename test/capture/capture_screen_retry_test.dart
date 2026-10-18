@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
 import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
+import 'package:gst_bill_app/features/capture/widgets/batch_item_card.dart';
 import 'package:gst_bill_app/features/capture/widgets/status_filter_bar.dart';
 
 /// Trying again on a bill that failed.
@@ -424,7 +425,10 @@ void main() {
       expect(box('Processing 1'), findsNothing);
 
       final failed = find.byKey(const ValueKey('j:8'));
-      await tester.tap(find.descendant(of: failed, matching: find.byIcon(Icons.refresh_rounded)));
+      final retry = find.descendant(of: failed, matching: find.byIcon(Icons.refresh_rounded));
+      await tester.ensureVisible(retry);                         // clear of the bottom bar's Add row
+      await tester.pump();
+      await tester.tap(retry);
       await tester.pump();
       await tester.pump();                                       // the server has not answered the retry
       expect(box('Processing 1'), findsOneWidget, reason: 'a retry began: +1 at once');
@@ -445,6 +449,37 @@ void main() {
       await _settle(tester);                                     // the refetch confirms it
       expect(box('Processing 1'), findsOneWidget);
       expect(box('Failed 1'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 40));
+    }, () => server.client);
+  });
+
+  testWidgets('a retried bill hands its card over to the shop\'s row once the server lists it read (DAS-62)', (tester) async {
+    // The phone holds a card only while the server cannot show the bill.
+    // Once the read is done and the list has it in the same box, one card is
+    // left — the shop's — and nothing about it stays on this phone.
+    _ignoreOverflow();
+    final server = _Server(filed: true, finishes: true, job8Failed: true);
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 1400));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: CaptureScreen(onBatchFinished: () {}))));
+      await _settle(tester);
+      await tester.tap(find.text('Testing2'));
+      await _settle(tester);
+
+      final retry = find.descendant(of: find.byKey(const ValueKey('j:8')), matching: find.byIcon(Icons.refresh_rounded));
+      await tester.ensureVisible(retry);
+      await tester.pump();
+      await tester.tap(retry);
+      await tester.pump();
+      expect(find.byType(BatchItemCard), findsOneWidget, reason: 'being read: the phone\'s card stands in');
+
+      await _settle(tester);                                     // read, flagged; the list refetched
+      await tester.pump(const Duration(seconds: 1));
+      await _settle(tester);
+      expect(find.byType(BatchItemCard), findsNothing, reason: 'handed over');
+      expect(find.byKey(const ValueKey('j:8')), findsOneWidget, reason: 'one card, the shop\'s');
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 40));

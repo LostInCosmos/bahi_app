@@ -206,6 +206,16 @@ class BatchItem {
       errorMessage == timedOutMessage &&
       lastJobId != null;
 
+  /// The server has finished with this bill — read (flagged or not) or saved —
+  /// so the shop's list shows it, and this phone's card is only a copy that
+  /// can go stale (DAS-62). The phone keeps its own card only while the server
+  /// cannot show the bill: not uploaded, being read, or failed.
+  bool get isFinishedOnServer =>
+      (lastJobId ?? jobId) != null &&
+      (status == BatchItemStatus.pendingConfirm ||
+          status == BatchItemStatus.needsReview ||
+          status == BatchItemStatus.saved);
+
   /// Whether the card offers its ↻ button.
   ///
   /// Not while its photos are being uploaded or it is being read, and not

@@ -73,6 +73,13 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
   @override
   final List<BatchItem> _items = [];
 
+  @override
+  final Set<int> _watchedRows = {};
+
+  /// Whether this batch handed any bill over to the shop's list — so "Done"
+  /// is still offered once every card of it has gone there (DAS-62).
+  bool _batchHandedOver = false;
+
   /// The shop's folders and where this screen is in them. Bills are shown
   /// folder by folder: a bill captured inside a folder is saved into it.
   @override
@@ -96,7 +103,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
       i.status == BatchItemStatus.failed ||
       i.status == BatchItemStatus.pendingConfirm);
   bool get _allResolved =>
-      _items.isNotEmpty &&
+      (_items.isNotEmpty || _batchHandedOver) &&
       _items.every((i) => i.status == BatchItemStatus.saved);
 
   @override
@@ -210,7 +217,18 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
     if (store == null) return;
     final restored = await store.load();
     if (restored.isEmpty || !mounted) return;
+    // A bill the server finished last session is the shop list's now
+    // (DAS-62): its card here could only be a stale copy — 25 such cards once
+    // said "needs review" for bills discarded long before.
+    final finished = restored.where((i) => i.isFinishedOnServer).toList();
+    restored.removeWhere(finished.contains);
+    for (final item in finished) {
+      if (item.status != BatchItemStatus.saved) {
+        _watchedRows.add((item.lastJobId ?? item.jobId)!);
+      }
+    }
     setState(() => _items.addAll(restored));
+    if (finished.isNotEmpty) unawaited(_persistBatch());
     _reconcileItemFolders();
 
     final toUpload = <BatchItem>[];
@@ -360,6 +378,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
     }
     final history = _uploadHistory.currentState;
     history?.forget([upload.jobId]);
+    _watchedRows.remove(upload.jobId);
     try {
       final reply = await ApiClient.instance.bulkDiscard([upload.jobId]);
       if (!reply.discarded.contains(upload.jobId)) {
@@ -371,6 +390,25 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
       return;
     }
     if (mounted) unawaited(_folders.load());
+  }
+
+  /// The shop's list now shows these bills in the box their cards are in, so
+  /// the cards go and the list's rows are the only ones (DAS-62). One that is
+  /// not saved is still watched by its job — see [_watchedRows].
+  void _handOver(List<BatchItem> items) {
+    final gone = items.where(_items.contains).toList();
+    if (gone.isEmpty) return;
+    for (final item in gone) {
+      if (item.status != BatchItemStatus.saved) {
+        _watchedRows.add((item.lastJobId ?? item.jobId)!);
+      }
+    }
+    setState(() {
+      _items.removeWhere(gone.contains);
+      _batchHandedOver = true;
+    });
+    _persistBatch();
+    _ensureStatusLoop();
   }
 
   /// Forget a bill on THIS device: its card, its saved state and its photos.
@@ -556,6 +594,8 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
           item.failedAtSave = false;
           item.errorMessage = null;
         });
+        // The shop's row turns Saved, and the card hands over to it.
+        _scheduleListRefresh();
         await showSavedTick(context);
         break;
       } on ApiException catch (e) {
@@ -647,7 +687,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
   }
 
   void _finish() {
-    setState(() => _items.clear());
+    setState(() {
+      _items.clear();
+      _batchHandedOver = false;
+    });
     _persistBatch();
     widget.onBatchFinished();
   }
@@ -783,7 +826,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
             )
           else
             CaptureBottomBar(
-              hasItems: _items.isNotEmpty,
+              // Bills on screen at all, not just cards this phone holds — those
+              // go to the shop's list once read (DAS-62), and without this a
+              // full list had no way to add another.
+              hasItems: _items.isNotEmpty || _visible.isNotEmpty,
               allResolved: _allResolved,
               hasUnresolved: _hasUnresolved,
               onTakePhoto: () => _addPhoto(ImageSource.camera),
@@ -1057,6 +1103,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
           UploadHistory(
             key: _uploadHistory,
             onFolderTotals: _onFolderTotals,
+            onHandOver: _handOver,
             query: _query,
             onRetry: _retryUpload,
             onDelete: _discardUpload,

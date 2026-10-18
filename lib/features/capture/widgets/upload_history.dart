@@ -80,6 +80,12 @@ class UploadHistory extends StatefulWidget {
   /// once when bills are moved.
   final void Function(Map<int?, int> totals)? onFolderTotals;
 
+  /// Bills this phone holds that the server has finished with, and that this
+  /// list now holds in the same box (DAS-62): the screen drops its own card
+  /// and the shop's row is the only one left. Same box, so a row fetched
+  /// before the bill finished does not take over from a card that is newer.
+  final void Function(List<BatchItem> items)? onHandOver;
+
   /// Read this bill again. Offered on the cards that want a second look —
   /// the ones that failed and the ones that need review — and never while
   /// bills are being chosen.
@@ -122,6 +128,7 @@ class UploadHistory extends StatefulWidget {
     this.onToggle,
     this.onEntries,
     this.onFolderTotals,
+    this.onHandOver,
     this.query = '',
     this.onRetry,
     this.onDelete,
@@ -569,6 +576,19 @@ class UploadHistoryState extends State<UploadHistory> {
     return totals;
   }
 
+  /// The phone's finished cards whose bill this list holds in the same box —
+  /// see [UploadHistory.onHandOver].
+  List<BatchItem> get _handedOver {
+    final byJob = {for (final u in _uploads) u.jobId: u};
+    return [
+      for (final item in widget.localItems)
+        if (item.isFinishedOnServer)
+          if (byJob[item.lastJobId ?? item.jobId] case final row?
+              when uploadCategory(row) == categoryOfItem(item))
+            item,
+    ];
+  }
+
   String _reportedTotals = '';
   String _reportedKey = '';
 
@@ -576,6 +596,13 @@ class UploadHistoryState extends State<UploadHistory> {
   /// rebuilds mid-build is an error. Keyed on the ids, so a card changing
   /// its status does not re-announce an unchanged set.
   void _report(List<ListEntry> entries) {
+    final handOver = widget.onHandOver;
+    final handed = handOver == null ? const <BatchItem>[] : _handedOver;
+    if (handed.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) handOver!(handed);
+      });
+    }
     final tellTotals = widget.onFolderTotals;
     if (tellTotals != null) {
       final totals = _folderTotals;
