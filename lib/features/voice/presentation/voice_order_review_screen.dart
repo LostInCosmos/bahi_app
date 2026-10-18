@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../inventory/data/inventory_api.dart';
+import '../../inventory/data/product_catalog.dart';
 import '../data/voice_api.dart';
 import '../models/voice.dart';
 import '../../../app/theme/app_theme.dart';
@@ -52,11 +53,16 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       if (!mounted) return;
       setState(() => _order = updated);
     } on ApiException catch (e) {
-      if (mounted) {
-        setState(() => _message = e.statusCode == 409
-            ? 'This draft is no longer editable (already confirmed or cancelled).'
-            : 'Could not update line: ${e.message}');
+      if (!mounted) return;
+      if (e.statusCode == 404 && e.message == 'product not found') {
+        // Merged into another by our team (DAS-93) since the list was loaded.
+        unawaited(ProductCatalog.instance.refresh());
+        setState(() => _message = 'That medicine was merged into another one. The list has been refreshed — pick it again.');
+        return;
       }
+      setState(() => _message = e.statusCode == 409
+          ? 'This draft is no longer editable (already confirmed or cancelled).'
+          : 'Could not update line: ${e.message}');
     } catch (e) {
       if (mounted) setState(() => _message = 'Could not update line: $e');
     } finally {
@@ -882,9 +888,10 @@ class _AddItemSheetState extends State<_AddItemSheet> {
 
   final _searchController = TextEditingController();
   final _qtyController = TextEditingController(text: '1');
-  List<ProductSummary> _results = [];
-  bool _loading = false;
-  bool _searched = false;
+  final _catalog = ProductCatalog.instance;
+
+  /// What is typed, searched on the phone as each letter is typed (DAS-94).
+  String _query = '';
   String? _error;
   ProductSummary? _selected;
   String _unit = 'tablet';
@@ -899,32 +906,27 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   final _newGstController = TextEditingController(text: '0');
 
   @override
+  void initState() {
+    super.initState();
+    _catalog.addListener(_onCatalog);
+    // The list the other tabs hold is searched at once; a fresh one is asked
+    // for alongside, so the stock shown here is current.
+    unawaited(_catalog.refresh());
+  }
+
+  void _onCatalog() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _catalog.removeListener(_onCatalog);
     _searchController.dispose();
     _qtyController.dispose();
     _newNameController.dispose();
     _newMrpController.dispose();
     _newGstController.dispose();
     super.dispose();
-  }
-
-  Future<void> _search() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final results = await ApiClient.instance.searchProducts(q: _searchController.text.trim());
-      if (!mounted) return;
-      setState(() {
-        _results = results;
-        _searched = true;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Could not search: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   void _confirm() {
@@ -974,6 +976,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
         gstPct: gst,
       );
       if (!mounted) return;
+      unawaited(_catalog.refresh()); // so every search finds it from now on
       setState(() {
         _selected = created;
         _creatingNew = false;
@@ -990,6 +993,12 @@ class _AddItemSheetState extends State<_AddItemSheet> {
   @override
   Widget build(BuildContext context) {
     final selected = _selected;
+    final index = _catalog.index;
+    final typed = _query.trim().isNotEmpty;
+    // Nothing until something is typed: the whole shop is not a pick list.
+    final results = typed && index != null ? index.match(_query) : const <ProductSummary>[];
+    final loading = index == null && _catalog.isLoading;
+    final failure = _error ?? (index == null && _catalog.lastError != null ? 'Could not load medicines: ${_catalog.lastError}' : null);
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1076,35 +1085,43 @@ class _AddItemSheetState extends State<_AddItemSheet> {
               ),
             ] else if (selected == null) ...[
               TextField(
+                key: const ValueKey('add-item-search'),
                 controller: _searchController,
                 autofocus: true,
-                decoration: InputDecoration(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: const InputDecoration(
                   labelText: 'Search a medicine',
                   isDense: true,
-                  suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: _search),
+                  suffixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _search(),
               ),
               const SizedBox(height: Spacing.s),
-              if (_loading) const Center(child: Padding(padding: EdgeInsets.all(Spacing.m), child: CircularProgressIndicator())),
-              if (_error != null)
+              if (loading) const Center(child: Padding(padding: EdgeInsets.all(Spacing.m), child: CircularProgressIndicator())),
+              if (failure != null)
                 Padding(
                   padding: const EdgeInsets.only(top: Spacing.s),
-                  child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  child: Text(failure, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: _results.map((p) => ListTile(
+              // A fixed height, not shrinkWrap: a shrink-wrapped list builds
+              // every row to measure itself, and "p" alone matches hundreds.
+              if (results.isNotEmpty)
+                SizedBox(
+                  height: (results.length * 64.0).clamp(0, MediaQuery.of(context).size.height * 0.4),
+                  child: ListView.builder(
+                    itemCount: results.length,
+                    itemBuilder: (context, i) {
+                      final p = results[i];
+                      return ListTile(
                         title: Text(p.name),
                         subtitle: Text('${p.quantityOnHand.toStringAsFixed(0)} in stock'),
                         enabled: p.quantityOnHand > 0,
                         onTap: () => setState(() => _selected = p),
-                      )).toList(),
+                      );
+                    },
+                  ),
                 ),
-              ),
-              if (_searched && !_loading)
+              if (typed && index != null)
                 Padding(
                   padding: const EdgeInsets.only(top: Spacing.s),
                   child: TextButton.icon(

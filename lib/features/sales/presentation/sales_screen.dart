@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../inventory/data/inventory_api.dart';
+import '../../inventory/data/product_catalog.dart';
 import '../../voice/data/voice_api.dart';
 import '../../inventory/models/product.dart';
 import '../models/sale.dart';
@@ -41,15 +42,18 @@ class SalesScreen extends StatefulWidget {
 
 class SalesScreenState extends State<SalesScreen> {
   final _searchController = TextEditingController();
-  List<ProductSummary> _products = [];
+  final _catalog = ProductCatalog.instance;
+
+  /// What is typed, searched on the phone as each letter is typed (DAS-94) —
+  /// the same list and the same match as the Inventory tab.
+  String _query = '';
   final List<CartEntry> _cart = [];
   final List<_VoiceJobItem> _voiceJobs = [];
-  bool _loading = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
+    _catalog.addListener(_onCatalog);
     // No _search() here deliberately — see the same note in
     // purchases_screen.dart: HomeScreen's tab switcher calls refresh() the
     // first (and every) time this tab is actually selected, so every tab
@@ -61,8 +65,13 @@ class SalesScreenState extends State<SalesScreen> {
 
   @override
   void dispose() {
+    _catalog.removeListener(_onCatalog);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onCatalog() {
+    if (mounted) setState(() {});
   }
 
   // ==================== in-flight voice job persistence ====================
@@ -117,22 +126,9 @@ class SalesScreenState extends State<SalesScreen> {
 
   Future<void> refresh() => _search();
 
-  Future<void> _search() async {
-    if (_loading) return;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final products = await ApiClient.instance.searchProducts(q: _searchController.text.trim());
-      if (!mounted) return;
-      setState(() => _products = products);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Could not search: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  /// Fetch the shop's products again — on opening the tab and after every
+  /// sale, so the stock shown is what is left.
+  Future<void> _search() => _catalog.refresh();
 
   void _openPicker(ProductSummary p) {
     showModalBottomSheet(
@@ -274,47 +270,72 @@ class SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final index = _catalog.index;
+    final products = index?.match(_query) ?? const <ProductSummary>[];
+    final failure = _catalog.lastError;
+    final header = <Widget>[
+      TextField(
+        key: const ValueKey('sale-search'),
+        controller: _searchController,
+        onChanged: (typed) => setState(() => _query = typed),
+        decoration: InputDecoration(
+          labelText: 'Search a medicine to add',
+          suffixIcon: _query.isEmpty
+              ? const Icon(Icons.search)
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+        ),
+        textInputAction: TextInputAction.search,
+      ),
+      const SizedBox(height: 12),
+      if (_voiceJobs.isNotEmpty) ...[
+        _buildVoiceJobsStrip(context),
+        const SizedBox(height: 12),
+      ],
+      if (failure != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text('Could not load medicines: $failure',
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ),
+      if (index == null && _catalog.isLoading)
+        const Padding(
+          padding: EdgeInsets.only(top: 32),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      if (products.isEmpty && index != null)
+        const Padding(
+          padding: EdgeInsets.only(top: 32),
+          child: Center(child: Text('No products found')),
+        ),
+    ];
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _search,
-        child: ListView(
+        // Built as they scroll into view — see InventoryScreen.
+        child: ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-          children: [
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Search a medicine to add',
-                suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: _search),
+          itemCount: header.length + products.length,
+          itemBuilder: (context, i) {
+            if (i < header.length) return header[i];
+            final p = products[i - header.length];
+            return Card(
+              child: ListTile(
+                title: Text(p.name),
+                subtitle: Text('${p.quantityOnHand.toStringAsFixed(0)} in stock'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: p.quantityOnHand > 0 ? () => _openPicker(p) : null,
+                ),
               ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(),
-            ),
-            const SizedBox(height: 12),
-            if (_voiceJobs.isNotEmpty) ...[
-              _buildVoiceJobsStrip(context),
-              const SizedBox(height: 12),
-            ],
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
-            if (_products.isEmpty && !_loading)
-              const Padding(
-                padding: EdgeInsets.only(top: 32),
-                child: Center(child: Text('No products found')),
-              ),
-            ..._products.map((p) => Card(
-                  child: ListTile(
-                    title: Text(p.name),
-                    subtitle: Text('${p.quantityOnHand.toStringAsFixed(0)} in stock'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: p.quantityOnHand > 0 ? () => _openPicker(p) : null,
-                    ),
-                  ),
-                )),
-          ],
+            );
+          },
         ),
       ),
       floatingActionButton: Column(
@@ -408,6 +429,15 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
         _rateControllers[b.id] = TextEditingController(text: b.mrp?.toStringAsFixed(2) ?? '');
       }
       setState(() => _detail = detail);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode != 404) return setState(() => _error = 'Could not load product: $e');
+      // Merged into another product by our team (DAS-93): the list it was
+      // picked from is out of date. Fetch it again and let them pick again.
+      unawaited(ProductCatalog.instance.refresh());
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('That medicine was merged into another one. The list has been refreshed — pick it again.')));
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not load product: $e');
     }

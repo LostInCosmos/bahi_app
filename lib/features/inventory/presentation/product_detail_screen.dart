@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
 import '../data/inventory_api.dart';
+import '../data/product_catalog.dart';
 import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../models/product.dart';
 
@@ -49,11 +52,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final detail = await ApiClient.instance.getProductDetail(widget.productId);
       if (!mounted) return;
       setState(() => _detail = detail);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 404) return _gone();
+      setState(() => _error = 'Could not load product: $e');
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not load product: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// The product no longer exists: our team merged it into another (DAS-93).
+  /// The list it was picked from is out of date, so it is fetched again and
+  /// the shopkeeper picks again, rather than being shown an error.
+  void _gone() {
+    unawaited(ProductCatalog.instance.refresh());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('That medicine was merged into another one. The list has been refreshed.')),
+    );
+    Navigator.of(context).pop();
   }
 
   @override
