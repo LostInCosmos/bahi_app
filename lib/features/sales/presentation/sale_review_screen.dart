@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../inventory/data/product_catalog.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
 
@@ -39,6 +42,22 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
     if (widget.cart.isEmpty) Navigator.of(context).pop();
   }
 
+  /// How the server refuses a batch that no longer exists: `batch 12 not found`.
+  static final _goneBatch = RegExp(r'batch (\d+) not found');
+
+  /// A batch in the cart was merged into another by our team (DAS-93) after it
+  /// was picked. Its line comes out of the cart, the product list is fetched
+  /// again, and the shopkeeper adds it again — nothing else in the cart changes.
+  void _dropGoneBatch(int batchId) {
+    final gone = widget.cart.where((c) => c.productBatchId == batchId).map((c) => c.productName).toSet();
+    unawaited(ProductCatalog.instance.refresh());
+    setState(() {
+      widget.cart.removeWhere((c) => c.productBatchId == batchId);
+      _message = '${gone.isEmpty ? 'A medicine' : gone.join(', ')} was merged into another by our team and '
+          'has been taken out of the cart. Add it again from the list.';
+    });
+  }
+
   Future<void> _complete() async {
     if (_saving || widget.cart.isEmpty) return;
     setState(() {
@@ -56,9 +75,12 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
     } on ApiException catch (e) {
       final detail = e.detail;
       if (!mounted) return;
+      final gone = e.statusCode == 404 ? _goneBatch.firstMatch(e.message) : null;
       if (detail is Map && detail['error'] == 'insufficient_stock') {
         setState(() => _message = 'Not enough stock for ${detail['product_name']}: '
             'requested ${detail['requested']}, available ${detail['available']}.');
+      } else if (gone != null) {
+        _dropGoneBatch(int.parse(gone.group(1)!));
       } else {
         setState(() => _message = 'Sale failed: $e');
       }
