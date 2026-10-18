@@ -1,11 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/share_file.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
 import '../../../app/theme/app_theme.dart';
@@ -79,10 +76,9 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
     });
     try {
       final bytes = await ApiClient.instance.exportSalesExcel(startDate: _iso(_startDate), endDate: _iso(_endDate));
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/sales_${DateTime.now().millisecondsSinceEpoch}.xlsx');
-      await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GST sales export'));
+      if (!mounted) return;
+      await shareBytes(context, bytes,
+          name: 'sales_${DateTime.now().millisecondsSinceEpoch}.xlsx', text: 'GST sales export');
     } catch (e) {
       if (mounted) setState(() => _error = 'Export failed: $e');
     } finally {

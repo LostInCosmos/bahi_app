@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/share_file.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
 
@@ -50,7 +51,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
       'CGST + SGST: ₹${(s.totalCgst + s.totalSgst).toStringAsFixed(2)}',
       'Total: ₹${s.grandTotal.toStringAsFixed(2)}',
     ];
-    await SharePlus.instance.share(ShareParams(text: lines.join('\n')));
+    await SharePlus.instance.share(ShareParams(text: lines.join('\n'), sharePositionOrigin: shareOrigin(context)));
   }
 
   @override
