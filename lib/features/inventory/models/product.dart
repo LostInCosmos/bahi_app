@@ -1,5 +1,7 @@
 library;
 
+import '../../../core/utils/json.dart';
+
 class ProductSummary {
   final int id;
   final String name;
@@ -27,14 +29,14 @@ class ProductSummary {
   });
 
   factory ProductSummary.fromJson(Map<String, dynamic> json) => ProductSummary(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        hsnCode: json['hsn_code'] as String?,
-        pack: json['pack'] as String?,
-        quantityOnHand: (json['quantity_on_hand'] as num).toDouble(),
-        netRate: (json['net_rate'] as num?)?.toDouble(),
-        mrp: (json['mrp'] as num?)?.toDouble(),
-        expiryDate: (json['expiry_date'] as String?)?.split('T').first,
+        id: json.intReq('id'),
+        name: json.strReq('name'),
+        hsnCode: json.str('hsn_code'),
+        pack: json.str('pack'),
+        quantityOnHand: json.dblReq('quantity_on_hand'),
+        netRate: json.dbl('net_rate'),
+        mrp: json.dbl('mrp'),
+        expiryDate: json.dateOnly('expiry_date'),
       );
 }
 
@@ -88,22 +90,22 @@ class ProductBatchInfo {
   });
 
   factory ProductBatchInfo.fromJson(Map<String, dynamic> json) => ProductBatchInfo(
-        id: json['id'] as int,
-        batchNo: json['batch_no'] as String?,
-        expiryDate: (json['expiry_date'] as String?)?.split('T').first,
-        quantityOnHand: (json['quantity_on_hand'] as num).toDouble(),
-        mrp: (json['mrp'] as num?)?.toDouble(),
-        gstPct: (json['gst_pct'] as num).toDouble(),
-        isExpired: json['is_expired'] as bool,
-        sourceInvoiceId: json['source_invoice_id'] as int?,
-        vendorName: json['vendor_name'] as String?,
-        invoiceNo: json['invoice_no'] as String?,
-        netRate: (json['net_rate'] as num?)?.toDouble(),
-        rate: (json['rate'] as num?)?.toDouble(),
-        discountPct: (json['discount_pct'] as num?)?.toDouble(),
-        discountAmount: (json['discount_amount'] as num?)?.toDouble(),
-        freeQty: (json['free_qty'] as num?)?.toDouble(),
-        freeScheme: json['free_scheme'] as String?,
+        id: json.intReq('id'),
+        batchNo: json.str('batch_no'),
+        expiryDate: json.dateOnly('expiry_date'),
+        quantityOnHand: json.dblReq('quantity_on_hand'),
+        mrp: json.dbl('mrp'),
+        gstPct: json.dblReq('gst_pct'),
+        isExpired: json.boolReq('is_expired'),
+        sourceInvoiceId: json.integer('source_invoice_id'),
+        vendorName: json.str('vendor_name'),
+        invoiceNo: json.str('invoice_no'),
+        netRate: json.dbl('net_rate'),
+        rate: json.dbl('rate'),
+        discountPct: json.dbl('discount_pct'),
+        discountAmount: json.dbl('discount_amount'),
+        freeQty: json.dbl('free_qty'),
+        freeScheme: json.str('free_scheme'),
       );
 }
 
@@ -127,13 +129,11 @@ class ProductDetail {
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) => ProductDetail(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        hsnCode: json['hsn_code'] as String?,
-        pack: json['pack'] as String?,
-        totalQuantity: (json['total_quantity'] as num).toDouble(),
-        batches: (json['batches'] as List<dynamic>)
-            .map((e) => ProductBatchInfo.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        id: json.intReq('id'),
+        name: json.strReq('name'),
+        hsnCode: json.str('hsn_code'),
+        pack: json.str('pack'),
+        totalQuantity: json.dblReq('total_quantity'),
+        batches: json.listOf('batches', ProductBatchInfo.fromJson),
       );
 }

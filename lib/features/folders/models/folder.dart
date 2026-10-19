@@ -1,3 +1,5 @@
+import '../../../core/utils/json.dart';
+
 /// A shopkeeper's folder for saved bills. The server owns the tree; this is
 /// just what it sends back.
 class Folder {
@@ -16,10 +18,10 @@ class Folder {
       this.billCount = 0});
 
   factory Folder.fromJson(Map<String, dynamic> json) => Folder(
-        id: json['id'] as int,
-        parentId: json['parent_id'] as int?,
-        name: json['name'] as String,
-        billCount: json['bill_count'] as int? ?? 0,
+        id: json.intReq('id'),
+        parentId: json.integer('parent_id'),
+        name: json.strReq('name'),
+        billCount: json.intOr('bill_count'),
       );
 }
 
@@ -35,18 +37,33 @@ class FolderTree {
   final List<Folder> folders;
   final Map<int, Folder> _byId;
 
-  FolderTree(this.folders) : _byId = {for (final f in folders) f.id: f};
+  /// Each folder's children, sorted by name, worked out once: the capture
+  /// grid asks for every tile's children on every build, and a filter-and-sort
+  /// over the whole list per tile per frame added up.
+  final Map<int?, List<Folder>> _children;
+
+  FolderTree(this.folders)
+      : _byId = {for (final f in folders) f.id: f},
+        _children = _indexChildren(folders);
+
+  static Map<int?, List<Folder>> _indexChildren(List<Folder> folders) {
+    final out = <int?, List<Folder>>{};
+    for (final f in folders) {
+      (out[f.parentId] ??= []).add(f);
+    }
+    for (final kids in out.values) {
+      kids.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
+    return out;
+  }
 
   static final empty = FolderTree(const []);
 
   Folder? byId(int? id) => id == null ? null : _byId[id];
   bool contains(int? id) => id == null || _byId.containsKey(id);
 
-  List<Folder> childrenOf(int? parentId) {
-    final out = folders.where((f) => f.parentId == parentId).toList();
-    out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return out;
-  }
+  /// Sorted by name, ignoring case. The list is shared: do not mutate it.
+  List<Folder> childrenOf(int? parentId) => _children[parentId] ?? const [];
 
   /// Home-to-here, inclusive of [id] itself; empty for home.
   List<Folder> pathTo(int? id) {

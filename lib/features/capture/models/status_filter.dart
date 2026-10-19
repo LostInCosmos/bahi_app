@@ -84,11 +84,12 @@ const List<FilterBox> kFilterBoxes = [
 bool matchesStatusFilter(BatchItem item, String key) {
   final retrying = item.retryAt != null;
   if (retrying) return key == 'working';
-  for (final f in kStatusFilters) {
-    if (f.key == key) return f.statuses.contains(item.status);
-  }
-  return false;
+  return _filterByKey[key]?.statuses.contains(item.status) ?? false;
 }
+
+/// [kStatusFilters] by key. Looked up per card per build, so a map rather
+/// than a scan.
+final Map<String, StatusFilter> _filterByKey = {for (final f in kStatusFilters) f.key: f};
 
 /// Which status box a bill held on this phone is in right now, if any.
 String? categoryOfItem(BatchItem item) {

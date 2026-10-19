@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/business_types.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
@@ -73,7 +74,7 @@ ColorScheme _buildColorScheme({required Brightness brightness, required bool isK
   );
 }
 
-ThemeData buildAppTheme({required Brightness brightness, String businessType = 'medical'}) {
+ThemeData buildAppTheme({required Brightness brightness, String businessType = kDefaultBusinessType}) {
   final isKirana = businessType == 'kirana';
   final colorScheme = _buildColorScheme(brightness: brightness, isKirana: isKirana);
   final base = ThemeData(colorScheme: colorScheme, useMaterial3: true, brightness: brightness);

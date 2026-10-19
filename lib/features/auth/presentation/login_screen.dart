@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/api/api_client.dart';
-import '../data/auth_api.dart';
 import '../../../app/theme/app_theme.dart';
-import '../../../core/widgets/dastavez_logo.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/config/business_types.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/utils/snack.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/dastavez_logo.dart';
+import '../data/auth_api.dart';
+import 'legal_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,7 +28,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   bool _obscurePassword = true;
   String? _error;
-  String _businessType = 'medical';
+  String _businessType = kDefaultBusinessType;
+
+  /// The shopkeeper has ticked that they accept the Terms of Service and
+  /// Privacy Policy. Required to create an account (DPDP Act s.6: consent by
+  /// a clear affirmative action), not to log in to one that already agreed.
+  bool _acceptedTerms = false;
+
+  bool get _canSubmit => !_busy && (!_signupMode || _acceptedTerms);
 
   @override
   void dispose() {
@@ -132,16 +143,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const SizedBox(height: Spacing.m),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: _businessType,
                                     decoration: const InputDecoration(
                                       labelText: 'Business type',
                                       prefixIcon: Icon(Icons.category_outlined),
                                     ),
-                                    items: const [
-                                      DropdownMenuItem(value: 'medical', child: Text('Medical / Pharmacy')),
-                                      DropdownMenuItem(value: 'kirana', child: Text('Kirana / General store')),
-                                      DropdownMenuItem(value: 'other', child: Text('Other')),
-                                    ],
+                                    items: businessTypeItems(),
                                     onChanged: (v) {
                                       if (v != null) setState(() => _businessType = v);
                                     },
@@ -173,14 +181,36 @@ class _LoginScreenState extends State<LoginScreen> {
                                   Align(
                                     alignment: Alignment.centerRight,
                                     child: TextButton(
-                                      onPressed: () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text("Password reset isn't available yet — contact support.")),
-                                        );
-                                      },
+                                      onPressed: () =>
+                                          context.say("Password reset isn't available yet — contact support."),
                                       child: const Text('Forgot password?'),
                                     ),
                                   ),
+                                if (_signupMode) ...[
+                                  const SizedBox(height: Spacing.s),
+                                  // The one affirmative act the law wants before an
+                                  // account exists. Both names open the document.
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Checkbox(
+                                        key: const ValueKey('accept-terms'),
+                                        value: _acceptedTerms,
+                                        onChanged: _busy ? null : (v) => setState(() => _acceptedTerms = v ?? false),
+                                      ),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(top: Spacing.m),
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.translucent,
+                                            onTap: _busy ? null : () => setState(() => _acceptedTerms = !_acceptedTerms),
+                                            child: const LegalLinksText(prefix: 'I have read and agree to the'),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                 ],
                             ),
                           ),
@@ -235,13 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: Spacing.s),
                           FilledButton(
-                            onPressed: _busy ? null : _submit,
+                            onPressed: _canSubmit ? _submit : null,
                             child: _busy
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
+                                ? const ButtonSpinner(size: 18, onFilled: true)
                                 : Text(_signupMode ? 'Create account' : 'Log in'),
                           ),
                         ],
@@ -254,12 +280,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Icon(Icons.shield_outlined, size: 14, color: colors.onSurfaceVariant),
                       const SizedBox(width: Spacing.xs),
-                      Text(
-                        'Secure access for your store workspace',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                      Flexible(
+                        child: Text(
+                          'Secure access for your store workspace',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                        ),
                       ),
                     ],
                   ),
+                  // Reachable before signing in, as the store rules ask; in
+                  // signup mode the checkbox above already names them.
+                  if (!_signupMode) ...[
+                    const SizedBox(height: Spacing.s),
+                    const LegalLinksText(prefix: 'Using Dastavez means you accept the', textAlign: TextAlign.center),
+                  ],
                 ],
               ),
             ),

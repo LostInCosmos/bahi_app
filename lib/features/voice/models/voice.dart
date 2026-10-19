@@ -1,5 +1,7 @@
 library;
 
+import '../../../core/utils/json.dart';
+
 /// One candidate product offered for an ambiguous/not_found voice-order
 /// line — shown in a bottom sheet so the shopkeeper taps the right one.
 class VoiceLineCandidate {
@@ -11,10 +13,10 @@ class VoiceLineCandidate {
   VoiceLineCandidate({required this.id, required this.name, this.strength, this.unit});
 
   factory VoiceLineCandidate.fromJson(Map<String, dynamic> json) => VoiceLineCandidate(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        strength: json['strength'] as String?,
-        unit: json['unit'] as String?,
+        id: json.intReq('id'),
+        name: json.strReq('name'),
+        strength: json.str('strength'),
+        unit: json.str('unit'),
       );
 }
 
@@ -40,13 +42,13 @@ class BatchAllocation {
   });
 
   factory BatchAllocation.fromJson(Map<String, dynamic> json) => BatchAllocation(
-        batchId: json['batch_id'] as int,
-        batchNo: json['batch_no'] as String?,
-        expiryDate: (json['expiry_date'] as String?)?.split('T').first,
-        qty: (json['qty'] as num).toDouble(),
-        unitPrice: (json['unit_price'] as num).toDouble(),
-        gstPct: (json['gst_pct'] as num).toDouble(),
-        expiringSoon: json['expiring_soon'] as bool? ?? false,
+        batchId: json.intReq('batch_id'),
+        batchNo: json.str('batch_no'),
+        expiryDate: json.dateOnly('expiry_date'),
+        qty: json.dblReq('qty'),
+        unitPrice: json.dblReq('unit_price'),
+        gstPct: json.dblReq('gst_pct'),
+        expiringSoon: json.boolOr('expiring_soon'),
       );
 }
 
@@ -104,32 +106,28 @@ class VoiceOrderLine {
         batchAllocation = batchAllocation ?? [];
 
   factory VoiceOrderLine.fromJson(Map<String, dynamic> json) => VoiceOrderLine(
-        id: json['id'] as int,
-        rawPhrase: json['raw_phrase'] as String? ?? '',
-        productId: json['product_id'] as int?,
-        productName: json['product_name'] as String?,
-        schedule: json['schedule'] as String?,
-        strengthSpoken: json['strength_spoken'] as String?,
-        quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
-        unit: json['unit'] as String?,
-        baseQuantity: (json['base_quantity'] as num?)?.toDouble(),
-        mrp: (json['mrp'] as num?)?.toDouble(),
-        discountType: json['discount_type'] as String?,
-        discountValue: (json['discount_value'] as num?)?.toDouble(),
-        unitPrice: (json['unit_price'] as num?)?.toDouble(),
-        lineTotal: (json['line_total'] as num?)?.toDouble(),
-        confidence: (json['confidence'] as num?)?.toDouble(),
-        status: json['status'] as String? ?? 'not_found',
-        note: json['note'] as String?,
-        candidates: (json['candidates'] as List<dynamic>? ?? [])
-            .map((e) => VoiceLineCandidate.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        batchAllocation: (json['batch_allocation'] as List<dynamic>? ?? [])
-            .map((e) => BatchAllocation.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        resolvedBy: json['resolved_by'] as String?,
-        prescriptionRef: json['prescription_ref'] as String?,
-        skip: json['skip'] as bool? ?? false,
+        id: json.intReq('id'),
+        rawPhrase: json.strOr('raw_phrase'),
+        productId: json.integer('product_id'),
+        productName: json.str('product_name'),
+        schedule: json.str('schedule'),
+        strengthSpoken: json.str('strength_spoken'),
+        quantity: json.dblOr('quantity'),
+        unit: json.str('unit'),
+        baseQuantity: json.dbl('base_quantity'),
+        mrp: json.dbl('mrp'),
+        discountType: json.str('discount_type'),
+        discountValue: json.dbl('discount_value'),
+        unitPrice: json.dbl('unit_price'),
+        lineTotal: json.dbl('line_total'),
+        confidence: json.dbl('confidence'),
+        status: json.strOr('status', 'not_found'),
+        note: json.str('note'),
+        candidates: json.listOf('candidates', VoiceLineCandidate.fromJson),
+        batchAllocation: json.listOf('batch_allocation', BatchAllocation.fromJson),
+        resolvedBy: json.str('resolved_by'),
+        prescriptionRef: json.str('prescription_ref'),
+        skip: json.boolOr('skip'),
       );
 
   bool get isUnresolved => status != 'resolved';
@@ -158,15 +156,13 @@ class VoiceOrder {
   });
 
   factory VoiceOrder.fromJson(Map<String, dynamic> json) => VoiceOrder(
-        id: json['id'] as int,
-        transcript: json['transcript'] as String? ?? '',
-        status: json['status'] as String? ?? 'draft',
-        itemCountHeard: json['item_count_heard'] as int? ?? 0,
-        totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0,
-        saleId: json['sale_id'] as int?,
-        lines: (json['lines'] as List<dynamic>? ?? [])
-            .map((e) => VoiceOrderLine.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        id: json.intReq('id'),
+        transcript: json.strOr('transcript'),
+        status: json.strOr('status', 'draft'),
+        itemCountHeard: json.intOr('item_count_heard', 0),
+        totalAmount: json.dblOr('total_amount'),
+        saleId: json.integer('sale_id'),
+        lines: json.listOf('lines', VoiceOrderLine.fromJson),
       );
 }
 
@@ -203,15 +199,15 @@ class VoiceOrderJob {
   bool get isRetrying => status == 'retrying';
 
   factory VoiceOrderJob.fromJson(Map<String, dynamic> json) {
-    final error = json['error'] as Map<String, dynamic>?;
+    final error = json.obj('error');
     return VoiceOrderJob(
-      jobId: json['job_id'] as int,
-      status: json['status'] as String,
-      order: json['order'] != null ? VoiceOrder.fromJson(json['order'] as Map<String, dynamic>) : null,
-      errorKind: error?['kind'] as String?,
-      errorMessage: error?['message'] as String?,
-      attempt: json['attempt'] as int? ?? 0,
-      maxAttempts: json['max_attempts'] as int? ?? 3,
+      jobId: json.intReq('job_id'),
+      status: json.strReq('status'),
+      order: json.objOf('order', VoiceOrder.fromJson),
+      errorKind: error?.str('kind'),
+      errorMessage: error?.str('message'),
+      attempt: json.intOr('attempt', 0),
+      maxAttempts: json.intOr('max_attempts', 3),
     );
   }
 }
@@ -238,11 +234,11 @@ class VoiceCommandResult {
   });
 
   factory VoiceCommandResult.fromJson(Map<String, dynamic> json) => VoiceCommandResult(
-        success: json['success'] as bool? ?? false,
-        intent: json['intent'] as String? ?? 'UNKNOWN',
-        requiresConfirmation: json['requires_confirmation'] as bool? ?? false,
-        confirmationToken: json['confirmation_token'] as String?,
-        message: json['message'] as String? ?? '',
-        data: json['data'] as Map<String, dynamic>?,
+        success: json.boolOr('success'),
+        intent: json.strOr('intent', 'UNKNOWN'),
+        requiresConfirmation: json.boolOr('requires_confirmation'),
+        confirmationToken: json.str('confirmation_token'),
+        message: json.strOr('message'),
+        data: json.obj('data'),
       );
 }

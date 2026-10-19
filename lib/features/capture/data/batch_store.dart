@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
-import '../../../core/utils/pending_photo_store.dart';
+import '../../../core/disk/pending_photo_store.dart';
 import '../models/batch_item.dart';
 
 /// Saves and restores the capture screen's in-progress batch, so it survives

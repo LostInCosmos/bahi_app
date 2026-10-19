@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/utils/share_file.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
+import '../widgets/totals_card.dart';
 
 /// Completing the sale is the one moment stock actually leaves inventory —
 /// this screen only ever displays what already happened, nothing here is
 /// still editable.
 class SaleReceiptScreen extends StatefulWidget {
   final int saleId;
+
   /// Label for the bottom button — "New sale" right after checkout (the
   /// common case this screen was built for), "Close" when reached by tapping
   /// into a past sale from history, where "new sale" would be misleading.
@@ -46,85 +51,57 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
     if (s == null) return;
     final lines = [
       '${s.saleNo} • ${s.saleDate}',
-      ...s.lineItems.map((li) => '${li.productName} × ${li.qty.toStringAsFixed(0)} — ₹${li.lineAmount.toStringAsFixed(2)}'),
-      'Subtotal: ₹${s.subtotal.toStringAsFixed(2)}',
-      'CGST + SGST: ₹${(s.totalCgst + s.totalSgst).toStringAsFixed(2)}',
-      'Total: ₹${s.grandTotal.toStringAsFixed(2)}',
+      ...s.lineItems.map((li) => '${li.productName} × ${qty(li.qty)} — ${rupees(li.lineAmount)}'),
+      'Subtotal: ${rupees(s.subtotal)}',
+      'CGST + SGST: ${rupees(s.totalCgst + s.totalSgst)}',
+      'Total: ${rupees(s.grandTotal)}',
     ];
     await SharePlus.instance.share(ShareParams(text: lines.join('\n'), sharePositionOrigin: shareOrigin(context)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final sale = _sale;
     return Scaffold(
       appBar: AppBar(title: const Text('Sale complete')),
-      body: _sale == null
-          ? Center(
-              child: _error != null
-                  ? Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
-                  : const CircularProgressIndicator(),
-            )
+      body: sale == null
+          ? Center(child: _error != null ? ErrorText(_error, padding: EdgeInsets.zero) : const CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(Spacing.l),
               children: [
                 Center(
                   child: Column(children: [
                     Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 40),
-                    const SizedBox(height: 8),
-                    Text('${_sale!.saleNo} • ${_sale!.saleDate}'),
+                    const SizedBox(height: Spacing.s),
+                    Text('${sale.saleNo} • ${sale.saleDate}'),
                   ]),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: Spacing.l),
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: _sale!.lineItems
-                          .map((li) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(child: Text('${li.productName} × ${li.qty.toStringAsFixed(0)}')),
-                                    Text('₹${li.lineAmount.toStringAsFixed(2)}'),
-                                  ],
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(Spacing.m),
                     child: Column(
                       children: [
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          const Text('Subtotal'),
-                          Text('₹${_sale!.subtotal.toStringAsFixed(2)}'),
-                        ]),
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          const Text('CGST + SGST'),
-                          Text('₹${(_sale!.totalCgst + _sale!.totalSgst).toStringAsFixed(2)}'),
-                        ]),
-                        const Divider(),
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          const Text('Total paid', style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text('₹${_sale!.grandTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ]),
+                        for (final li in sale.lineItems)
+                          KeyValueRow('${li.productName} × ${qty(li.qty)}', rupees(li.lineAmount)),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: Spacing.s),
+                SaleTotalsCard(
+                  subtotal: sale.subtotal,
+                  tax: sale.totalCgst + sale.totalSgst,
+                  total: sale.grandTotal,
+                  totalLabel: 'Total paid',
+                ),
+                const SizedBox(height: Spacing.l),
                 OutlinedButton.icon(
                   onPressed: _share,
                   icon: const Icon(Icons.share),
                   label: const Text('Share receipt'),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: Spacing.s),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(widget.primaryActionLabel),

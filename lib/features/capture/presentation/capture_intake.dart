@@ -173,10 +173,7 @@ mixin _Intake on State<CaptureScreen> {
       // A page cap or an unreadable file is the shopkeeper's problem to
       // act on, not a silent no-op that looks like the app ignored them.
       setState(() => _pdfProgress = null);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text(e is TooManyPdfPages ? e.toString() : 'Could not read $name'),
-      ));
+      context.say(e is TooManyPdfPages ? e.toString() : 'Could not read $name');
     }
   }
 

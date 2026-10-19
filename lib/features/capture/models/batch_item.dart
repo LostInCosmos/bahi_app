@@ -1,7 +1,8 @@
 import 'dart:typed_data';
+import '../../../core/utils/json.dart';
 
 import '../../../core/utils/offset_2d.dart';
-import '../../../core/utils/pending_photo_store.dart';
+import '../../../core/disk/pending_photo_store.dart';
 import '../../invoice/models/invoice.dart';
 
 /// Where one bill is in the capture flow. A clean extraction (0 issues)
@@ -63,17 +64,17 @@ class BatchItemPage {
       };
 
   static BatchItemPage? fromJson(Map<String, dynamic> json) {
-    final photoId = json['photoId'] as String?;
+    final photoId = json.str('photoId');
     if (photoId == null) return null;
     return BatchItemPage(
       photoId: photoId,
       memoryBytes: null,
-      filename: json['filename'] as String? ?? 'bill.jpg',
+      filename: json.strOr('filename', 'bill.jpg'),
       corners: (json['corners'] as List<dynamic>)
           .map((c) =>
               Offset2D((c[0] as num).toDouble(), (c[1] as num).toDouble()))
           .toList(),
-      rotationDegrees: json['rotation'] as int? ?? 0,
+      rotationDegrees: json.intOr('rotation', 0),
     );
   }
 }
@@ -281,9 +282,7 @@ class BatchItem {
       );
 
   static BatchItem? fromJson(Map<String, dynamic> json) {
-    final sourceImages = (json['sourceImages'] as List<dynamic>? ?? [])
-        .map((e) => e as String)
-        .toList();
+    final sourceImages = json.strList('sourceImages');
     final pages = <BatchItemPage>[];
     for (final p in json['pages'] as List<dynamic>? ?? []) {
       final page = BatchItemPage.fromJson(p as Map<String, dynamic>);
@@ -292,7 +291,7 @@ class BatchItem {
     if (sourceImages.isEmpty && pages.isEmpty) return null;
 
     final item = BatchItem(
-        label: json['label'] as String? ?? 'Photo',
+        label: json.strOr('label', 'Photo'),
         pages: sourceImages.isEmpty ? pages : []);
     item.sourceImages = sourceImages;
     // A bill that never finished uploading comes back as "preparing",
@@ -308,14 +307,14 @@ class BatchItem {
             : BatchItemStatus.preparing)
         : BatchItemStatus.values.firstWhere((v) => v.name == json['status'],
             orElse: () => BatchItemStatus.ready);
-    item.jobId = json['jobId'] as int?;
+    item.jobId = json.integer('jobId');
     // Batches saved before lastJobId existed have no key for it — jobId is
     // the same value for any item whose first submission was still running.
-    item.lastJobId = json['lastJobId'] as int? ?? item.jobId;
-    item.errorMessage = json['errorMessage'] as String?;
-    item.savedInvoiceId = json['savedInvoiceId'] as int?;
-    item.folderId = json['folderId'] as int?;
-    final resultJson = json['result'] as Map<String, dynamic>?;
+    item.lastJobId = json.integer('lastJobId') ?? item.jobId;
+    item.errorMessage = json.str('errorMessage');
+    item.savedInvoiceId = json.integer('savedInvoiceId');
+    item.folderId = json.integer('folderId');
+    final resultJson = json.obj('result');
     if (resultJson != null) item.result = ExtractionResult.fromJson(resultJson);
     return item;
   }

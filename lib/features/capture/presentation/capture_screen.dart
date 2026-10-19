@@ -7,10 +7,14 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/navigation/tab_screen.dart';
+import '../../../core/disk/pending_photo_store.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/utils/offset_2d.dart';
+import '../../../core/utils/snack.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../invoice/data/invoice_api.dart';
 import '../data/capture_api.dart';
-import '../../../core/utils/offset_2d.dart';
-import '../../../core/utils/pending_photo_store.dart';
 import '../../folders/data/folder_controller.dart';
 import '../../folders/models/folder.dart';
 import '../../folders/widgets/folder_widgets.dart';
@@ -70,7 +74,7 @@ class CaptureScreen extends StatefulWidget {
   State<CaptureScreen> createState() => CaptureScreenState();
 }
 
-class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, _Watching {
+class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection, _Intake, _Watching {
   @override
   final List<BatchItem> _items = [];
 
@@ -176,8 +180,13 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
     if (mounted) setState(() {});
   }
 
-  /// Public so HomeScreen can reload folders when this tab is selected — a
-  /// folder made or removed on the Purchases tab would otherwise not show here.
+  /// Called by HomeScreen when this tab is selected: folders made or removed
+  /// on the Purchases tab would otherwise not show here, and a bill our team
+  /// resolved while another tab was in front is asked about again (DAS-76).
+  @override
+  Future<void> refresh() => Future.wait([refreshFolders(), recheckNeedsReview()]);
+
+  /// Reload the folder tree and send home any bill whose folder is gone.
   Future<void> refreshFolders() async {
     await _folders.load();
     if (!mounted) return;
@@ -438,11 +447,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
   }
 
   @override
-  void _say(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
+  void _say(String message) => context.say(message);
 
   // ==================== review, save & retry ====================
 
@@ -502,24 +507,13 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
     }
   }
 
-  Future<bool> _askRetry(String title, String? message) async {
-    final retry = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message ?? 'Something went wrong processing this bill.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Close')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Retry')),
-        ],
-      ),
-    );
-    return retry == true;
-  }
+  Future<bool> _askRetry(String title, String? message) => showConfirmDialog(
+        context,
+        title: title,
+        message: message ?? 'Something went wrong processing this bill.',
+        confirmLabel: 'Retry',
+        cancelLabel: 'Close',
+      );
 
   Future<void> _offerRetry(BatchItem item) async {
     if (!await _askRetry(item.label, item.errorMessage)) return;
@@ -689,9 +683,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
         if (!moved) throw 'it is saved, discarded or no longer in this shop';
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Couldn't move it: $e")));
+      _say("Couldn't move it: $e");
       return;
     }
     if (!mounted) return;
@@ -952,11 +944,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
       final job = await ApiClient.instance.getExtractionJob(upload.jobId);
       final result = job.result;
       if (result == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('That bill has not finished being read yet.')),
-        );
+        _say('That bill has not finished being read yet.');
         return;
       }
       item
@@ -969,10 +957,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
                 : BatchItemStatus.pendingConfirm)
         ..recheckedThisReview = false;
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Couldn't open that bill: $e")),
-      );
+      _say("Couldn't open that bill: $e");
       return;
     }
 
@@ -1031,7 +1016,10 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
       {required bool empty, required bool filtering}) {
     // This device's bills as cards on the shared list. Each carries the place
     // it sits — its upload order — so it lands among the shop's bills
-    // rather than above them all.
+    // rather than above them all. The position in the batch is looked up
+    // once per bill, not searched for: `indexOf` in this loop was quadratic
+    // in the batch, every build.
+    final positions = {for (var i = 0; i < _items.length; i++) _items[i]: i};
     final localEntries = [
       for (var i = 0; i < items.length; i++)
         () {
@@ -1039,7 +1027,7 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
           final id = _idOf(item);
           return ListEntry(
             id: id,
-            sortKey: localSortKey(item, _items.indexOf(item)),
+            sortKey: localSortKey(item, positions[item]!),
             item: item,
             card: BatchItemCard(
               key: ValueKey(item),

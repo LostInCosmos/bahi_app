@@ -1,5 +1,8 @@
 library;
 
+import '../../../core/config/business_types.dart';
+import '../../../core/utils/json.dart';
+
 class AccountInfo {
   final String tenantName;
   final String? gstin;
@@ -16,10 +19,10 @@ class AccountInfo {
   });
 
   factory AccountInfo.fromJson(Map<String, dynamic> json) => AccountInfo(
-        tenantName: json['tenant_name'] as String,
-        gstin: json['gstin'] as String?,
-        address: json['address'] as String?,
-        email: json['email'] as String,
-        businessType: json['business_type'] as String? ?? 'medical',
+        tenantName: json.strReq('tenant_name'),
+        gstin: json.str('gstin'),
+        address: json.str('address'),
+        email: json.strReq('email'),
+        businessType: json.strOr('business_type', kDefaultBusinessType),
       );
 }

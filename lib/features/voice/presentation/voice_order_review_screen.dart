@@ -2,15 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/utils/poll.dart';
+import '../../../core/utils/snack.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/inventory_api.dart';
 import '../../inventory/data/product_catalog.dart';
-import '../data/voice_api.dart';
-import '../models/voice.dart';
-import '../../../app/theme/app_theme.dart';
-import '../../../core/utils/poll.dart';
 import '../../inventory/models/product.dart';
 import '../../sales/presentation/sale_receipt_screen.dart';
+import '../data/voice_api.dart';
+import '../models/voice.dart';
 import 'voice_sale_screen.dart';
 
 /// Review/confirm screen for a voice-parsed sale draft. Every mutation
@@ -56,8 +60,8 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       if (!mounted) return;
       if (e.statusCode == 404 && e.message == 'product not found') {
         // Merged into another by our team (DAS-93) since the list was loaded.
-        unawaited(ProductCatalog.instance.refresh());
-        setState(() => _message = 'That medicine was merged into another one. The list has been refreshed — pick it again.');
+        ProductCatalog.instance.noteMergedAway();
+        setState(() => _message = ProductCatalog.mergedAwayMessage);
         return;
       }
       setState(() => _message = e.statusCode == 409
@@ -321,11 +325,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                       onSubmitDiscountType: (t) => _submitDiscount(l, type: t),
                       onSubmitDiscountValue: (v) => _submitDiscount(l, valueText: v),
                     )),
-                if (_message != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Spacing.m),
-                    child: Text(_message!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ),
+                ErrorText(_message),
                 const SizedBox(height: Spacing.l),
                 Row(
                   children: [
@@ -340,9 +340,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: (_confirming || _busy) ? null : _addMore,
-                        icon: _busy
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.mic),
+                        icon: _busy ? const ButtonSpinner() : const Icon(Icons.mic),
                         label: const Text('Add more'),
                       ),
                     ),
@@ -361,16 +359,11 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Total', style: Theme.of(context).textTheme.bodyMedium),
-                      Text('₹${_order.totalAmount.toStringAsFixed(2)}', style: amountTextStyle(context, emphasized: true)),
+                      Text(rupees(_order.totalAmount), style: amountTextStyle(context, emphasized: true)),
                     ],
                   ),
                   const Spacer(),
-                  FilledButton(
-                    onPressed: _confirming ? null : _confirm,
-                    child: _confirming
-                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Confirm sale'),
-                  ),
+                  BusyFilledButton(busy: _confirming, onPressed: _confirm, label: 'Confirm sale'),
                 ],
               ),
             ),
@@ -394,7 +387,7 @@ class _Header extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${order.itemCountHeard} item${order.itemCountHeard == 1 ? '' : 's'} heard',
+              '${plural(order.itemCountHeard, 'item')} heard',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: Spacing.xs),
@@ -474,20 +467,12 @@ class _VoiceLineCard extends StatefulWidget {
   State<_VoiceLineCard> createState() => _VoiceLineCardState();
 }
 
-/// Formats a number for a text field: whole numbers plain, fractional ones
-/// with minimal decimals — the same shape numbers arrive in from the server,
-/// so re-typing the same field back never nudges the cursor around.
-String _numText(double? v) {
-  if (v == null) return '';
-  return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
-}
-
 class _VoiceLineCardState extends State<_VoiceLineCard> {
   late final TextEditingController _prescriptionController =
       TextEditingController(text: widget.line.prescriptionRef ?? '');
-  late final TextEditingController _quantityController = TextEditingController(text: _numText(widget.line.quantity));
-  late final TextEditingController _mrpController = TextEditingController(text: _numText(widget.line.mrp));
-  late final TextEditingController _discountController = TextEditingController(text: _numText(widget.line.discountValue));
+  late final TextEditingController _quantityController = TextEditingController(text: numText(widget.line.quantity));
+  late final TextEditingController _mrpController = TextEditingController(text: numText(widget.line.mrp));
+  late final TextEditingController _discountController = TextEditingController(text: numText(widget.line.discountValue));
 
   @override
   void didUpdateWidget(covariant _VoiceLineCard oldWidget) {
@@ -496,15 +481,15 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
         _prescriptionController.text != (widget.line.prescriptionRef ?? '')) {
       _prescriptionController.text = widget.line.prescriptionRef ?? '';
     }
-    if (oldWidget.line.quantity != widget.line.quantity && _quantityController.text != _numText(widget.line.quantity)) {
-      _quantityController.text = _numText(widget.line.quantity);
+    if (oldWidget.line.quantity != widget.line.quantity && _quantityController.text != numText(widget.line.quantity)) {
+      _quantityController.text = numText(widget.line.quantity);
     }
-    if (oldWidget.line.mrp != widget.line.mrp && _mrpController.text != _numText(widget.line.mrp)) {
-      _mrpController.text = _numText(widget.line.mrp);
+    if (oldWidget.line.mrp != widget.line.mrp && _mrpController.text != numText(widget.line.mrp)) {
+      _mrpController.text = numText(widget.line.mrp);
     }
     if (oldWidget.line.discountValue != widget.line.discountValue &&
-        _discountController.text != _numText(widget.line.discountValue)) {
-      _discountController.text = _numText(widget.line.discountValue);
+        _discountController.text != numText(widget.line.discountValue)) {
+      _discountController.text = numText(widget.line.discountValue);
     }
   }
 
@@ -612,7 +597,7 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                   ),
                 ),
                 const SizedBox(width: Spacing.s),
-                Text('₹${(line.lineTotal ?? 0).toStringAsFixed(2)}', style: amountTextStyle(context)),
+                Text(rupees(line.lineTotal ?? 0), style: amountTextStyle(context)),
               ],
             ),
             if (line.status == 'resolved')
@@ -804,7 +789,7 @@ class _BatchLine extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              'Batch ${alloc.batchNo ?? "—"} · qty ${alloc.qty.toStringAsFixed(0)} · ₹${alloc.unitPrice.toStringAsFixed(2)}',
+              'Batch ${alloc.batchNo ?? "—"} · qty ${qty(alloc.qty)} · ${rupees(alloc.unitPrice)}',
               style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
             ),
           ),
@@ -998,7 +983,8 @@ class _AddItemSheetState extends State<_AddItemSheet> {
     // Nothing until something is typed: the whole shop is not a pick list.
     final results = typed && index != null ? index.match(_query) : const <ProductSummary>[];
     final loading = index == null && _catalog.isLoading;
-    final failure = _error ?? (index == null && _catalog.lastError != null ? 'Could not load medicines: ${_catalog.lastError}' : null);
+    final failure =
+        _error ?? (index == null && _catalog.lastError != null ? 'Could not load medicines: ${_catalog.lastError}' : null);
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1062,11 +1048,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   ),
                 ],
               ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.s),
-                  child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
+              ErrorText(_error, padding: const EdgeInsets.only(top: Spacing.s)),
               const SizedBox(height: Spacing.m),
               Row(
                 children: [
@@ -1075,12 +1057,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                     child: const Text('Back to search'),
                   ),
                   const Spacer(),
-                  FilledButton(
-                    onPressed: _creating ? null : _createProduct,
-                    child: _creating
-                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Create & continue'),
-                  ),
+                  BusyFilledButton(busy: _creating, onPressed: _createProduct, label: 'Create & continue'),
                 ],
               ),
             ] else if (selected == null) ...[
@@ -1098,11 +1075,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
               ),
               const SizedBox(height: Spacing.s),
               if (loading) const Center(child: Padding(padding: EdgeInsets.all(Spacing.m), child: CircularProgressIndicator())),
-              if (failure != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.s),
-                  child: Text(failure, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
+              ErrorText(failure, padding: const EdgeInsets.only(top: Spacing.s)),
               // A fixed height, not shrinkWrap: a shrink-wrapped list builds
               // every row to measure itself, and "p" alone matches hundreds.
               if (results.isNotEmpty)
@@ -1114,7 +1087,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                       final p = results[i];
                       return ListTile(
                         title: Text(p.name),
-                        subtitle: Text('${p.quantityOnHand.toStringAsFixed(0)} in stock'),
+                        subtitle: Text('${qty(p.quantityOnHand)} in stock'),
                         enabled: p.quantityOnHand > 0,
                         onTap: () => setState(() => _selected = p),
                       );
@@ -1134,7 +1107,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(selected.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${selected.quantityOnHand.toStringAsFixed(0)} in stock'),
+                subtitle: Text('${qty(selected.quantityOnHand)} in stock'),
                 trailing: TextButton(onPressed: () => setState(() => _selected = null), child: const Text('Change')),
               ),
               const SizedBox(height: Spacing.s),
@@ -1160,11 +1133,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                   ),
                 ],
               ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.s),
-                  child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
+              ErrorText(_error, padding: const EdgeInsets.only(top: Spacing.s)),
               const SizedBox(height: Spacing.m),
               FilledButton(onPressed: _confirm, child: const Text('Add to order')),
             ],
@@ -1222,7 +1191,7 @@ class _VoiceSaleReceiptWithUndoState extends State<_VoiceSaleReceiptWithUndo> {
       Navigator.of(context).pop('undone');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not undo: $e')));
+      context.say('Could not undo: $e');
       setState(() => _undoing = false);
     }
   }
@@ -1255,7 +1224,7 @@ class _VoiceSaleReceiptWithUndoState extends State<_VoiceSaleReceiptWithUndo> {
                       TextButton(
                         onPressed: _undoing ? null : _undo,
                         child: _undoing
-                            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const ButtonSpinner()
                             : Text('UNDO', style: TextStyle(color: Theme.of(context).colorScheme.inversePrimary)),
                       ),
                     ],

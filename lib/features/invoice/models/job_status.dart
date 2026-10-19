@@ -3,6 +3,8 @@
 /// invoice models — these carry no invoice data, only where a job is.
 library;
 
+import '../../../core/utils/json.dart';
+
 /// One bill's state in a batch status answer. Deliberately without a result:
 /// learning a bill is done is cheap and happens often, fetching its result
 /// happens once. See ApiClient.jobStatuses.
@@ -38,12 +40,12 @@ class JobStatusBrief {
   bool get isSettled => status != 'done' ? isTerminal : saved;
 
   factory JobStatusBrief.fromJson(Map<String, dynamic> json) => JobStatusBrief(
-        jobId: json['job_id'] as int,
-        status: json['status'] as String,
-        attempt: json['attempt'] as int? ?? 0,
-        maxAttempts: json['max_attempts'] as int? ?? 3,
-        retryAt: json['retry_at'] == null ? null : DateTime.parse(json['retry_at'] as String).toUtc(),
-        saved: json['saved'] as bool? ?? false,
+        jobId: json.intReq('job_id'),
+        status: json.strReq('status'),
+        attempt: json.intOr('attempt', 0),
+        maxAttempts: json.intOr('max_attempts', 3),
+        retryAt: json.utc('retry_at'),
+        saved: json.boolOr('saved'),
       );
 }
 
@@ -56,9 +58,7 @@ class JobStatusBatch {
   const JobStatusBatch({required this.jobs, required this.changed});
 
   factory JobStatusBatch.fromJson(Map<String, dynamic> json) => JobStatusBatch(
-        jobs: (json['jobs'] as List<dynamic>? ?? [])
-            .map((e) => JobStatusBrief.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        changed: json['changed'] as bool? ?? false,
+        jobs: json.listOf('jobs', JobStatusBrief.fromJson),
+        changed: json.boolOr('changed'),
       );
 }

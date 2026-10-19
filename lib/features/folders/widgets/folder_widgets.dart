@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/utils/snack.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../data/folder_controller.dart';
 import '../models/folder.dart';
 
@@ -150,7 +153,7 @@ class FolderTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     Text(
-                        subtitle ?? '${folder.billCount} ${folder.billCount == 1 ? 'bill' : 'bills'}',
+                        subtitle ?? plural(folder.billCount, 'bill'),
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -445,11 +448,7 @@ Future<void> showFolderActions(
   );
   if (action == null || !context.mounted) return;
 
-  void fail(Object e) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e is ApiException ? e.message : '$e')));
-  }
+  void fail(Object e) => context.say(e is ApiException ? e.message : '$e');
 
   switch (action) {
     case 'rename':
@@ -476,8 +475,7 @@ Future<void> showFolderActions(
       // costs no request. A folder filled on another device since the tree
       // loaded is exported on the next try, after the tree reloads.
       if (folder.billCount == 0) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('No bills in this folder.')));
+        context.say('No bills in this folder.');
         return;
       }
       await onExport!(folder);
@@ -485,29 +483,18 @@ Future<void> showFolderActions(
       final parentName = controller.tree.byId(folder.parentId)?.name ?? 'Home';
       final subfolders = controller.tree.childrenOf(folder.id).length;
       final contents = <String>[
-        if (folder.billCount > 0)
-          '${folder.billCount} ${folder.billCount == 1 ? 'bill' : 'bills'}',
-        if (subfolders > 0)
-          '$subfolders ${subfolders == 1 ? 'folder' : 'folders'}',
+        if (folder.billCount > 0) plural(folder.billCount, 'bill'),
+        if (subfolders > 0) plural(subfolders, 'folder'),
       ];
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Delete "${folder.name}"?'),
-          content: Text(contents.isEmpty
-              ? 'This folder is empty.'
-              : 'Its ${contents.join(' and ')} will move to $parentName. No bills are deleted.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
-            FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete folder')),
-          ],
-        ),
+      final ok = await showConfirmDialog(
+        context,
+        title: 'Delete "${folder.name}"?',
+        message: contents.isEmpty
+            ? 'This folder is empty.'
+            : 'Its ${contents.join(' and ')} will move to $parentName. No bills are deleted.',
+        confirmLabel: 'Delete folder',
       );
-      if (ok != true) return;
+      if (!ok || !context.mounted) return;
       try {
         final moved = await controller.delete(folder);
         onDeleted?.call(folder, moved);
@@ -520,6 +507,6 @@ Future<void> showFolderActions(
 /// "327 bills", or "327 bills · 2 folders" — what a folder holds, in the
 /// words a shopkeeper would use. Folders are named only when there are some.
 String folderSubtitle({required int bills, required int folders}) {
-  final b = '$bills ${bills == 1 ? 'bill' : 'bills'}';
-  return folders == 0 ? b : '$b · $folders ${folders == 1 ? 'folder' : 'folders'}';
+  final b = plural(bills, 'bill');
+  return folders == 0 ? b : '$b · ${plural(folders, 'folder')}';
 }

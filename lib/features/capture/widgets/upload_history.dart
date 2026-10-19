@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/widgets/busy_button.dart';
 import '../data/capture_api.dart';
 import '../models/batch_item.dart';
 import '../models/bill_search.dart';
@@ -445,8 +447,8 @@ class UploadHistoryState extends State<UploadHistory> {
   /// own entry in the count. Matching by photo let twenty cards hide thirty
   /// rows. A card with no job yet has no row to match; it falls back to its
   /// photo.
-  List<UploadSummary> get _inFolder => _rowsNotCoveredBy(
-        [for (final entry in _drawnCards) if (entry.item != null) entry.item!],
+  List<UploadSummary> _inFolder(List<ListEntry> drawn) => _rowsNotCoveredBy(
+        [for (final entry in drawn) if (entry.item != null) entry.item!],
         alsoHidingInFlight: true,
       );
 
@@ -517,11 +519,12 @@ class UploadHistoryState extends State<UploadHistory> {
   }
 
   /// What to draw: [_inFolder] in upload order, matching the ticked boxes.
-  List<UploadSummary> get _shown {
+  /// [drawn] is this build's [_drawnCards], worked out once by the caller.
+  List<UploadSummary> _shown(List<ListEntry> drawn) {
     // Upload order, stated rather than inherited from however the pages
     // happened to arrive — a refresh inserts at the top and an update
     // replaces in place, and neither may reorder what is on screen.
-    final ordered = _inFolder..sort((a, b) => b.jobId.compareTo(a.jobId));
+    final ordered = _inFolder(drawn)..sort((a, b) => b.jobId.compareTo(a.jobId));
     final byBox = filterUploads(ordered, _held?.boxes ?? widget.selected);
     return widget.query.isEmpty ? byBox : byBox.where((u) => u.matchesSearch(widget.query)).toList();
   }
@@ -634,8 +637,11 @@ class UploadHistoryState extends State<UploadHistory> {
     // leave the device's own bills on screen — they used to take the whole
     // list with them.
     final showServer = wantsUploads(widget.selected);
+    // Which of the phone's cards are drawn decides which rows are hidden,
+    // and both halves need it: worked out once here, not once per getter.
+    final drawn = _drawnCards;
     final serverEntries = showServer
-        ? _shown.map((u) {
+        ? _shown(drawn).map((u) {
             final id = 'j:${u.jobId}';
             return ListEntry(
               id: id,
@@ -655,7 +661,7 @@ class UploadHistoryState extends State<UploadHistory> {
         : <ListEntry>[];
 
     // Strictly by upload order, whichever half a card came from.
-    final entries = [..._drawnCards, ...serverEntries]
+    final entries = [...drawn, ...serverEntries]
       ..sort((a, b) => b.sortKey.compareTo(a.sortKey));
     _report(entries);
 
@@ -727,8 +733,7 @@ class UploadHistoryState extends State<UploadHistory> {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(Spacing.l),
-              child: Center(child: SizedBox(
-                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(child: ButtonSpinner(size: 20)),
             ),
           ),
       ],
@@ -810,7 +815,7 @@ class _UploadCard extends StatelessWidget {
                       style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                   Text(
-                    _shortDate(upload.createdAt),
+                    shortDate(upload.createdAt),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
@@ -894,11 +899,4 @@ class _Pill extends StatelessWidget {
       ),
     );
   }
-}
-
-String _shortDate(DateTime when) {
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return '${when.day.toString().padLeft(2, '0')} ${months[when.month - 1]} ${when.year}';
 }

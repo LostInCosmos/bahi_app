@@ -1,5 +1,7 @@
+import '../../../core/utils/format.dart';
 import 'batch_item.dart';
 import 'list_entry.dart';
+import '../../../core/utils/json.dart';
 
 /// Picking several bills and doing one thing to all of them.
 ///
@@ -137,7 +139,7 @@ Future<BulkResult> runBulk(Iterable<ListEntry> entries, Future<void> Function(Li
 
 /// A sentence for the outcome, in the words a shopkeeper would use.
 String summarise(String verb, BulkResult result, {int savedLeft = 0, int readingLeft = 0}) {
-  final parts = <String>['$verb ${result.done} bill${result.done == 1 ? '' : 's'}'];
+  final parts = <String>['$verb ${plural(result.done, 'bill')}'];
   if (result.failed.isNotEmpty) {
     parts.add("${result.failed.length} couldn't be ${verb.toLowerCase()}");
   }
@@ -161,8 +163,8 @@ class BulkMoveReply {
   const BulkMoveReply({this.movedJobs = const {}, this.movedInvoices = const {}});
 
   factory BulkMoveReply.fromJson(Map<String, dynamic> json) => BulkMoveReply(
-        movedJobs: {for (final id in json['moved_jobs'] as List<dynamic>? ?? const []) (id as num).toInt()},
-        movedInvoices: {for (final id in json['moved_invoices'] as List<dynamic>? ?? const []) (id as num).toInt()},
+        movedJobs: json.intList('moved_jobs').toSet(),
+        movedInvoices: json.intList('moved_invoices').toSet(),
       );
 }
 
@@ -236,7 +238,7 @@ class BulkDiscardReply {
   const BulkDiscardReply({this.discarded = const {}});
 
   factory BulkDiscardReply.fromJson(Map<String, dynamic> json) => BulkDiscardReply(
-        discarded: {for (final id in json['discarded'] as List<dynamic>? ?? const []) (id as num).toInt()},
+        discarded: json.intList('discarded').toSet(),
       );
 }
 

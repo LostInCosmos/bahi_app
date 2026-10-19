@@ -1,5 +1,7 @@
 library;
 
+import '../../../core/utils/json.dart';
+
 /// One line the shopkeeper has added to the sale in progress, before it's
 /// submitted — mirrors the web app's in-memory `cart` array.
 class CartEntry {
@@ -42,13 +44,13 @@ class SaleLineItemDetail {
   });
 
   factory SaleLineItemDetail.fromJson(Map<String, dynamic> json) => SaleLineItemDetail(
-        productName: json['product_name'] as String,
-        qty: (json['qty'] as num).toDouble(),
-        rate: (json['rate'] as num).toDouble(),
-        gstPct: (json['gst_pct'] as num).toDouble(),
-        cgstAmount: (json['cgst_amount'] as num).toDouble(),
-        sgstAmount: (json['sgst_amount'] as num).toDouble(),
-        lineAmount: (json['line_amount'] as num).toDouble(),
+        productName: json.strReq('product_name'),
+        qty: json.dblReq('qty'),
+        rate: json.dblReq('rate'),
+        gstPct: json.dblReq('gst_pct'),
+        cgstAmount: json.dblReq('cgst_amount'),
+        sgstAmount: json.dblReq('sgst_amount'),
+        lineAmount: json.dblReq('line_amount'),
       );
 }
 
@@ -69,11 +71,11 @@ class SaleSummary {
   });
 
   factory SaleSummary.fromJson(Map<String, dynamic> json) => SaleSummary(
-        id: json['id'] as int,
-        saleNo: json['sale_no'] as String,
-        saleDate: (json['sale_date'] as String).split('T').first,
-        buyerName: json['buyer_name'] as String?,
-        grandTotal: (json['grand_total'] as num).toDouble(),
+        id: json.intReq('id'),
+        saleNo: json.strReq('sale_no'),
+        saleDate: json.dateOnlyReq('sale_date'),
+        buyerName: json.str('buyer_name'),
+        grandTotal: json.dblReq('grand_total'),
       );
 }
 
@@ -104,17 +106,15 @@ class SaleDetail {
   });
 
   factory SaleDetail.fromJson(Map<String, dynamic> json) => SaleDetail(
-        id: json['id'] as int,
-        saleNo: json['sale_no'] as String,
-        saleDate: (json['sale_date'] as String).split('T').first,
-        buyerName: json['buyer_name'] as String?,
-        buyerGstin: json['buyer_gstin'] as String?,
-        subtotal: (json['subtotal'] as num).toDouble(),
-        totalCgst: (json['total_cgst'] as num).toDouble(),
-        totalSgst: (json['total_sgst'] as num).toDouble(),
-        grandTotal: (json['grand_total'] as num).toDouble(),
-        lineItems: (json['line_items'] as List<dynamic>)
-            .map((e) => SaleLineItemDetail.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        id: json.intReq('id'),
+        saleNo: json.strReq('sale_no'),
+        saleDate: json.dateOnlyReq('sale_date'),
+        buyerName: json.str('buyer_name'),
+        buyerGstin: json.str('buyer_gstin'),
+        subtotal: json.dblReq('subtotal'),
+        totalCgst: json.dblReq('total_cgst'),
+        totalSgst: json.dblReq('total_sgst'),
+        grandTotal: json.dblReq('grand_total'),
+        lineItems: json.listOf('line_items', SaleLineItemDetail.fromJson),
       );
 }

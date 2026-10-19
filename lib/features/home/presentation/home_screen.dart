@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/navigation/tab_screen.dart';
 import '../../../core/widgets/dastavez_logo.dart';
-
 import '../../auth/presentation/account_screen.dart';
-import '../../capture/presentation/capture_screen.dart';
-import '../../inventory/presentation/inventory_screen.dart';
 import '../../auth/presentation/sign_out.dart';
-import '../../invoice/presentation/purchases_screen.dart';
-import '../../sales/presentation/sales_history_screen.dart';
-import '../../sales/presentation/sales_screen.dart';
 import '../../voice/presentation/voice_command_screen.dart';
+import 'home_tabs.dart';
 
+/// The shell after login: an app bar, the bottom bar, and [kHomeTabs] in an
+/// `IndexedStack` so every tab keeps its scroll position and its state while
+/// another is in front (`test/core/tab_scroll_test.dart` pins that). Selecting
+/// a tab calls its [TabScreen.refresh], since a tab kept alive does not
+/// otherwise notice what the others changed.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,68 +19,29 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  static const _titles = [
-    'New bills',
-    'Purchases',
-    'Inventory',
-    'New sale',
-    'Sales'
+class _HomeScreenState extends State<HomeScreen> implements HomeTabHost {
+  int _tab = 0;
+
+  /// One stable key per tab, so a reselect reaches the same State.
+  final List<GlobalKey> _keys = [for (final _ in kHomeTabs) GlobalKey()];
+
+  late final List<Widget> _screens = [
+    for (var i = 0; i < kHomeTabs.length; i++) kHomeTabs[i].build(_keys[i], this),
   ];
 
-  int _tab = 0;
-  final _captureKey = GlobalKey<CaptureScreenState>();
-  final _purchasesKey = GlobalKey<PurchasesScreenState>();
-  final _inventoryKey = GlobalKey<InventoryScreenState>();
-  final _salesKey = GlobalKey<SalesScreenState>();
-  final _salesHistoryKey = GlobalKey<SalesHistoryScreenState>();
+  void _push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
-  void _openAccount() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const AccountScreen()));
-  }
-
-  void _openVoiceCommand() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const VoiceCommandScreen()));
-  }
-
-  void _goToPurchases() {
-    setState(() => _tab = 1);
-    _purchasesKey.currentState?.refresh();
-  }
+  @override
+  void select(String id) => _selectTab(kHomeTabs.indexWhere((t) => t.id == id));
 
   void _selectTab(int i) {
+    if (i < 0) return;
     setState(() => _tab = i);
-    switch (i) {
-      case 0:
-        _captureKey.currentState?.refreshFolders();
-        _captureKey.currentState?.recheckNeedsReview();
-        break;
-      case 1:
-        _purchasesKey.currentState?.refresh();
-        break;
-      case 2:
-        _inventoryKey.currentState?.refresh();
-        break;
-      case 3:
-        _salesKey.currentState?.refresh();
-        break;
-      case 4:
-        _salesHistoryKey.currentState?.refresh();
-        break;
-    }
+    (_keys[i].currentState as TabScreen?)?.refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      CaptureScreen(key: _captureKey, onBatchFinished: _goToPurchases),
-      PurchasesScreen(key: _purchasesKey),
-      InventoryScreen(key: _inventoryKey),
-      SalesScreen(key: _salesKey),
-      SalesHistoryScreen(key: _salesHistoryKey),
-    ];
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -86,49 +49,30 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const DastavezLogoTile(size: 30),
             const SizedBox(width: 10),
-            Text(_titles[_tab]),
+            Text(kHomeTabs[_tab].title),
           ],
         ),
         actions: [
           IconButton(
-              onPressed: _openVoiceCommand,
-              icon: const Icon(Icons.record_voice_over_outlined),
-              tooltip: 'Voice command'),
+            onPressed: () => _push(const VoiceCommandScreen()),
+            icon: const Icon(Icons.record_voice_over_outlined),
+            tooltip: 'Voice command',
+          ),
           IconButton(
-              onPressed: _openAccount,
-              icon: const Icon(Icons.storefront_outlined),
-              tooltip: 'Account'),
-          IconButton(
-              onPressed: () => signOut(context),
-              icon: const Icon(Icons.logout),
-              tooltip: 'Log out'),
+            onPressed: () => _push(const AccountScreen()),
+            icon: const Icon(Icons.storefront_outlined),
+            tooltip: 'Account',
+          ),
+          IconButton(onPressed: () => signOut(context), icon: const Icon(Icons.logout), tooltip: 'Log out'),
         ],
       ),
-      body: IndexedStack(index: _tab, children: screens),
+      body: IndexedStack(index: _tab, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: _selectTab,
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.camera_alt_outlined),
-              selectedIcon: Icon(Icons.camera_alt),
-              label: 'Capture'),
-          NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long),
-              label: 'Purchases'),
-          NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2),
-              label: 'Inventory'),
-          NavigationDestination(
-              icon: Icon(Icons.shopping_cart_outlined),
-              selectedIcon: Icon(Icons.shopping_cart),
-              label: 'Sell'),
-          NavigationDestination(
-              icon: Icon(Icons.receipt_outlined),
-              selectedIcon: Icon(Icons.receipt),
-              label: 'Sales'),
+        destinations: [
+          for (final tab in kHomeTabs)
+            NavigationDestination(icon: Icon(tab.icon), selectedIcon: Icon(tab.selectedIcon), label: tab.label),
         ],
       ),
     );

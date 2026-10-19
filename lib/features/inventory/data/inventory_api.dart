@@ -4,7 +4,7 @@ import '../models/product.dart';
 extension InventoryApi on ApiClient {
   Future<List<ProductSummary>> searchProducts({String? q}) async {
     final res = await get('/inventory/products', query: {if (q != null && q.isNotEmpty) 'q': q});
-    return ApiClient.jsonList(res).map((e) => ProductSummary.fromJson(e as Map<String, dynamic>)).toList();
+    return ApiClient.listOf(res, ProductSummary.fromJson);
   }
 
   Future<ProductDetail> getProductDetail(int productId) async =>

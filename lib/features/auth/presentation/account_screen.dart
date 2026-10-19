@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/config/business_types.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/inline_message.dart';
+import '../../../core/config/legal_documents.dart';
 import '../data/auth_api.dart';
 import '../models/account.dart';
-import '../../../app/theme/app_theme.dart';
+import 'legal_screen.dart';
 
 /// Shop details — the mobile counterpart of the web app's Account page.
 /// Business type in particular tunes how bills are read and validated (see
@@ -22,7 +27,7 @@ class _AccountScreenState extends State<AccountScreen> {
   final _shopNameController = TextEditingController();
   final _gstinController = TextEditingController();
   final _addressController = TextEditingController();
-  String _businessType = 'medical';
+  String _businessType = kDefaultBusinessType;
 
   AccountInfo? _account;
   bool _loading = true;
@@ -132,6 +137,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                   const SizedBox(height: Spacing.m),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: _businessType,
                     decoration: const InputDecoration(
                       labelText: 'Business type',
@@ -139,35 +145,36 @@ class _AccountScreenState extends State<AccountScreen> {
                           "work differently from a pharmacy bill's.",
                       helperMaxLines: 3,
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'medical', child: Text('Medical / Pharmacy')),
-                      DropdownMenuItem(value: 'kirana', child: Text('Kirana / General store')),
-                      DropdownMenuItem(value: 'other', child: Text('Other')),
-                    ],
+                    items: businessTypeItems(),
                     onChanged: (v) {
                       if (v != null) setState(() => _businessType = v);
                     },
                   ),
                   const SizedBox(height: Spacing.l),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: Spacing.m),
-                      child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    ),
+                  ErrorText(_error, padding: const EdgeInsets.only(bottom: Spacing.m)),
                   if (_savedMessage != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: Spacing.m),
                       child: Text(_savedMessage!, style: const TextStyle(color: AppColors.statusSaved)),
                     ),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    child: _saving
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Save details'),
+                  BusyFilledButton(busy: _saving, onPressed: _save, label: 'Save details'),
+                  const SizedBox(height: Spacing.xl),
+                  Text('Legal', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: Spacing.xs),
+                  for (final doc in legalDocuments)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.description_outlined),
+                      title: Text(doc.title),
+                      subtitle: Text('Version ${doc.version} · ${doc.effectiveDate}'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => LegalScreen.open(context, doc.id),
+                    ),
+                  const SizedBox(height: Spacing.s),
+                  Text(
+                    'To delete your account and everything in it, email $kSupportEmail from the address above. '
+                    'We complete deletion within 30 days.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),

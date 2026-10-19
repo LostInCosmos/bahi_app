@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../../core/api/api_client.dart';
-import '../../../core/utils/bill_image_cache.dart';
+import '../../../core/disk/bill_image_cache.dart';
 import '../../../core/utils/offset_2d.dart';
 import '../models/invoice.dart';
 import '../models/job_status.dart';
@@ -167,7 +167,7 @@ extension InvoiceApi on ApiClient {
       // Neither given = every bill, in any folder. `unfiled` is home.
       if (folderId != null) 'folder_id': '$folderId' else if (unfiled) 'unfiled': 'true',
     });
-    return ApiClient.jsonList(res).map((e) => InvoiceSummary.fromJson(e as Map<String, dynamic>)).toList();
+    return ApiClient.listOf(res, InvoiceSummary.fromJson);
   }
 
   Future<InvoiceDetail> getInvoiceDetail(int invoiceId) async =>
