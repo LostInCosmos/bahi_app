@@ -5,11 +5,12 @@ part of 'capture_screen.dart';
 /// somewhere else (DAS-76, DAS-79). Both of those bugs were about when a job
 /// stops being watched, which is why this lives on its own.
 ///
-/// It needs four things from the screen, declared here so the dependency is
+/// It needs six things from the screen, declared here so the dependency is
 /// written down rather than reached for.
 mixin _Watching on State<CaptureScreen> {
   List<BatchItem> get _items;
   Future<void> _persistBatch();
+  Future<void> _persistBatchIfChanged();
   void _noteMove(BatchItem item, String? before);
   void _scheduleListRefresh();
 
@@ -248,7 +249,10 @@ mixin _Watching on State<CaptureScreen> {
       // bills retried together left "Working 10" over an empty list after the
       // server had finished all of them.
       if (finished) _scheduleListRefresh();
-      await _persistBatch();
+      // Most rounds change nothing: the server held the request ~25s and
+      // answered that nobody moved. Rewriting the whole batch then cost a
+      // 1.6 MB encode and write every round for a 300-bill batch (DAS-92).
+      await _persistBatchIfChanged();
     }
   }
 

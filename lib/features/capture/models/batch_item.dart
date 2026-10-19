@@ -262,6 +262,24 @@ class BatchItem {
         'folderId': folderId,
       };
 
+  /// Everything [toJson] writes, as one value that compares equal exactly
+  /// when the stored bill would be written the same — so the status loop can
+  /// tell an idle round from a real change without encoding the batch
+  /// (DAS-92). The read compares by identity: it is always replaced, never
+  /// edited in place. Keep in step with [toJson].
+  Object get persistedState => (
+        label,
+        sourceImages.join('\n'),
+        Object.hashAll(pages),
+        status,
+        jobId,
+        lastJobId,
+        result,
+        errorMessage,
+        savedInvoiceId,
+        folderId,
+      );
+
   static BatchItem? fromJson(Map<String, dynamic> json) {
     final sourceImages = (json['sourceImages'] as List<dynamic>? ?? [])
         .map((e) => e as String)
@@ -305,3 +323,7 @@ class BatchItem {
 
 /// What a bill restored at startup needs, decided in one place.
 enum StartupAction { uploadAgain, process, resumeJob, askServer, none }
+
+/// Every bill's [BatchItem.persistedState], in order: equal to an earlier one
+/// (by `listEquals`) exactly when the stored batch would be written the same.
+List<Object> batchState(Iterable<BatchItem> items) => [for (final item in items) item.persistedState];
