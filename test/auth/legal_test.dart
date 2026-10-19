@@ -50,6 +50,15 @@ void main() {
     expect(text, isNot(contains('{{')));
   });
 
+  test('compareLegalVersions orders dotted versions as numbers', () {
+    expect(compareLegalVersions('1.1', '1.1'), 0);
+    expect(compareLegalVersions('1.0', '1.1'), lessThan(0));
+    expect(compareLegalVersions('1.2', '1.10'), lessThan(0));
+    expect(compareLegalVersions('2.0', '1.9'), greaterThan(0));
+    expect(compareLegalVersions('1', '1.0'), 0);
+    expect(compareLegalVersions('1.1', ''), greaterThan(0));
+  });
+
   test('no placeholder is left in the documents', () {
     // The owner supplied every fact on 2026-10-19; a bracketed value here
     // would be shown to a shop as-is.

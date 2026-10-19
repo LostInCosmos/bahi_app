@@ -1,9 +1,13 @@
 import '../../../core/api/api_client.dart';
 import '../../../core/config/business_types.dart';
+import '../../../core/config/legal_documents.dart';
 import '../models/account.dart';
 
 extension AuthApi on ApiClient {
-  Future<void> signup({
+  /// Creates the shop. The signup form's tick is the acceptance of
+  /// [kLegalVersion], which the server records (DAS-104). Returns the
+  /// account when the server sends it (DAS-105), else null.
+  Future<AccountInfo?> signup({
     required String tenantName,
     required String email,
     required String password,
@@ -16,29 +20,38 @@ extension AuthApi on ApiClient {
           'email': email,
           'password': password,
           'business_type': businessType,
+          'legal_version': kLegalVersion,
         },
         auth: false);
     final body = ApiClient.jsonObject(res);
     await saveToken(body['access_token'] as String);
     final account = _accountIn(body);
     await saveBusinessType(account?.businessType ?? businessType ?? kDefaultBusinessType);
+    return account;
   }
 
-  Future<void> login({required String email, required String password}) async {
+  /// Signs in and returns the account — from the login answer when the
+  /// server sends it (DAS-105), else fetched — so the caller can see
+  /// whether the legal documents need accepting (DAS-104).
+  Future<AccountInfo> login({required String email, required String password}) async {
     // No token sent, so a 401 here is a wrong password, not a session ending.
     final res = await postJson('/auth/login', {'email': email, 'password': password}, auth: false);
     final body = ApiClient.jsonObject(res);
     await saveToken(body['access_token'] as String);
-    // Since 2026-10-19 the answer carries the account (DAS-105), so the
-    // business type for theming needs no second request; an older server
-    // is asked for it as before.
     final account = _accountIn(body);
     if (account != null) {
       await saveBusinessType(account.businessType);
-    } else {
-      await getAccount();
+      return account;
     }
+    return getAccount();
   }
+
+  /// Records that the shop accepted the documents this build carries
+  /// (DAS-104). 204; a 422 `stale_version` means the server's current text
+  /// is newer than this build's — not expected, since the screen is only
+  /// shown when it is not.
+  Future<void> acceptLegal({String version = kLegalVersion}) =>
+      postJson('/account/accept-legal', {'version': version});
 
   /// The `account` object a login or signup answer may carry (DAS-105).
   static AccountInfo? _accountIn(Map<String, dynamic> body) {

@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../core/api/api_client.dart';
 import '../core/utils/share_file.dart';
 import '../features/auth/data/auth_api.dart';
+import '../features/auth/models/account.dart';
 import '../core/navigation/app_routes.dart';
+import '../features/auth/presentation/legal_acceptance_screen.dart';
 import '../features/auth/presentation/sign_out.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/home/presentation/home_screen.dart';
@@ -120,6 +122,10 @@ class _StartupGate extends StatefulWidget {
 class _StartupGateState extends State<_StartupGate> {
   bool _ready = false;
 
+  /// The server said the shop must accept the current documents (DAS-104);
+  /// the app is covered until it does. Null until the account was asked.
+  AccountInfo? _needsAcceptance;
+
   @override
   void initState() {
     super.initState();
@@ -134,7 +140,10 @@ class _StartupGateState extends State<_StartupGate> {
 
   Future<void> _refreshBusinessTypeSilently() async {
     try {
-      await ApiClient.instance.getAccount();
+      final account = await ApiClient.instance.getAccount();
+      // Also where a shop learns, on launch, that the documents changed
+      // (DAS-104). Offline: nothing is asked; the next launch asks.
+      if (mounted && account.needsLegalAcceptance) setState(() => _needsAcceptance = account);
     } catch (_) {
       // Best-effort — the persisted value from the last session is fine.
     }
@@ -145,7 +154,18 @@ class _StartupGateState extends State<_StartupGate> {
     if (!_ready) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return ApiClient.instance.isLoggedIn ? const HomeScreen() : const LoginScreen();
+    if (!ApiClient.instance.isLoggedIn) return const LoginScreen();
+    final pending = _needsAcceptance;
+    if (pending != null) {
+      return LegalAcceptanceScreen(
+        firstTime: pending.legal?.acceptedVersion == null,
+        onAccept: (_) async {
+          await ApiClient.instance.acceptLegal();
+          if (mounted) setState(() => _needsAcceptance = null);
+        },
+      );
+    }
+    return const HomeScreen();
   }
 }
 
