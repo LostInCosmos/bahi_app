@@ -4,18 +4,25 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/navigation/tab_screen.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/utils/poll.dart';
+import '../../../core/utils/snack.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/inventory_api.dart';
 import '../../inventory/data/product_catalog.dart';
-import '../../voice/data/voice_api.dart';
 import '../../inventory/models/product.dart';
-import '../models/sale.dart';
+import '../../voice/data/voice_api.dart';
 import '../../voice/models/voice.dart';
-import '../../../core/utils/poll.dart';
-import 'sale_receipt_screen.dart';
-import 'sale_review_screen.dart';
 import '../../voice/presentation/voice_order_review_screen.dart';
 import '../../voice/presentation/voice_sale_screen.dart';
+import '../models/sale.dart';
+import 'sale_receipt_screen.dart';
+import 'sale_review_screen.dart';
 
 /// One submitted-but-not-yet-opened voice note, tracked here rather than on
 /// VoiceSaleScreen itself so the owner can record a second note immediately
@@ -40,7 +47,7 @@ class SalesScreen extends StatefulWidget {
   State<SalesScreen> createState() => SalesScreenState();
 }
 
-class SalesScreenState extends State<SalesScreen> {
+class SalesScreenState extends State<SalesScreen> with TabScreen {
   final _searchController = TextEditingController();
   final _catalog = ProductCatalog.instance;
 
@@ -124,11 +131,10 @@ class SalesScreenState extends State<SalesScreen> {
     }
   }
 
-  Future<void> refresh() => _search();
-
   /// Fetch the shop's products again — on opening the tab and after every
   /// sale, so the stock shown is what is left.
-  Future<void> _search() => _catalog.refresh();
+  @override
+  Future<void> refresh() => _catalog.refresh();
 
   void _openPicker(ProductSummary p) {
     showModalBottomSheet(
@@ -155,7 +161,7 @@ class SalesScreenState extends State<SalesScreen> {
       if (saleId != null) _cart.clear();
     });
     if (saleId == null || !mounted) return;
-    _search();
+    refresh();
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => SaleReceiptScreen(saleId: saleId)),
     );
@@ -227,12 +233,10 @@ class SalesScreenState extends State<SalesScreen> {
   void _notifyVoiceJobReady(_VoiceJobItem item) {
     if (!mounted) return;
     final count = item.order?.itemCountHeard ?? 0;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Voice order ready — $count item${count == 1 ? '' : 's'} heard'),
-        action: SnackBarAction(label: 'View', onPressed: () => _openVoiceJobResult(item)),
-        duration: const Duration(seconds: 6),
-      ),
+    context.say(
+      'Voice order ready — ${plural(count, 'item')} heard',
+      action: SnackBarAction(label: 'View', onPressed: () => _openVoiceJobResult(item)),
+      duration: const Duration(seconds: 6),
     );
   }
 
@@ -241,15 +245,10 @@ class SalesScreenState extends State<SalesScreen> {
   /// tapping a failed one shows the error with a way to dismiss it.
   Future<void> _openVoiceJobResult(_VoiceJobItem item) async {
     if (item.status == _VoiceJobStatus.failed) {
-      final dismiss = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Voice note'),
-          content: Text(item.errorMessage ?? 'Something went wrong.'),
-          actions: [TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Dismiss'))],
-        ),
-      );
-      if (dismiss == true && mounted) {
+      // Reading the failure is dismissing it: a failed note is not worth a
+      // second look, and the chip would otherwise sit there for ever.
+      await showMessageDialog(context, title: 'Voice note', message: item.errorMessage ?? 'Something went wrong.');
+      if (mounted) {
         setState(() => _voiceJobs.remove(item));
         _persistVoiceJobs();
       }
@@ -262,10 +261,8 @@ class SalesScreenState extends State<SalesScreen> {
       MaterialPageRoute(builder: (_) => VoiceOrderReviewScreen(order: item.order!)),
     );
     if (!mounted) return;
-    _search();
-    if (result == 'undone') {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sale reversed')));
-    }
+    refresh();
+    if (result == 'undone') context.say('Sale reversed');
   }
 
   @override
@@ -293,34 +290,30 @@ class SalesScreenState extends State<SalesScreen> {
         ),
         textInputAction: TextInputAction.search,
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: Spacing.m),
       if (_voiceJobs.isNotEmpty) ...[
         _buildVoiceJobsStrip(context),
-        const SizedBox(height: 12),
+        const SizedBox(height: Spacing.m),
       ],
       if (failure != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text('Could not load medicines: $failure',
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
-        ),
+        ErrorText('Could not load medicines: $failure', padding: const EdgeInsets.only(bottom: Spacing.m)),
       if (index == null && _catalog.isLoading)
         const Padding(
-          padding: EdgeInsets.only(top: 32),
+          padding: EdgeInsets.only(top: Spacing.xxl),
           child: Center(child: CircularProgressIndicator()),
         ),
       if (products.isEmpty && index != null)
         const Padding(
-          padding: EdgeInsets.only(top: 32),
+          padding: EdgeInsets.only(top: Spacing.xxl),
           child: Center(child: Text('No products found')),
         ),
     ];
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _search,
+        onRefresh: refresh,
         // Built as they scroll into view — see InventoryScreen.
         child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+          padding: const EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, 90),
           itemCount: header.length + products.length,
           itemBuilder: (context, i) {
             if (i < header.length) return header[i];
@@ -328,7 +321,7 @@ class SalesScreenState extends State<SalesScreen> {
             return Card(
               child: ListTile(
                 title: Text(p.name),
-                subtitle: Text('${p.quantityOnHand.toStringAsFixed(0)} in stock'),
+                subtitle: Text('${qty(p.quantityOnHand)} in stock'),
                 trailing: IconButton(
                   icon: const Icon(Icons.add_circle_outline),
                   onPressed: p.quantityOnHand > 0 ? () => _openPicker(p) : null,
@@ -354,7 +347,7 @@ class SalesScreenState extends State<SalesScreen> {
               heroTag: 'cartFab',
               onPressed: _openReview,
               icon: const Icon(Icons.shopping_cart),
-              label: Text('View cart · ${_cart.length} item${_cart.length == 1 ? '' : 's'}'),
+              label: Text('View cart · ${plural(_cart.length, 'item')}'),
             ),
           ],
         ],
@@ -382,9 +375,7 @@ class SalesScreenState extends State<SalesScreen> {
             _VoiceJobStatus.failed => (Icons.error_outline, 'Voice note failed', colors.errorContainer),
           };
           return ActionChip(
-            avatar: icon == null
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : Icon(icon, size: 18),
+            avatar: icon == null ? const ButtonSpinner() : Icon(icon, size: 18),
             label: Text(label),
             backgroundColor: color,
             onPressed: item.status == _VoiceJobStatus.processing ? null : () => _openVoiceJobResult(item),
@@ -434,9 +425,8 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       if (e.statusCode != 404) return setState(() => _error = 'Could not load product: $e');
       // Merged into another product by our team (DAS-93): the list it was
       // picked from is out of date. Fetch it again and let them pick again.
-      unawaited(ProductCatalog.instance.refresh());
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('That medicine was merged into another one. The list has been refreshed — pick it again.')));
+      ProductCatalog.instance.noteMergedAway();
+      context.say(ProductCatalog.mergedAwayMessage);
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not load product: $e');
@@ -516,7 +506,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                   ),
                 ],
               ),
-              Text('Available: ${b.quantityOnHand.toStringAsFixed(0)}',
+              Text('Available: ${qty(b.quantityOnHand)}',
                   style: TextStyle(color: Theme.of(context).colorScheme.outline)),
               const SizedBox(height: 8),
               Row(
@@ -542,22 +532,17 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                     onPressed: disabled
                         ? null
                         : () {
-                            final qty = double.tryParse(_qtyControllers[b.id]!.text) ?? 0;
+                            final quantity = double.tryParse(_qtyControllers[b.id]!.text) ?? 0;
                             final rate = double.tryParse(_rateControllers[b.id]!.text) ?? 0;
-                            if (qty <= 0 || qty > b.quantityOnHand) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'Enter a quantity between 1 and ${b.quantityOnHand.toStringAsFixed(0)}'),
-                                ),
-                              );
+                            if (quantity <= 0 || quantity > b.quantityOnHand) {
+                              context.say('Enter a quantity between 1 and ${qty(b.quantityOnHand)}');
                               return;
                             }
                             widget.onAdd(CartEntry(
                               productBatchId: b.id,
                               productName: _detail!.name,
                               batchNo: b.batchNo,
-                              qty: qty,
+                              qty: quantity,
                               rate: rate,
                               gstPct: b.gstPct,
                             ));

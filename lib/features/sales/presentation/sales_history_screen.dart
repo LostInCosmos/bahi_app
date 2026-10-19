@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/navigation/tab_screen.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/utils/share_file.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/date_range_buttons.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
-import '../../../app/theme/app_theme.dart';
 import 'sale_receipt_screen.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
@@ -15,7 +20,7 @@ class SalesHistoryScreen extends StatefulWidget {
   State<SalesHistoryScreen> createState() => SalesHistoryScreenState();
 }
 
-class SalesHistoryScreenState extends State<SalesHistoryScreen> {
+class SalesHistoryScreenState extends State<SalesHistoryScreen> with TabScreen {
   DateTime? _startDate;
   DateTime? _endDate;
 
@@ -28,37 +33,17 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
   // HomeScreen's tab switcher calls refresh() the first (and every) time
   // this tab is actually selected, so every tab doesn't fetch on app open.
 
-  String? _iso(DateTime? d) => d?.toIso8601String().split('T').first;
-
-  Future<void> _pickDate({required bool isStart}) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: (isStart ? _startDate : _endDate) ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked == null) return;
-    setState(() {
-      if (isStart) {
-        _startDate = picked;
-      } else {
-        _endDate = picked;
-      }
-    });
-  }
-
-  /// Public so HomeScreen can trigger a reload when this tab is selected —
-  /// IndexedStack keeps this widget's state alive across tab switches.
-  Future<void> refresh() => _refresh();
-
-  Future<void> _refresh() async {
+  /// Called by HomeScreen when this tab is selected — IndexedStack keeps this
+  /// widget's state alive across tab switches.
+  @override
+  Future<void> refresh() async {
     if (_loading) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final sales = await ApiClient.instance.listSales(startDate: _iso(_startDate), endDate: _iso(_endDate));
+      final sales = await ApiClient.instance.listSales(startDate: isoDate(_startDate), endDate: isoDate(_endDate));
       if (!mounted) return;
       setState(() => _sales = sales);
     } catch (e) {
@@ -75,7 +60,8 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
       _error = null;
     });
     try {
-      final bytes = await ApiClient.instance.exportSalesExcel(startDate: _iso(_startDate), endDate: _iso(_endDate));
+      final bytes =
+          await ApiClient.instance.exportSalesExcel(startDate: isoDate(_startDate), endDate: isoDate(_endDate));
       if (!mounted) return;
       await shareBytes(context, bytes,
           name: 'sales_${DateTime.now().millisecondsSinceEpoch}.xlsx', text: 'GST sales export');
@@ -88,107 +74,82 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(Spacing.l),
+    final header = <Widget>[
+      DateRangeButtons(
+        start: _startDate,
+        end: _endDate,
+        onChanged: (start, end) => setState(() {
+          _startDate = start;
+          _endDate = end;
+        }),
+      ),
+      const SizedBox(height: Spacing.m),
+      Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _pickDate(isStart: true),
-                  child: Text(_startDate == null ? 'From' : _iso(_startDate)!),
-                ),
-              ),
-              const SizedBox(width: Spacing.s),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _pickDate(isStart: false),
-                  child: Text(_endDate == null ? 'To' : _iso(_endDate)!),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Spacing.m),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _loading ? null : _refresh,
-                  child: _loading
-                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Refresh'),
-                ),
-              ),
-              const SizedBox(width: Spacing.s),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _exporting ? null : _export,
-                  icon: _exporting
-                      ? const SizedBox(
-                          height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.ios_share, size: 18),
-                  label: const Text('Export'),
-                ),
-              ),
-            ],
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: Spacing.m),
-              child: Text(_error!, style: TextStyle(color: colors.error)),
-            ),
-          const SizedBox(height: Spacing.m),
-          if (_sales.isEmpty && !_loading)
-            Padding(
-              padding: const EdgeInsets.only(top: Spacing.xxl),
-              child: Column(children: [
-                Icon(Icons.point_of_sale_outlined, size: 48, color: colors.outline),
-                const SizedBox(height: Spacing.s),
-                Text('No sales yet', style: TextStyle(color: colors.onSurfaceVariant)),
-              ]),
-            ),
-          ..._sales.map((s) => Padding(
-                padding: const EdgeInsets.only(bottom: Spacing.s),
-                child: Card(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => SaleReceiptScreen(saleId: s.id, primaryActionLabel: 'Close')),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(Spacing.m),
-                      child: Row(children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: colors.secondaryContainer,
-                          child: Icon(Icons.receipt_outlined, size: 18, color: colors.onSecondaryContainer),
-                        ),
-                        const SizedBox(width: Spacing.m),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('${s.saleNo}${s.buyerName != null ? ' — ${s.buyerName}' : ''}',
-                                  style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                              Text(s.saleDate,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: Spacing.s),
-                        Text('₹${s.grandTotal.toStringAsFixed(2)}', style: amountTextStyle(context)),
-                      ]),
-                    ),
-                  ),
-                ),
-              )),
+          Expanded(child: BusyOutlinedButton(busy: _loading, onPressed: refresh, label: 'Refresh')),
+          const SizedBox(width: Spacing.s),
+          Expanded(child: BusyFilledButton(busy: _exporting, onPressed: _export, label: 'Export', icon: Icons.ios_share)),
         ],
+      ),
+      ErrorText(_error),
+      const SizedBox(height: Spacing.m),
+      if (_sales.isEmpty && !_loading) const EmptyHint(icon: Icons.point_of_sale_outlined, text: 'No sales yet'),
+    ];
+    return RefreshIndicator(
+      onRefresh: refresh,
+      // Built as they scroll into view: a month of sales is hundreds of rows.
+      child: ListView.builder(
+        padding: const EdgeInsets.all(Spacing.l),
+        itemCount: header.length + _sales.length,
+        itemBuilder: (context, i) => i < header.length ? header[i] : _SaleRow(_sales[i - header.length]),
+      ),
+    );
+  }
+}
+
+class _SaleRow extends StatelessWidget {
+  final SaleSummary sale;
+  const _SaleRow(this.sale);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final s = sale;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.s),
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => SaleReceiptScreen(saleId: s.id, primaryActionLabel: 'Close')),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.m),
+            child: Row(children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: colors.secondaryContainer,
+                child: Icon(Icons.receipt_outlined, size: 18, color: colors.onSecondaryContainer),
+              ),
+              const SizedBox(width: Spacing.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${s.saleNo}${s.buyerName != null ? ' — ${s.buyerName}' : ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                    Text(s.saleDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Spacing.s),
+              Text(rupees(s.grandTotal), style: amountTextStyle(context)),
+            ]),
+          ),
+        ),
       ),
     );
   }

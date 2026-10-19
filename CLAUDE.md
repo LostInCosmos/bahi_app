@@ -46,19 +46,33 @@ The index itself is local only — never deployed, never committed. What it can 
 
 ## Layout
 ```
-lib/features/<domain>/{data,models,presentation,widgets}
-lib/core/utils/        poll.dart, recording_error.dart, pending_photo_store.dart, bill_image_cache.dart
+lib/app/               app.dart (root widget, routes, session/version-gate handling), theme/
 lib/core/api/          api_client.dart (transport only; each feature's API is its own data/<f>_api.dart, an extension on ApiClient)
+lib/core/config/       business_types.dart — the kinds of shop (login + account dropdowns, theme)
+lib/core/navigation/   app_routes.dart, tab_screen.dart (the `TabScreen` mixin every home tab's State carries)
+lib/core/disk/         pending_photo_store.dart (photos not yet uploaded), bill_image_cache.dart (photos already uploaded)
+lib/core/utils/        json.dart, format.dart, snack.dart, poll.dart, share_file.dart, offset_2d.dart
+lib/core/widgets/      busy_button.dart, inline_message.dart, confirm_dialog.dart, date_range_buttons.dart, dastavez_logo.dart
+lib/features/<domain>/{data,models,presentation,widgets}
 ```
-Reuse before writing a new one:
-- calling the server: `get` / `postJson` / `patchJson` / `delete` / `multipart` on `ApiClient`, from your feature's `data/<f>_api.dart`, never `http.*` directly — they all go through the private `_send`, which adds the auth header, a timeout (`ApiClient.readTimeout` and friends), the error check, and signs the device out on a refused token. Core imports no feature: a new feature's API is a new extension file, not an edit to `api_client.dart`
-- recording audio: `voice/widgets/recording.dart` (format, permission, `MicButton`, `formatElapsed`)
+Reuse before writing a new one (each is tested in `test/core/`):
+- calling the server: `get` / `postJson` / `patchJson` / `delete` / `multipart` on `ApiClient`, from your feature's `data/<f>_api.dart`, never `http.*` directly — they all go through the private `_send`, which adds the auth header, a timeout (`ApiClient.readTimeout` and friends), the error check, and signs the device out on a refused token. A list endpoint is `ApiClient.listOf(res, X.fromJson)`. Core imports no feature: a new feature's API is a new extension file, not an edit to `api_client.dart`
+- reading a server JSON object into a model: the `JsonReads` extension (`core/utils/json.dart`) — `json.dbl('x')` / `dblOr` / `dblReq`, `str`, `integer`, `dateOnly`, `utc`, `listOf('k', X.fromJson)`, `objOf`. Nullable, defaulted and required variants; never hand-write `(json['x'] as num?)?.toDouble()` again
+- writing a number, amount, count or date for the shopkeeper: `core/utils/format.dart` — `rupees`, `numText` (what a form field holds; exact round trip), `wholeOrFixed2`, `percent`, `qty`, `plural(n, 'bill')`, `isoDate`, `shortDate`, `formatElapsed`
+- telling the shopkeeper something: `context.say('…')` (`core/utils/snack.dart`; replaces the current snackbar); a yes/no question: `showConfirmDialog` (`destructive: true` for Delete); a message: `showMessageDialog`
+- a button that runs an action: `BusyFilledButton` / `BusyOutlinedButton` / `ButtonSpinner` (`core/widgets/busy_button.dart`); an error line under a form: `ErrorText(_error)`; an empty list: `EmptyHint`; a detail row: `KeyValueRow` / `SectionTitle` (`core/widgets/inline_message.dart`)
+- a From/To date filter: `DateRangeButtons`; the shop kinds: `kBusinessTypes` / `businessTypeItems()`
+- a new home tab: one entry in `features/home/presentation/home_tabs.dart` and `with TabScreen` on the screen's State (`refresh()` is called whenever the tab is selected). `home_screen.dart` is driven from that list and needs no edit
+- recording audio: `voice/widgets/recording.dart` (format, permission, `RecordingSupport` mixin for the recorder + clock, `MicButton`, `VoiceHintBox`, `recordingErrorMessage`)
 - waiting on a job: `core/utils/poll.dart` (one job) or the capture screen's `_statusLoop` (a batch)
-- a save the server refused for a GSTIN: `VendorHint.fromSaveRefusal`, then `showGstinConfirmDialog` / `showSavedTick` (`invoice/presentation/gstin_confirm.dart`)
-- what a save sends as `extraction_meta`: `ExtractionMeta.reviewed()`
+- the product list: `ProductCatalog.instance` (one list, searched on the phone); a merged-away product: `noteMergedAway()` + `ProductCatalog.mergedAwayMessage`
+- what a save sends as `extraction_meta`: `ExtractionMeta.reviewed()`; the saved tick: `showSavedTick` (`invoice/widgets/saved_tick.dart`)
 - a capture bill failing: `BatchItem.markFailed` (it also clears the retry state)
 - the capture grid's rules (filters, bulk move/discard, search): pure functions in `capture/models/`, tested without a screen; the Select-mode UI around them is `capture/presentation/capture_selection.dart`, a `part` of the capture screen
 **No state-management package** — plain `StatefulWidget`/`setState` throughout. Do not introduce one casually.
+
+## The legal pages move with the code
+The Terms of Service and Privacy Policy are data in `core/config/legal_documents.dart` (shown by `auth/presentation/legal_screen.dart`; signup requires the tick). They describe what the app collects, who processes it and how long it is kept, so **a change to any of these is also a change to that file**: a new signup/account field, a new permission or content type, a new third-party service or SDK (the policy promises there is no analytics or tracking), data shared across shops in a new way, retention or deletion behaviour, in-app account deletion, fees. Bump `kLegalVersion` and `kLegalEffectiveDate`, run `dart run tool/export_legal.dart` (regenerates the vault's `01 - Product/Legal/` notes), and say so in the report. The full trigger list and the law each section answers: the vault's `01 - Product/Legal/Legal Pages.md`.
 
 ## The things that bite
 - **iOS permissions live in `ios/Runner/Info.plist`, and a missing key does not error — iOS terminates the app** (SIGABRT) the moment the API is touched. No prompt, no message. `NSCameraUsageDescription` was missing once and the camera "just closed the app". `Info.plist` is compiled into the bundle, so a hot reload will not pick up a change — rebuild.
@@ -67,7 +81,8 @@ Reuse before writing a new one:
 - **The review screen must round-trip what the server sent.** It once cleared `discount_amount` before re-submitting, so the server saw no discount and invented six validation errors on a clean bill. If you clear a derived field, make sure something survives to recompute it from. A field the form does not show is still carried (`seller_phone` was once dropped that way), and after a revalidate the form holds the server's answer, derived tax rates included. `test/invoice/save_round_trip_test.dart` checks both save paths.
 - **The client never self-asserts a confirmation.** A destructive voice result always round-trips a server-issued token; `confirmed: true` from the client is not trusted, and the backend re-validates anyway.
 - **A 401 signs the device out.** `_send` clears a refused token and the app returns to login (`ApiClient.onSessionEnded`, set in `app/app.dart`). A call that is not about the session must go through `_send`, and one that already ends it (`logout`) must not.
-- **The tests cover the capture grid and the models well, the rest thinly** (`test/`, 296 tests on 2026-10-14). Screens are driven against a fake server with `http.runWithClient` + `MockClient` — see `test/capture/capture_screen_retry_test.dart`. Voice, sales, inventory and account screens have no tests; camera, mic and permissions can only be checked on a real device.
+- **The tests cover the capture grid, the models and the core wrappers well, the rest thinly** (`test/`, 392 tests on 2026-10-19). Screens are driven against a fake server with `http.runWithClient` + `MockClient` — see `test/capture/capture_screen_retry_test.dart`. Voice, sales, inventory and account screens have no tests; camera, mic and permissions can only be checked on a real device.
+- **Lists are lazy.** Every list of rows is a `ListView.builder` (header widgets first, then rows) — never `ListView(children: [...list.map(...)])`, which builds every row. A per-build getter that rebuilds a map (issues by field, children by folder) is cached once per build or once per change; `FolderTree` indexes children on construction, `ApiClient.tenantId` decodes the JWT once per token.
 
 ## Commands
 ```bash

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/format.dart';
 import '../../invoice/models/invoice.dart';
 
 enum ConfirmBillAction { save, edit }
@@ -30,10 +31,10 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
           if (inv.sellerGstin.isNotEmpty) Text('GSTIN ${inv.sellerGstin}'),
           const SizedBox(height: 8),
           Text('Invoice ${inv.invoiceNo} • ${inv.invoiceDate}'),
-          Text('${inv.lineItems.length} item(s)'),
+          Text(plural(inv.lineItems.length, 'item')),
           const SizedBox(height: 8),
           Text(
-            'Grand total: ₹${inv.totals.grandTotal.toStringAsFixed(2)}',
+            'Grand total: ${rupees(inv.totals.grandTotal)}',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ],

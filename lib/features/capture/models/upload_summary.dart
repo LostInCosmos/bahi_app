@@ -1,3 +1,5 @@
+import '../../../core/utils/json.dart';
+
 /// One row of `GET /invoices/extract` — a bill this SHOP has uploaded,
 /// as opposed to one this DEVICE happens to be holding.
 ///
@@ -13,11 +15,6 @@
 /// separates a bill that wants a person from one that is merely waiting
 /// to be saved. The full result is fetched for the one bill that gets
 /// opened (`getExtractionJob`).
-String? _text(Object? value) {
-  final text = (value as String? ?? '').trim();
-  return text.isEmpty ? null : text;
-}
-
 class UploadSummary {
   final int jobId;
   final String status;
@@ -71,22 +68,20 @@ class UploadSummary {
   });
 
   factory UploadSummary.fromJson(Map<String, dynamic> json) => UploadSummary(
-        jobId: json['job_id'] as int,
-        status: json['status'] as String? ?? 'queued',
-        sourceImage: json['source_image'] as String? ?? '',
-        createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
-        invoiceId: json['invoice_id'] as int?,
-        folderId: json['folder_id'] as int?,
+        jobId: json.intReq('job_id'),
+        status: json.strOr('status', 'queued'),
+        sourceImage: json.strOr('source_image'),
+        createdAt: DateTime.parse(json.strReq('created_at')).toLocal(),
+        invoiceId: json.integer('invoice_id'),
+        folderId: json.integer('folder_id'),
         // Absent on a server older than the field; absent means none, not
         // unknown, so the card reads "Not saved" exactly as it used to.
-        issueCount: (json['issue_count'] as num?)?.toInt() ?? 0,
-        retryAt: json['retry_at'] == null
-            ? null
-            : DateTime.parse(json['retry_at'] as String).toLocal(),
-        sellerName: _text(json['seller_name']),
-        invoiceNo: _text(json['invoice_no']),
-        reviewState: json['review_state'] as String?,
-        imageRev: (json['image_rev'] as num?)?.toInt() ?? 0,
+        issueCount: json.intOr('issue_count'),
+        retryAt: json.utc('retry_at')?.toLocal(),
+        sellerName: json.text('seller_name'),
+        invoiceNo: json.text('invoice_no'),
+        reviewState: json.str('review_state'),
+        imageRev: json.intOr('image_rev'),
       );
 
   bool get isSaved => invoiceId != null;
@@ -131,11 +126,9 @@ class UploadPage {
   const UploadPage({required this.uploads, this.nextBeforeId, this.counts});
 
   factory UploadPage.fromJson(Map<String, dynamic> json) => UploadPage(
-        uploads: (json['jobs'] as List<dynamic>? ?? const [])
-            .map((e) => UploadSummary.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        nextBeforeId: json['next_before_id'] as int?,
-        counts: (json['counts'] as Map<String, dynamic>?)?.map(
+        uploads: json.listOf('jobs', UploadSummary.fromJson),
+        nextBeforeId: json.integer('next_before_id'),
+        counts: json.obj('counts')?.map(
           (folder, byCategory) => MapEntry(
             folder,
             (byCategory as Map<String, dynamic>).map((k, v) => MapEntry(k, (v as num).toInt())),

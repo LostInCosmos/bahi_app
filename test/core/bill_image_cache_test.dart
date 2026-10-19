@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gst_bill_app/core/utils/bill_image_cache.dart';
+import 'package:gst_bill_app/core/disk/bill_image_cache.dart';
 
 // DAS-86: measure the on-disk cache rather than trust its doc comment. The
 // cache's own code runs unmodified against a real temp directory; only

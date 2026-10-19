@@ -8,7 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../utils/bill_image_cache.dart';
+import '../config/business_types.dart';
+import '../disk/bill_image_cache.dart';
 import 'api_exception.dart';
 
 export 'api_exception.dart';
@@ -65,7 +66,7 @@ class ApiClient {
   /// Drives the app's color scheme (teal for medical, red for kirana — see
   /// theme.dart) — a [ValueNotifier] so the theme updates live the moment
   /// the account loads or changes, without needing a restart.
-  final businessTypeNotifier = ValueNotifier<String>('medical');
+  final businessTypeNotifier = ValueNotifier<String>(kDefaultBusinessType);
 
   Future<void> loadFromDisk() async {
     final prefs = await SharedPreferences.getInstance();
@@ -81,7 +82,7 @@ class ApiClient {
         await prefs.remove('token');
       }
     }
-    businessTypeNotifier.value = prefs.getString('business_type') ?? 'medical';
+    businessTypeNotifier.value = prefs.getString('business_type') ?? kDefaultBusinessType;
   }
 
   int _appBuild = 0;
@@ -153,7 +154,7 @@ class ApiClient {
   /// sign-in (see BatchStore).
   Future<void> _forget() async {
     token = null;
-    businessTypeNotifier.value = 'medical';
+    businessTypeNotifier.value = kDefaultBusinessType;
     try {
       await _secureStorage.delete(key: 'token');
       final prefs = await SharedPreferences.getInstance();
@@ -208,20 +209,55 @@ class ApiClient {
   /// — on-device storage (the capture batch, pending photos, the image cache)
   /// is scoped by it and needs it before any request has been made.
   /// Not verified here; the server verifies the token on every request.
+  ///
+  /// Decoded once per token, not per call: every thumbnail, every batch save
+  /// and every pending-photo write asks, and base64-decoding a JWT each time
+  /// was measurable on a 300-card grid.
   int? get tenantId {
     final t = token;
     if (t == null) return null;
+    if (t == _tenantIdToken) return _tenantIdCached;
+    _tenantIdToken = t;
+    return _tenantIdCached = _decodeTenantId(t);
+  }
+
+  String? _tenantIdToken;
+  int? _tenantIdCached;
+
+  static int? _decodeTenantId(String token) {
     try {
-      final parts = t.split('.');
+      final parts = token.split('.');
       if (parts.length != 3) return null;
       final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map<String, dynamic>;
-      return payload['tenant_id'] as int?;
+      return (payload['tenant_id'] as num?)?.toInt();
     } catch (_) {
       return null;
     }
   }
 
   Uri _uri(String path, [Map<String, String>? query]) => Uri.parse('$baseUrl$path').replace(queryParameters: query);
+
+  /// One connection pool for the life of the app. The top-level `http.get`
+  /// and friends open a fresh connection per call, so every request — each
+  /// thumbnail included — paid a TLS handshake (~0.2 s measured from a
+  /// laptop, more on cellular). A single `Client` keeps connections alive.
+  ///
+  /// Made with the `http.Client()` factory, which honours
+  /// `http.runWithClient`, and remade whenever the zone changes: a test's
+  /// `runWithClient` runs in its own zone and must never be answered by the
+  /// client a previous test created. In the app the zone never changes.
+  http.Client get _http {
+    final zone = Zone.current;
+    if (_client == null || _clientZone != zone) {
+      _client?.close();
+      _client = http.Client();
+      _clientZone = zone;
+    }
+    return _client!;
+  }
+
+  http.Client? _client;
+  Zone? _clientZone;
 
   // ---- transport ----
   //
@@ -270,18 +306,18 @@ class ApiClient {
   }
 
   Future<http.Response> get(String path, {Map<String, String>? query, Duration timeout = readTimeout}) =>
-      _send((h) => http.get(_uri(path, query), headers: h), timeout: timeout);
+      _send((h) => _http.get(_uri(path, query), headers: h), timeout: timeout);
 
   Future<http.Response> post(String path, {Duration timeout = readTimeout}) =>
-      _send((h) => http.post(_uri(path), headers: h), timeout: timeout);
+      _send((h) => _http.post(_uri(path), headers: h), timeout: timeout);
 
   Future<http.Response> postJson(String path, Object body, {bool auth = true, Duration timeout = readTimeout}) =>
-      _send((h) => http.post(_uri(path), headers: h, body: jsonEncode(body)), auth: auth, json: true, timeout: timeout);
+      _send((h) => _http.post(_uri(path), headers: h, body: jsonEncode(body)), auth: auth, json: true, timeout: timeout);
 
   Future<http.Response> patchJson(String path, Object body) =>
-      _send((h) => http.patch(_uri(path), headers: h, body: jsonEncode(body)), json: true);
+      _send((h) => _http.patch(_uri(path), headers: h, body: jsonEncode(body)), json: true);
 
-  Future<http.Response> delete(String path) => _send((h) => http.delete(_uri(path), headers: h));
+  Future<http.Response> delete(String path) => _send((h) => _http.delete(_uri(path), headers: h));
 
   /// A multipart form, built by [build] — photos and recordings.
   Future<http.Response> multipart(
@@ -293,7 +329,8 @@ class ApiClient {
       _send((h) async {
         final request = http.MultipartRequest('POST', _uri(path, query))..headers.addAll(h);
         await build(request);
-        return http.Response.fromStream(await request.send());
+        // Through the shared client: `request.send()` would open its own.
+        return http.Response.fromStream(await _http.send(request));
       }, timeout: timeout);
 
   /// The date filter purchases and sales share, keeping only the ends that are set.
@@ -314,6 +351,13 @@ class ApiClient {
 
   static Map<String, dynamic> jsonObject(http.Response res) => jsonDecode(res.body) as Map<String, dynamic>;
   static List<dynamic> jsonList(http.Response res) => jsonDecode(res.body) as List<dynamic>;
+
+  /// A JSON array of objects, each read with [fromJson] — what most list
+  /// endpoints answer with. (Spelled out rather than through `core/utils/json`,
+  /// so `core/api` and `core/utils` do not import each other: `poll.dart`
+  /// already needs `ApiException`.)
+  static List<T> listOf<T>(http.Response res, T Function(Map<String, dynamic>) fromJson) =>
+      [for (final e in jsonList(res)) fromJson(e as Map<String, dynamic>)];
 
   void _checkOk(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) return;

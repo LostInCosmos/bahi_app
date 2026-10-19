@@ -2,8 +2,7 @@ import '../../../core/api/api_client.dart';
 import '../models/folder.dart';
 
 extension FolderApi on ApiClient {
-  Future<FolderTree> listFolders() async => FolderTree(
-      ApiClient.jsonList(await get('/folders')).map((e) => Folder.fromJson(e as Map<String, dynamic>)).toList());
+  Future<FolderTree> listFolders() async => FolderTree(ApiClient.listOf(await get('/folders'), Folder.fromJson));
 
   /// Throws ApiException(409) for a duplicate name in that place and
   /// ApiException(422) past the depth cap — surface `.message`.

@@ -1,4 +1,5 @@
 import '../../../core/api/api_client.dart';
+import '../../../core/config/business_types.dart';
 import '../models/account.dart';
 
 extension AuthApi on ApiClient {
@@ -18,7 +19,7 @@ extension AuthApi on ApiClient {
         },
         auth: false);
     await saveToken(ApiClient.jsonObject(res)['access_token'] as String);
-    await saveBusinessType(businessType ?? 'medical');
+    await saveBusinessType(businessType ?? kDefaultBusinessType);
   }
 
   Future<void> login({required String email, required String password}) async {

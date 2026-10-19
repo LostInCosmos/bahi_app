@@ -2,7 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/utils/snack.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../data/invoice_api.dart';
 import '../models/invoice.dart';
 
@@ -30,9 +36,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     setState(() => _error = null);
     try {
       final detail = await ApiClient.instance.getInvoiceDetail(widget.invoiceId);
-      final allPaths = [detail.sourceImagePath, ...detail.extraSourceImagePaths];
       final pages = <Uint8List>[];
-      for (final path in allPaths) {
+      for (final path in [detail.sourceImagePath, ...detail.extraSourceImagePaths]) {
         try {
           pages.add(await ApiClient.instance.fetchImage(path, imageRev: detail.imageRev));
         } catch (_) {
@@ -53,23 +58,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   Future<void> _confirmDelete() async {
     if (_deleting) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete this purchase?'),
-        content: const Text(
-          'This also removes the stock it added to inventory. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Delete', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete this purchase?',
+      message: 'This also removes the stock it added to inventory. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _deleting = true);
     try {
@@ -79,18 +75,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _deleting = false);
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Could not delete'),
-          content: Text(e.message),
-          actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
-        ),
-      );
+      showMessageDialog(context, title: 'Could not delete', message: e.message);
     } catch (e) {
       if (!mounted) return;
       setState(() => _deleting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      context.say('Delete failed: $e');
     }
   }
 
@@ -101,93 +90,92 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       appBar: AppBar(title: Text(detail?.invoiceNo ?? 'Invoice')),
       body: SafeArea(
         child: _error != null
-            ? Center(child: Padding(padding: const EdgeInsets.all(16), child: Text(_error!)))
+            ? Center(child: Padding(padding: const EdgeInsets.all(Spacing.l), child: Text(_error!)))
             : detail == null
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(Spacing.l),
                     children: [
                       for (final page in _photoPages)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(page),
-                          ),
+                          padding: const EdgeInsets.only(bottom: Spacing.s),
+                          child: ClipRRect(borderRadius: BorderRadius.circular(Spacing.s), child: Image.memory(page)),
                         ),
                       if (_photoPages.length > 1)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: Spacing.s),
                           child: Text('${_photoPages.length} pages', style: Theme.of(context).textTheme.bodySmall),
                         ),
-                      const SizedBox(height: 8),
-                      _sectionTitle(context, 'Vendor'),
-                      _kv('Name', detail.vendorName),
-                      _kv('GSTIN', detail.vendorGstin),
-                      if (detail.sellerDlNo != null) _kv('D.L. no.', detail.sellerDlNo!),
-                      const SizedBox(height: 16),
-                      _sectionTitle(context, 'Invoice'),
-                      _kv('Invoice number', detail.invoiceNo),
-                      _kv('Date', detail.invoiceDate),
-                      if (detail.invoiceType != null) _kv('Type', detail.invoiceType!),
-                      if (detail.placeOfSupply != null) _kv('Place of supply', detail.placeOfSupply!),
-                      if (detail.buyerName != null) _kv('Buyer', detail.buyerName!),
-                      if (detail.buyerDlNo != null) _kv('Buyer D.L. no.', detail.buyerDlNo!),
-                      _kv('Extraction method', detail.extractionMethod),
-                      _kv('Reviewed', detail.reviewed ? 'Yes' : 'No'),
+                      const SizedBox(height: Spacing.s),
+                      const SectionTitle('Vendor'),
+                      KeyValueRow('Name', detail.vendorName),
+                      KeyValueRow('GSTIN', detail.vendorGstin),
+                      if (detail.sellerDlNo != null) KeyValueRow('D.L. no.', detail.sellerDlNo!),
+                      const SizedBox(height: Spacing.l),
+                      const SectionTitle('Invoice'),
+                      KeyValueRow('Invoice number', detail.invoiceNo),
+                      KeyValueRow('Date', detail.invoiceDate),
+                      if (detail.invoiceType != null) KeyValueRow('Type', detail.invoiceType!),
+                      if (detail.placeOfSupply != null) KeyValueRow('Place of supply', detail.placeOfSupply!),
+                      if (detail.buyerName != null) KeyValueRow('Buyer', detail.buyerName!),
+                      if (detail.buyerDlNo != null) KeyValueRow('Buyer D.L. no.', detail.buyerDlNo!),
+                      KeyValueRow('Extraction method', detail.extractionMethod),
+                      KeyValueRow('Reviewed', detail.reviewed ? 'Yes' : 'No'),
                       // What the machine flagged is for our team, not the shop
                       // (DAS-71): shown only by a server that does not say who
                       // holds the bill, as it always was.
                       if (detail.validationIssues.isNotEmpty && detail.reviewState == null) ...[
-                        const SizedBox(height: 16),
-                        _sectionTitle(context, 'Flagged at save time'),
-                        ...detail.validationIssues.map((i) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                '${i.isError ? '⚠' : '•'} ${i.message}',
-                                style: TextStyle(
-                                  color: i.isError ? Theme.of(context).colorScheme.error : const Color(0xFFB45309),
-                                ),
-                              ),
-                            )),
-                      ],
-                      const SizedBox(height: 16),
-                      _sectionTitle(context, 'Line items'),
-                      ...detail.lineItems.map((item) => Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(item.productName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Qty ${_fmt(item.qty)} × ₹${_fmt(item.rate)}'
-                                    '${item.hsnCode != null ? ' • HSN ${item.hsnCode}' : ''}'
-                                    ' • GST ${_fmt(item.gstPct)}%',
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ],
+                        const SizedBox(height: Spacing.l),
+                        const SectionTitle('Flagged at save time'),
+                        for (final i in detail.validationIssues)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: Spacing.xs),
+                            child: Text(
+                              '${i.isError ? '⚠' : '•'} ${i.message}',
+                              style: TextStyle(
+                                color: i.isError ? Theme.of(context).colorScheme.error : AppColors.statusNeedsReview,
                               ),
                             ),
-                          )),
-                      const SizedBox(height: 16),
-                      _sectionTitle(context, 'Totals'),
-                      _kv('Subtotal', '₹${_fmt(detail.subtotal)}'),
-                      if (detail.totalDiscount != null) _kv('Discount', '₹${_fmt(detail.totalDiscount!)}'),
-                      _kv('CGST', '₹${_fmt(detail.totalCgst)}'),
-                      _kv('SGST', '₹${_fmt(detail.totalSgst)}'),
-                      if (detail.totalIgst != null) _kv('IGST', '₹${_fmt(detail.totalIgst!)}'),
-                      if (detail.roundOff != null) _kv('Round off', '₹${_fmt(detail.roundOff!)}'),
-                      _kv('Grand total', '₹${_fmt(detail.grandTotal)}', bold: true),
-                      const SizedBox(height: 24),
-                      OutlinedButton.icon(
-                        onPressed: _deleting ? null : _confirmDelete,
-                        icon: _deleting
-                            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.delete_outline),
-                        label: Text(_deleting ? 'Deleting…' : 'Delete this purchase'),
+                          ),
+                      ],
+                      const SizedBox(height: Spacing.l),
+                      const SectionTitle('Line items'),
+                      for (final item in detail.lineItems)
+                        Card(
+                          margin: const EdgeInsets.only(bottom: Spacing.s),
+                          child: Padding(
+                            padding: const EdgeInsets.all(Spacing.m),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.productName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: Spacing.xs),
+                                Text(
+                                  'Qty ${wholeOrFixed2(item.qty)} × ₹${wholeOrFixed2(item.rate)}'
+                                  '${item.hsnCode != null ? ' • HSN ${item.hsnCode}' : ''}'
+                                  ' • GST ${percent(item.gstPct)}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: Spacing.l),
+                      const SectionTitle('Totals'),
+                      KeyValueRow('Subtotal', '₹${wholeOrFixed2(detail.subtotal)}'),
+                      if (detail.totalDiscount != null) KeyValueRow('Discount', '₹${wholeOrFixed2(detail.totalDiscount!)}'),
+                      KeyValueRow('CGST', '₹${wholeOrFixed2(detail.totalCgst)}'),
+                      KeyValueRow('SGST', '₹${wholeOrFixed2(detail.totalSgst)}'),
+                      if (detail.totalIgst != null) KeyValueRow('IGST', '₹${wholeOrFixed2(detail.totalIgst!)}'),
+                      if (detail.roundOff != null) KeyValueRow('Round off', '₹${wholeOrFixed2(detail.roundOff!)}'),
+                      KeyValueRow('Grand total', '₹${wholeOrFixed2(detail.grandTotal)}', bold: true),
+                      const SizedBox(height: Spacing.xl),
+                      BusyOutlinedButton(
+                        busy: _deleting,
+                        onPressed: _confirmDelete,
+                        icon: Icons.delete_outline,
+                        label: 'Delete this purchase',
+                        busyLabel: 'Deleting…',
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Theme.of(context).colorScheme.error,
                           side: BorderSide(color: Theme.of(context).colorScheme.error),
@@ -198,21 +186,4 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       ),
     );
   }
-
-  Widget _sectionTitle(BuildContext context, String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text, style: Theme.of(context).textTheme.titleMedium),
-      );
-
-  Widget _kv(String label, String value, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          children: [
-            Expanded(child: Text(label, style: const TextStyle(color: Colors.grey))),
-            Text(value, style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-          ],
-        ),
-      );
-
-  String _fmt(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 }

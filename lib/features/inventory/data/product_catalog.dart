@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
@@ -24,6 +26,12 @@ class ProductCatalog extends ChangeNotifier {
   ProductCatalog._();
   static final instance = ProductCatalog._();
 
+  /// What every screen says when a product or batch it was holding has been
+  /// merged into another by our team (DAS-93): the list is fetched again and
+  /// the shopkeeper picks again.
+  static const mergedAwayMessage =
+      'That medicine was merged into another one. The list has been refreshed — pick it again.';
+
   ProductIndex? _index;
   String? _session;
   Future<void>? _fetching;
@@ -36,6 +44,11 @@ class ProductCatalog extends ChangeNotifier {
   ProductIndex? get index => _session != null && _session == ApiClient.instance.token ? _index : null;
 
   bool get isLoading => _fetching != null;
+
+  /// A product or batch the server says no longer exists: the held list is
+  /// stale, so fetch it again in the background. The caller shows
+  /// [mergedAwayMessage].
+  void noteMergedAway() => unawaited(refresh());
 
   /// Fetch the list again. Callers at the same moment share one request, and
   /// a failure is kept in [lastError] rather than thrown: whatever list is

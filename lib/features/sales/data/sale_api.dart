@@ -22,7 +22,7 @@ extension SaleApi on ApiClient {
 
   Future<List<SaleSummary>> listSales({String? startDate, String? endDate}) async {
     final res = await get('/sales', query: ApiClient.dateRange(startDate, endDate));
-    return ApiClient.jsonList(res).map((e) => SaleSummary.fromJson(e as Map<String, dynamic>)).toList();
+    return ApiClient.listOf(res, SaleSummary.fromJson);
   }
 
   Future<Uint8List> exportSalesExcel({String? startDate, String? endDate}) async => (await get('/export/sales-excel',

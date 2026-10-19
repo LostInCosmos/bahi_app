@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/widgets/busy_button.dart';
 import '../data/invoice_api.dart';
 import '../models/invoice.dart';
 import '../widgets/saved_tick.dart';
-import '../../../app/theme/app_theme.dart';
 
-String _fmt(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
-String _fmtNullable(double? v) => v == null ? '' : _fmt(v);
+/// How a number is written into a field, and read back: see [numText]. A
+/// whole number stays whole and a fraction keeps Dart's own spelling, so the
+/// round trip through `double.tryParse` is exact.
+String _fmt(double v) => numText(v);
+String _fmtNullable(double? v) => numText(v);
 
 /// A bill doesn't always print a combined GST% — sometimes it only gives
 /// CGST/SGST rates, or only the rupee amounts. Rather than leaving the
@@ -206,17 +211,28 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _photoFailed = false;
   bool _photoMinimized = false;
 
-  Map<String, ValidationIssue> get _headerIssues => {
-        for (final i in _issues)
-          if (!_lineItemIssuePattern.hasMatch(i.field)) i.field: i,
-      };
+  /// The issues split once per change of [_issues], not once per field: the
+  /// form has some thirty decorated fields, and each used to rebuild this map
+  /// from the whole list on every build.
+  Map<String, ValidationIssue> _headerIssues = const {};
+  Map<int, List<ValidationIssue>> _lineIssues = const {};
 
-  List<ValidationIssue> _issuesForLineItem(int index) {
-    return _issues.where((i) {
+  void _indexIssues() {
+    final header = <String, ValidationIssue>{};
+    final lines = <int, List<ValidationIssue>>{};
+    for (final i in _issues) {
       final m = _lineItemIssuePattern.firstMatch(i.field);
-      return m != null && int.parse(m.group(1)!) == index;
-    }).toList();
+      if (m == null) {
+        header[i.field] = i;
+      } else {
+        (lines[int.parse(m.group(1)!)] ??= []).add(i);
+      }
+    }
+    _headerIssues = header;
+    _lineIssues = lines;
   }
+
+  List<ValidationIssue> _issuesForLineItem(int index) => _lineIssues[index] ?? const [];
 
   InputDecoration _decoration(String label, String field) {
     // The supplier's GSTIN is settled by our team, not flagged to the shop
@@ -239,6 +255,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   void initState() {
     super.initState();
     _issues = List<ValidationIssue>.from(widget.result.issues);
+    _indexIssues();
     final inv = widget.result.invoice;
     sellerName = TextEditingController(text: inv.sellerName);
     sellerGstin = TextEditingController(text: inv.sellerGstin);
@@ -433,6 +450,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       final hasErrors = result.issues.any((i) => i.isError);
       setState(() {
         _issues = result.issues;
+        _indexIssues();
         _applyInvoiceToControllers(result.invoice);
         _error = hasErrors
             ? "Still has flagged fields below — fix and revalidate again, or tick the box to save anyway."
@@ -479,6 +497,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
         setState(() {
           _issues = rawIssues.map((j) => ValidationIssue.fromJson(j as Map<String, dynamic>)).toList();
+          _indexIssues();
           _error = "Fix the flagged fields, or tick the box below to save anyway.";
         });
       } else {
@@ -641,21 +660,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       child: Text(_error!, style: TextStyle(color: colors.error)),
                     ),
             ),
-            OutlinedButton.icon(
-              onPressed: _revalidating ? null : _revalidate,
-              icon: _revalidating
-                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.fact_check_outlined, size: 18),
-              label: const Text('Revalidate'),
+            BusyOutlinedButton(
+              busy: _revalidating,
+              onPressed: _revalidate,
+              icon: Icons.fact_check_outlined,
+              label: 'Revalidate',
             ),
             const SizedBox(height: Spacing.s),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.check_circle_outline),
-              label: Text(_saving ? 'Saving…' : 'Save invoice'),
+            BusyFilledButton(
+              busy: _saving,
+              onPressed: _save,
+              icon: Icons.check_circle_outline,
+              label: 'Save invoice',
+              busyLabel: 'Saving…',
             ),
             const SizedBox(height: Spacing.xl),
                 ],
@@ -822,9 +839,8 @@ class _LineItemCardState extends State<_LineItemCard> {
 
   // issues here are already filtered to this row by the parent; strip the
   // "Line [N]." prefix so lookups are by plain field name (e.g. "qty").
-  Map<String, ValidationIssue> get _bySuffix => {
-        for (final i in widget.issues) _lineItemIssuePattern.firstMatch(i.field)!.group(2)!: i,
-      };
+  // Built once per build (seventeen fields ask), in [build].
+  Map<String, ValidationIssue> _bySuffix = const {};
 
   InputDecoration _decoration(String label, String field) {
     var issue = _bySuffix[field];
@@ -852,6 +868,7 @@ class _LineItemCardState extends State<_LineItemCard> {
     final form = widget.form;
     final hasError = widget.issues.any((i) => i.isError);
     final hasIssue = widget.issues.isNotEmpty;
+    _bySuffix = {for (final i in widget.issues) _lineItemIssuePattern.firstMatch(i.field)!.group(2)!: i};
 
     return Card(
       margin: const EdgeInsets.only(top: Spacing.m),

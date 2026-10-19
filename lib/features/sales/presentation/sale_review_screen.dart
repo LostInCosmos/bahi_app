@@ -1,11 +1,14 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
+import '../../../core/widgets/busy_button.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
+import '../widgets/totals_card.dart';
 
 /// Buyer GSTIN stays optional and out of the way — needed for a business
 /// customer, irrelevant for the walk-in retail sale that's the common case.
@@ -50,7 +53,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
   /// again, and the shopkeeper adds it again — nothing else in the cart changes.
   void _dropGoneBatch(int batchId) {
     final gone = widget.cart.where((c) => c.productBatchId == batchId).map((c) => c.productName).toSet();
-    unawaited(ProductCatalog.instance.refresh());
+    ProductCatalog.instance.noteMergedAway();
     setState(() {
       widget.cart.removeWhere((c) => c.productBatchId == batchId);
       _message = '${gone.isEmpty ? 'A medicine' : gone.join(', ')} was merged into another by our team and '
@@ -96,71 +99,40 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Review sale')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(Spacing.l),
         children: [
-          ...widget.cart.asMap().entries.map((entry) {
-            final i = entry.key;
-            final c = entry.value;
-            return Card(
+          for (var i = 0; i < widget.cart.length; i++)
+            Card(
               child: ListTile(
-                title: Text('${c.productName} × ${c.qty.toStringAsFixed(0)}'),
-                subtitle: Text('Batch ${c.batchNo ?? "—"}'),
+                title: Text('${widget.cart[i].productName} × ${qty(widget.cart[i].qty)}'),
+                subtitle: Text('Batch ${widget.cart[i].batchNo ?? "—"}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('₹${c.lineAmount.toStringAsFixed(2)}'),
+                    Text(rupees(widget.cart[i].lineAmount)),
                     IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _remove(i)),
                   ],
                 ),
               ),
-            );
-          }),
-          const SizedBox(height: 8),
+            ),
+          const SizedBox(height: Spacing.s),
           TextField(
             controller: _buyerNameController,
             decoration: const InputDecoration(labelText: 'Buyer name (optional)'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: Spacing.s),
           TextField(
             controller: _buyerGstinController,
-            decoration:
-                const InputDecoration(labelText: 'Buyer GSTIN (optional — leave blank for a retail sale)'),
+            decoration: const InputDecoration(labelText: 'Buyer GSTIN (optional — leave blank for a retail sale)'),
           ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Subtotal'),
-                    Text('₹${_subtotal.toStringAsFixed(2)}'),
-                  ]),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('CGST + SGST'),
-                    Text('₹${_totalTax.toStringAsFixed(2)}'),
-                  ]),
-                  const Divider(),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text('₹${(_subtotal + _totalTax).toStringAsFixed(2)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ]),
-                ],
-              ),
-            ),
-          ),
-          if (_message != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(_message!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: widget.cart.isEmpty || _saving ? null : _complete,
-            child: _saving
-                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Complete sale'),
+          const SizedBox(height: Spacing.m),
+          SaleTotalsCard(subtotal: _subtotal, tax: _totalTax, total: _subtotal + _totalTax),
+          ErrorText(_message),
+          const SizedBox(height: Spacing.l),
+          BusyFilledButton(
+            busy: _saving,
+            onPressed: widget.cart.isEmpty ? null : _complete,
+            label: 'Complete sale',
           ),
         ],
       ),

@@ -3,6 +3,8 @@
 /// result straight into a save request.
 library;
 
+import '../../../core/utils/json.dart';
+
 class LineItem {
   String productName;
   String? pack;
@@ -63,27 +65,27 @@ class LineItem {
   });
 
   factory LineItem.fromJson(Map<String, dynamic> json) => LineItem(
-        productName: json['product_name'] as String? ?? "",
-        pack: json['pack'] as String?,
-        batchNo: json['batch_no'] as String?,
-        expiry: json['expiry'] as String?,
-        hsnCode: json['hsn_code'] as String?,
-        qty: (json['qty'] as num?)?.toDouble() ?? 0,
-        freeQty: (json['free_qty'] as num?)?.toDouble(),
-        freeScheme: json['free_scheme'] as String?,
-        mrp: (json['mrp'] as num?)?.toDouble(),
-        rate: (json['rate'] as num?)?.toDouble() ?? 0,
-        discount: (json['discount'] as num?)?.toDouble(),
-        discountPct: (json['discount_pct'] as num?)?.toDouble(),
-        discountAmount: (json['discount_amount'] as num?)?.toDouble(),
-        gstPct: (json['gst_pct'] as num?)?.toDouble() ?? 0,
-        cgstPct: (json['cgst_pct'] as num?)?.toDouble(),
-        sgstPct: (json['sgst_pct'] as num?)?.toDouble(),
-        igstPct: (json['igst_pct'] as num?)?.toDouble(),
-        cgstAmount: (json['cgst_amount'] as num?)?.toDouble(),
-        sgstAmount: (json['sgst_amount'] as num?)?.toDouble(),
-        igstAmount: (json['igst_amount'] as num?)?.toDouble(),
-        grossAmount: (json['gross_amount'] as num?)?.toDouble() ?? 0,
+        productName: json.strOr('product_name'),
+        pack: json.str('pack'),
+        batchNo: json.str('batch_no'),
+        expiry: json.str('expiry'),
+        hsnCode: json.str('hsn_code'),
+        qty: json.dblOr('qty'),
+        freeQty: json.dbl('free_qty'),
+        freeScheme: json.str('free_scheme'),
+        mrp: json.dbl('mrp'),
+        rate: json.dblOr('rate'),
+        discount: json.dbl('discount'),
+        discountPct: json.dbl('discount_pct'),
+        discountAmount: json.dbl('discount_amount'),
+        gstPct: json.dblOr('gst_pct'),
+        cgstPct: json.dbl('cgst_pct'),
+        sgstPct: json.dbl('sgst_pct'),
+        igstPct: json.dbl('igst_pct'),
+        cgstAmount: json.dbl('cgst_amount'),
+        sgstAmount: json.dbl('sgst_amount'),
+        igstAmount: json.dbl('igst_amount'),
+        grossAmount: json.dblOr('gross_amount'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -131,13 +133,13 @@ class Totals {
   });
 
   factory Totals.fromJson(Map<String, dynamic> json) => Totals(
-        subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
-        totalDiscount: (json['total_discount'] as num?)?.toDouble(),
-        totalCgst: (json['total_cgst'] as num?)?.toDouble() ?? 0,
-        totalSgst: (json['total_sgst'] as num?)?.toDouble() ?? 0,
-        totalIgst: (json['total_igst'] as num?)?.toDouble(),
-        roundOff: (json['round_off'] as num?)?.toDouble(),
-        grandTotal: (json['grand_total'] as num?)?.toDouble() ?? 0,
+        subtotal: json.dblOr('subtotal'),
+        totalDiscount: json.dbl('total_discount'),
+        totalCgst: json.dblOr('total_cgst'),
+        totalSgst: json.dblOr('total_sgst'),
+        totalIgst: json.dbl('total_igst'),
+        roundOff: json.dbl('round_off'),
+        grandTotal: json.dblOr('grand_total'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -184,21 +186,19 @@ class InvoiceData {
         totals = totals ?? Totals();
 
   factory InvoiceData.fromJson(Map<String, dynamic> json) => InvoiceData(
-        sellerName: json['seller_name'] as String? ?? "",
-        sellerGstin: json['seller_gstin'] as String? ?? "",
-        sellerAddress: json['seller_address'] as String?,
-        sellerPhone: json['seller_phone'] as String?,
-        sellerDlNo: json['seller_dl_no'] as String?,
-        buyerName: json['buyer_name'] as String?,
-        buyerDlNo: json['buyer_dl_no'] as String?,
-        invoiceNo: json['invoice_no'] as String? ?? "",
-        invoiceDate: json['invoice_date'] as String? ?? "",
-        invoiceType: json['invoice_type'] as String?,
-        placeOfSupply: json['place_of_supply'] as String?,
-        lineItems: (json['line_items'] as List<dynamic>? ?? [])
-            .map((e) => LineItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        totals: Totals.fromJson(json['totals'] as Map<String, dynamic>? ?? {}),
+        sellerName: json.strOr('seller_name'),
+        sellerGstin: json.strOr('seller_gstin'),
+        sellerAddress: json.str('seller_address'),
+        sellerPhone: json.str('seller_phone'),
+        sellerDlNo: json.str('seller_dl_no'),
+        buyerName: json.str('buyer_name'),
+        buyerDlNo: json.str('buyer_dl_no'),
+        invoiceNo: json.strOr('invoice_no'),
+        invoiceDate: json.strOr('invoice_date'),
+        invoiceType: json.str('invoice_type'),
+        placeOfSupply: json.str('place_of_supply'),
+        lineItems: json.listOf('line_items', LineItem.fromJson),
+        totals: Totals.fromJson(json.obj('totals') ?? {}),
       );
 
   Map<String, dynamic> toJson() => {
@@ -249,16 +249,14 @@ class ExtractionMeta {
   }) : extraSourceImages = extraSourceImages ?? [];
 
   factory ExtractionMeta.fromJson(Map<String, dynamic> json) => ExtractionMeta(
-        sourceImage: json['source_image'] as String? ?? "",
-        extraSourceImages: (json['extra_source_images'] as List<dynamic>? ?? [])
-            .map((e) => e as String)
-            .toList(),
-        method: json['method'] as String? ?? "llm",
-        templateId: json['template_id'] as int?,
-        confidence: (json['confidence'] as num?)?.toDouble(),
-        reviewedByUser: json['reviewed_by_user'] as bool? ?? false,
-        vendorKnown: json['vendor_known'] as bool? ?? false,
-        imageRev: (json['image_rev'] as num?)?.toInt() ?? 0,
+        sourceImage: json.strOr('source_image'),
+        extraSourceImages: json.strList('extra_source_images'),
+        method: json.strOr('method', 'llm'),
+        templateId: json.integer('template_id'),
+        confidence: json.dbl('confidence'),
+        reviewedByUser: json.boolOr('reviewed_by_user'),
+        vendorKnown: json.boolOr('vendor_known'),
+        imageRev: json.intOr('image_rev'),
       );
 
   /// What a save sends: this read's meta, marked as checked by a person.
@@ -301,9 +299,9 @@ class ValidationIssue {
   ValidationIssue({required this.field, required this.severity, required this.message, this.candidates});
 
   factory ValidationIssue.fromJson(Map<String, dynamic> json) => ValidationIssue(
-        field: json['field'] as String,
-        severity: json['severity'] as String,
-        message: json['message'] as String,
+        field: json.strReq('field'),
+        severity: json.strReq('severity'),
+        message: json.strReq('message'),
         candidates: (json['candidates'] as List?)?.cast<String>(),
       );
 
@@ -323,9 +321,7 @@ class RevalidateResult {
 
   factory RevalidateResult.fromJson(Map<String, dynamic> json) => RevalidateResult(
         invoice: InvoiceData.fromJson(json['invoice'] as Map<String, dynamic>),
-        issues: (json['issues'] as List<dynamic>? ?? [])
-            .map((e) => ValidationIssue.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        issues: json.listOf('issues', ValidationIssue.fromJson),
       );
 }
 
@@ -339,9 +335,7 @@ class ExtractionResult {
   factory ExtractionResult.fromJson(Map<String, dynamic> json) => ExtractionResult(
         invoice: InvoiceData.fromJson(json['invoice'] as Map<String, dynamic>),
         meta: ExtractionMeta.fromJson(json['extraction_meta'] as Map<String, dynamic>),
-        issues: (json['issues'] as List<dynamic>? ?? [])
-            .map((e) => ValidationIssue.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        issues: json.listOf('issues', ValidationIssue.fromJson),
       );
 
   // Only needed to persist a batch item's result across an app kill —
@@ -429,20 +423,22 @@ class ExtractionJob {
   bool get isAlreadySaved => invoiceId != null;
 
   factory ExtractionJob.fromJson(Map<String, dynamic> json) {
-    final error = json['error'] as Map<String, dynamic>?;
+    final error = json.obj('error');
     return ExtractionJob(
-      jobId: json['job_id'] as int,
-      status: json['status'] as String,
-      result: json['result'] != null ? ExtractionResult.fromJson(json['result'] as Map<String, dynamic>) : null,
-      errorKind: error?['kind'] as String?,
-      errorMessage: error?['message'] as String?,
-      sourceImage: error?['source_image'] as String?,
+      jobId: json.intReq('job_id'),
+      status: json.strReq('status'),
+      result: json.objOf('result', ExtractionResult.fromJson),
+      errorKind: error?.str('kind'),
+      errorMessage: error?.str('message'),
+      sourceImage: error?.str('source_image'),
+      // Null when the server sent none, so the caller falls back to the pages
+      // it already knows; an empty list would mean "there are no more".
       extraSourceImages: (error?['extra_source_images'] as List?)?.cast<String>(),
-      attempt: json['attempt'] as int? ?? 0,
-      maxAttempts: json['max_attempts'] as int? ?? 3,
-      retryAt: json['retry_at'] != null ? DateTime.tryParse(json['retry_at'] as String)?.toUtc() : null,
-      invoiceId: json['invoice_id'] as int?,
-      reviewState: json['review_state'] as String?,
+      attempt: json.intOr('attempt', 0),
+      maxAttempts: json.intOr('max_attempts', 3),
+      retryAt: json.utcLenient('retry_at'),
+      invoiceId: json.integer('invoice_id'),
+      reviewState: json.str('review_state'),
     );
   }
 }
@@ -471,15 +467,15 @@ class InvoiceSummary {
   });
 
   factory InvoiceSummary.fromJson(Map<String, dynamic> json) => InvoiceSummary(
-        id: json['id'] as int,
-        vendorGstin: json['vendor_gstin'] as String,
-        vendorName: json['vendor_name'] as String,
-        invoiceNo: json['invoice_no'] as String,
-        invoiceDate: (json['invoice_date'] as String).split('T').first,
-        grandTotal: (json['grand_total'] as num).toDouble(),
-        reviewed: json['reviewed'] as bool,
-        extractionMethod: json['extraction_method'] as String,
-        folderId: json['folder_id'] as int?,
+        id: json.intReq('id'),
+        vendorGstin: json.strReq('vendor_gstin'),
+        vendorName: json.strReq('vendor_name'),
+        invoiceNo: json.strReq('invoice_no'),
+        invoiceDate: json.dateOnlyReq('invoice_date'),
+        grandTotal: json.dblReq('grand_total'),
+        reviewed: json.boolReq('reviewed'),
+        extractionMethod: json.strReq('extraction_method'),
+        folderId: json.integer('folder_id'),
       );
 }
 
@@ -554,38 +550,32 @@ class InvoiceDetail {
   }) : extraSourceImagePaths = extraSourceImagePaths ?? [];
 
   factory InvoiceDetail.fromJson(Map<String, dynamic> json) => InvoiceDetail(
-        id: json['id'] as int,
-        vendorGstin: json['vendor_gstin'] as String,
-        vendorName: json['vendor_name'] as String,
-        invoiceNo: json['invoice_no'] as String,
-        invoiceDate: (json['invoice_date'] as String).split('T').first,
-        invoiceType: json['invoice_type'] as String?,
-        placeOfSupply: json['place_of_supply'] as String?,
-        sellerDlNo: json['seller_dl_no'] as String?,
-        buyerName: json['buyer_name'] as String?,
-        buyerDlNo: json['buyer_dl_no'] as String?,
-        subtotal: (json['subtotal'] as num).toDouble(),
-        totalDiscount: (json['total_discount'] as num?)?.toDouble(),
-        totalCgst: (json['total_cgst'] as num).toDouble(),
-        totalSgst: (json['total_sgst'] as num).toDouble(),
-        totalIgst: (json['total_igst'] as num?)?.toDouble(),
-        roundOff: (json['round_off'] as num?)?.toDouble(),
-        grandTotal: (json['grand_total'] as num).toDouble(),
-        sourceImagePath: json['source_image_path'] as String,
-        extraSourceImagePaths: (json['extra_source_image_paths'] as List<dynamic>? ?? [])
-            .map((e) => e as String)
-            .toList(),
-        extractionMethod: json['extraction_method'] as String,
-        confidence: (json['confidence'] as num?)?.toDouble(),
-        reviewed: json['reviewed'] as bool,
-        validationIssues: (json['validation_issues'] as List<dynamic>? ?? [])
-            .map((e) => ValidationIssue.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        lineItems: (json['line_items'] as List<dynamic>? ?? [])
-            .map((e) => LineItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        reviewState: json['review_state'] as String?,
-        imageRev: (json['image_rev'] as num?)?.toInt() ?? 0,
+        id: json.intReq('id'),
+        vendorGstin: json.strReq('vendor_gstin'),
+        vendorName: json.strReq('vendor_name'),
+        invoiceNo: json.strReq('invoice_no'),
+        invoiceDate: json.dateOnlyReq('invoice_date'),
+        invoiceType: json.str('invoice_type'),
+        placeOfSupply: json.str('place_of_supply'),
+        sellerDlNo: json.str('seller_dl_no'),
+        buyerName: json.str('buyer_name'),
+        buyerDlNo: json.str('buyer_dl_no'),
+        subtotal: json.dblReq('subtotal'),
+        totalDiscount: json.dbl('total_discount'),
+        totalCgst: json.dblReq('total_cgst'),
+        totalSgst: json.dblReq('total_sgst'),
+        totalIgst: json.dbl('total_igst'),
+        roundOff: json.dbl('round_off'),
+        grandTotal: json.dblReq('grand_total'),
+        sourceImagePath: json.strReq('source_image_path'),
+        extraSourceImagePaths: json.strList('extra_source_image_paths'),
+        extractionMethod: json.strReq('extraction_method'),
+        confidence: json.dbl('confidence'),
+        reviewed: json.boolReq('reviewed'),
+        validationIssues: json.listOf('validation_issues', ValidationIssue.fromJson),
+        lineItems: json.listOf('line_items', LineItem.fromJson),
+        reviewState: json.str('review_state'),
+        imageRev: json.intOr('image_rev'),
       );
 }
 

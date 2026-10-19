@@ -78,18 +78,13 @@ mixin _Selection on State<CaptureScreen> {
     final n = plan.take.length;
     // The one confirmation in the flow: it cannot be undone from here, and
     // it reaches every device the shop signs in from.
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Discard $n bill${n == 1 ? '' : 's'}?'),
-        content: Text('${n == 1 ? 'It' : 'They'} will disappear from this shop on every device.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Discard')),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Discard ${plural(n, 'bill')}?',
+      message: '${n == 1 ? 'It' : 'They'} will disappear from this shop on every device.',
+      confirmLabel: 'Discard',
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
 
     final requests = planDiscardRequests(plan.take);
 
@@ -150,7 +145,7 @@ mixin _Selection on State<CaptureScreen> {
     final choice = await showFolderPicker(
       context,
       tree: _folders.tree,
-      title: 'Move $n bill${n == 1 ? '' : 's'} to…',
+      title: 'Move ${plural(n, 'bill')} to…',
       currentId: _folders.currentId,
     );
     if (choice == null || !mounted) return;
@@ -219,7 +214,7 @@ mixin _Selection on State<CaptureScreen> {
     await _persistBatch();
     final left = refused.length;
     _say(left == 0
-        ? 'Moved $moved bill${moved == 1 ? '' : 's'} to $name.'
+        ? 'Moved ${plural(moved, 'bill')} to $name.'
         : "Moved $moved to $name; $left couldn't be moved and went back"
             '${firstError.isEmpty ? ' (saved, discarded or not in this shop)' : ': $firstError'}.');
     unawaited(_folders.load());   // the tiles count what is inside them

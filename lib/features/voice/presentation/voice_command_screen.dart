@@ -1,14 +1,13 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/inline_message.dart';
 import '../data/voice_api.dart';
 import '../models/voice.dart';
-import '../../../app/theme/app_theme.dart';
-import '../../../core/utils/recording_error.dart';
 import '../widgets/recording.dart';
 
 /// General voice commands — "how much Maggi do I have", "delete Sharma's
@@ -29,15 +28,9 @@ class VoiceCommandScreen extends StatefulWidget {
   State<VoiceCommandScreen> createState() => _VoiceCommandScreenState();
 }
 
-class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
-  final AudioRecorder _recorder = AudioRecorder();
-  Timer? _elapsedTimer;
-
-  bool _initializing = true;
-  bool _hasPermission = false;
+class _VoiceCommandScreenState extends State<VoiceCommandScreen> with RecordingSupport {
   bool _recording = false;
   bool _processing = false;
-  Duration _elapsed = Duration.zero;
   String? _errorMessage;
   VoiceCommandResult? _lastResult;
 
@@ -49,21 +42,12 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
 
   @override
   void dispose() {
-    _elapsedTimer?.cancel();
-    if (_recording) _recorder.stop();
-    _recorder.dispose();
+    disposeRecording(sessionOpen: _recording);
     super.dispose();
   }
 
   Future<void> _bootstrap() async {
-    setState(() => _initializing = true);
-    final granted = await hasMicPermission(_recorder);
-    if (!mounted) return;
-    setState(() {
-      _hasPermission = granted;
-      _initializing = false;
-      if (!granted) _errorMessage = kMicPermissionMessage;
-    });
+    if (!await checkMic() && mounted) setState(() => _errorMessage = kMicPermissionMessage);
   }
 
   Future<void> _toggleRecording() async {
@@ -71,22 +55,18 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
       await _stopAndSend();
       return;
     }
-    if (!_hasPermission) {
+    if (!hasPermission) {
       await _bootstrap();
-      if (!_hasPermission) return;
+      if (!hasPermission) return;
     }
 
     setState(() {
       _errorMessage = null;
       _lastResult = null;
-      _elapsed = Duration.zero;
     });
 
     try {
-      await _recorder.start(kVoiceRecordConfig, path: await newRecordingPath('voice_command'));
-      _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _elapsed += const Duration(seconds: 1));
-      });
+      await startRecordingFile('voice_command');
       if (mounted) setState(() => _recording = true);
     } catch (e) {
       if (mounted) setState(() => _errorMessage = recordingErrorMessage(e));
@@ -94,10 +74,9 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
   }
 
   Future<void> _stopAndSend() async {
-    _elapsedTimer?.cancel();
     String? path;
     try {
-      path = await _recorder.stop();
+      path = await stopRecordingFile();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -136,8 +115,7 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage =
-            'Could not reach the server — check your connection and tap the mic to retry.');
+        setState(() => _errorMessage = 'Could not reach the server — check your connection and tap the mic to retry.');
       }
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -145,19 +123,14 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
   }
 
   Future<void> _showConfirmDialog(VoiceCommandResult result) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Confirm',
+      message: result.message,
+      confirmLabel: 'Confirm',
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm'),
-        content: Text(result.message),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
-        ],
-      ),
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _processing = true);
     try {
@@ -180,72 +153,51 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final result = _lastResult;
     return Scaffold(
       appBar: AppBar(title: const Text('Voice command')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(Spacing.l),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: _initializing
-                      ? const CircularProgressIndicator()
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            MicButton(
-                              recordingIcon: Icons.stop,
-                              recording: _recording,
-                              enabled: _hasPermission && !_processing,
-                              onTap: _toggleRecording,
-                            ),
-                            const SizedBox(height: Spacing.l),
-                            Text(
-                              _recording
-                                  ? 'Listening ${formatElapsed(_elapsed)} — tap to stop'
-                                  : (_processing ? 'Working on it…' : 'Tap the mic and speak a command'),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: Spacing.l),
-                            Container(
-                              width: double.infinity,
-                              constraints: const BoxConstraints(minHeight: 96),
-                              padding: const EdgeInsets.all(Spacing.m),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(AppRadius.control),
-                              ),
-                              child: _processing
-                                  ? const Center(child: CircularProgressIndicator())
-                                  : Text(
-                                      _lastResult?.message ??
-                                          'e.g. "how much Maggi do I have", "delete Sharma\'s sale from yesterday", '
-                                              '"add 20 Maggi to inventory"',
-                                      style: TextStyle(
-                                        color: _lastResult != null
-                                            ? (_lastResult!.success
-                                                ? Theme.of(context).colorScheme.onSurface
-                                                : AppColors.statusFailed)
-                                            : Theme.of(context).colorScheme.outline,
-                                        fontStyle: _lastResult != null ? FontStyle.normal : FontStyle.italic,
-                                      ),
-                                    ),
-                            ),
-                            if (_errorMessage != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: Spacing.m),
-                                child: Text(
-                                  _errorMessage!,
-                                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                                  textAlign: TextAlign.center,
+          child: Center(
+            child: micChecking
+                ? const CircularProgressIndicator()
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      MicButton(
+                        recordingIcon: Icons.stop,
+                        recording: _recording,
+                        enabled: hasPermission && !_processing,
+                        onTap: _toggleRecording,
+                      ),
+                      const SizedBox(height: Spacing.l),
+                      Text(
+                        _recording
+                            ? 'Listening ${formatElapsed(elapsed)} — tap to stop'
+                            : (_processing ? 'Working on it…' : 'Tap the mic and speak a command'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: Spacing.l),
+                      VoiceHintBox(
+                        child: _processing
+                            ? const Center(child: CircularProgressIndicator())
+                            : Text(
+                                result?.message ??
+                                    'e.g. "how much Maggi do I have", "delete Sharma\'s sale from yesterday", '
+                                        '"add 20 Maggi to inventory"',
+                                style: TextStyle(
+                                  color: result == null
+                                      ? colors.outline
+                                      : (result.success ? colors.onSurface : AppColors.statusFailed),
+                                  fontStyle: result == null ? FontStyle.italic : FontStyle.normal,
                                 ),
                               ),
-                          ],
-                        ),
-                ),
-              ),
-            ],
+                      ),
+                      ErrorText(_errorMessage, textAlign: TextAlign.center),
+                    ],
+                  ),
           ),
         ),
       ),
