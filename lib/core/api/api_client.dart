@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/bill_image_cache.dart';
 import 'api_exception.dart';
 
 export 'api_exception.dart';
@@ -115,9 +116,14 @@ class ApiClient {
 
   /// Public only so the auth feature's login and signup can call it. The
   /// server checks every token, so a bad one costs a 401 and a sign-out.
+  /// Drops any other shop's cached bill photos (DAS-90), in the background:
+  /// signing in never waits on cache housekeeping, and the new shop only ever
+  /// writes and reads files of its own, so nothing it does races the delete.
   Future<void> saveToken(String token) async {
     this.token = token;
     await _secureStorage.write(key: 'token', value: token);
+    final shop = tenantId;
+    if (shop != null) unawaited(BillImageCache.keepOnlyShop(shop));
   }
 
   /// Called when the server refuses this device's token — signed out from
