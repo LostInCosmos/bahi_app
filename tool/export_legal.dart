@@ -6,6 +6,7 @@
 // Default target: ../Dastavez-memory/GSTApp/01 - Product/Legal/. The Dart
 // data is the single source; the Markdown is generated and carries a
 // frontmatter saying so. Run it after every change to the documents.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:gst_bill_app/core/config/legal_documents.dart';
@@ -30,6 +31,41 @@ void main(List<String> args) {
         '${legalDocumentToMarkdown(d)}');
     stdout.writeln('wrote ${file.path}');
   }
+  writeSiteJson();
   final left = legalPlaceholdersLeft();
   if (left.isNotEmpty) stdout.writeln('placeholders still to fill: ${left.join(', ')}');
+}
+
+/// The same documents for the public site (DAS-103, agreed with Frontend over
+/// DM): `bahi_frontend/src/content/legal.json`, the resolved documents in
+/// exactly the Dart shape, so the site renders the text the app shows and
+/// never hand-maintains a copy. Written only when that checkout is beside
+/// this one; the vault export above does not depend on it.
+void writeSiteJson() {
+  // Beside this checkout, like the vault's default — not inside the vault.
+  final frontend = Directory('../bahi_frontend');
+  if (!frontend.existsSync()) {
+    stdout.writeln('no ../bahi_frontend checkout: site JSON not written');
+    return;
+  }
+  final file = File('${frontend.path}/src/content/legal.json')..parent.createSync(recursive: true);
+  final docs = [
+    for (final d in legalDocuments)
+      {
+        'id': d.id,
+        'title': d.title,
+        'version': d.version,
+        'effectiveDate': d.effectiveDate,
+        'summary': d.summary,
+        'sections': [
+          for (final s in d.sections)
+            {'heading': s.heading, 'paragraphs': s.paragraphs, 'bullets': s.bullets, 'after': s.after},
+        ],
+      },
+  ];
+  file.writeAsStringSync('${const JsonEncoder.withIndent('  ').convert({
+        'generated_from': 'bahi_app/lib/core/config/legal_documents.dart — run `dart run tool/export_legal.dart` in bahi_app; do not edit',
+        'documents': docs,
+      })}\n');
+  stdout.writeln('wrote ${file.path}');
 }
