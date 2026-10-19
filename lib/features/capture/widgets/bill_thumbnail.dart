@@ -15,6 +15,12 @@ import '../../invoice/data/invoice_api.dart';
 ///
 /// `ApiClient.fetchImage` serves from the on-device cache first, so scrolling
 /// back to a bill is a disk read, not a download.
+/// The width asked of the server for a card's picture (DAS-105): a card is a
+/// third of the screen, ~130 logical px, so 640 covers a 3× phone with room
+/// to spare and is a tenth of the original's bytes. The server snaps to
+/// 320/640/1280, so this must be one of those.
+const kThumbnailWidth = 640;
+
 class BillThumbnail extends StatefulWidget {
   /// Null while the bill is still uploading and has no server path yet.
   final String? sourceImage;
@@ -73,7 +79,7 @@ class _BillThumbnailState extends State<BillThumbnail> {
     try {
       final loader = widget.loader;
       if (loader != null) return await loader(path);
-      return await ApiClient.instance.fetchImage(path, imageRev: widget.imageRev);
+      return await ApiClient.instance.fetchImage(path, imageRev: widget.imageRev, width: kThumbnailWidth);
     } catch (_) {
       return null;
     }

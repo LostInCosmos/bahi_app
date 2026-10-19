@@ -30,7 +30,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/folders/models`](#libfeaturesfoldersmodels) | `Folder`, `FolderTree` | 1 | 4 |
 | [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +5 | 1 | 2 |
 | [`lib/features/home/presentation`](#libfeatureshomepresentation) | `HomeScreen`, `HomeTabHost`, `HomeTab` | 2 | 1 |
-| [`lib/features/inventory/data`](#libfeaturesinventorydata) | `InventoryApi`, `ProductCatalog` | 2 | 3 |
+| [`lib/features/inventory/data`](#libfeaturesinventorydata) | `ProductListPage`, `InventoryApi`, `ProductCatalog` | 2 | 3 |
 | [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex` | 2 | 4 |
 | [`lib/features/inventory/presentation`](#libfeaturesinventorypresentation) | `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen` | 2 | 1 |
 | [`lib/features/inventory/widgets`](#libfeaturesinventorywidgets) | `ProductName` | 1 | 3 |
@@ -47,7 +47,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 | [`lib/features/voice/widgets`](#libfeaturesvoicewidgets) | `newRecordingPath`, `deleteRecordingFile`, `hasMicPermission`, `recordingErrorMessage`, `RecordingSupport` +2 | 1 | 1 |
 
-**Coverage:** 0 of 36 modules state their purpose; 52 of 91 files have a purpose line (4 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 36 modules state their purpose; 51 of 91 files have a purpose line (4 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -97,7 +97,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `api_client.dart` | 384 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
+| `api_client.dart` | 402 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
 | `api_exception.dart` | 25 | — |
 
 **Public:** `VersionGateLevel`, `ApiClient`, `ApiException`
@@ -190,7 +190,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `auth_api.dart` | 64 | — |
+| `auth_api.dart` | 81 | — |
 
 **Public:** `AuthApi`
 
@@ -234,7 +234,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `batch_store.dart` | 79 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
-| `capture_api.dart` | 60 | The capture screen's own endpoints: the shop's uploads list and filing or  *[CaptureApi]* |
+| `capture_api.dart` | 66 | The capture screen's own endpoints: the shop's uploads list and filing or  *[CaptureApi]* |
 
 **Public:** `BatchStore`, `CaptureApi`
 
@@ -265,9 +265,9 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `capture_intake.dart` | 326 | Getting bills in: the camera, the gallery, a PDF rendered to pages  *[_Intake]* |
-| `capture_screen.dart` | 1127 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
+| `capture_screen.dart` | 1130 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
 | `capture_selection.dart` | 268 | — |
-| `capture_watching.dart` | 364 | Watching the bills the server is reading: the batch long-poll (DAS-19),  *[_Watching]* |
+| `capture_watching.dart` | 395 | Watching the bills the server is reading: the batch long-poll (DAS-19),  *[_Watching]* |
 | `crop_screen.dart` | 128 | One page of a batch capture: drag the four corners onto this bill, pick a  *[CropScreen]* |
 
 **Public:** `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult`
@@ -281,7 +281,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `batch_item_card.dart` | 294 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
-| `bill_thumbnail.dart` | 141 | One bill's picture, loaded when the card is actually on screen.  *[BillThumbnail]* |
+| `bill_thumbnail.dart` | 147 | — |
 | `capture_bottom_bar.dart` | 103 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
 | `capture_empty_state.dart` | 103 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
 | `confirm_bill_dialog.dart` | 54 | — |
@@ -291,7 +291,7 @@ Find the module whose names fit what you are adding, then read its section.
 | `selection_mark.dart` | 51 | The ring and corner tick a card wears while bills are being chosen.  *[selectionOverlay]* |
 | `status_filter_bar.dart` | 71 | Tickboxes for the statuses a shopkeeper wants to see (DAS-26).  *[StatusFilterBar]* |
 | `unsave_dialog.dart` | 68 | — |
-| `upload_history.dart` | 903 | Every bill, in ONE list: the ones this device holds and the shop's own.  *[UploadHistory]* |
+| `upload_history.dart` | 908 | Every bill, in ONE list: the ones this device holds and the shop's own.  *[UploadHistory]* |
 
 **Public:** `BatchItemCard`, `ChromeButton`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog`, `CropCanvas`, `RetryLabel`, `SelectionBar`, `selectionOverlay`, `StatusFilterBar`, `UnsaveChoice`, `showUnsaveDialog`, `showUnsaveUnderReviewDialog`, `UploadHistory`, `UploadHistoryState`
 
@@ -365,10 +365,10 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `inventory_api.dart` | 35 | — |
-| `product_catalog.dart` | 84 | The shop's whole product list, held once for every product search on the  *[ProductCatalog]* |
+| `inventory_api.dart` | 52 | — |
+| `product_catalog.dart` | 94 | The shop's whole product list, held once for every product search on the  *[ProductCatalog]* |
 
-**Public:** `InventoryApi`, `ProductCatalog`
+**Public:** `ProductListPage`, `InventoryApi`, `ProductCatalog`
 
 **Depends on:** `lib/core/api`, `lib/features/inventory/models`
 
@@ -418,7 +418,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice_api.dart` | 224 | — |
+| `invoice_api.dart` | 239 | — |
 
 **Public:** `InvoiceApi`
 
@@ -431,7 +431,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `invoice.dart` | 592 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
-| `job_status.dart` | 65 | Batch job-status answers (DAS-19): what one held request to |
+| `job_status.dart` | 77 | Batch job-status answers (DAS-19): what one held request to |
 | `purchase_export.dart` | 65 | A purchases spreadsheet from `GET /export/excel`, with what the server  *[PurchaseExport]* |
 
 **Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `ExtractionJob`, `InvoiceSummary`, `InvoiceDetail`, `SavedJob`, `JobStatusBrief`, `JobStatusBatch`, `PurchaseExport`, `exportRangeLabel`, `excludedNote`

@@ -34,6 +34,11 @@ class ProductCatalog extends ChangeNotifier {
 
   ProductIndex? _index;
   String? _session;
+
+  /// The `ETag` of the held list, sent back as `If-None-Match` so an
+  /// unchanged list costs a 304 and no parse (DAS-105). Per sign-in like
+  /// the list itself.
+  String? _etag;
   Future<void>? _fetching;
   String? _fetchingFor;
 
@@ -67,10 +72,15 @@ class ProductCatalog extends ChangeNotifier {
   Future<void> _fetch() async {
     final session = ApiClient.instance.token;
     try {
-      final products = await ApiClient.instance.searchProducts();
+      final held = _session == session && _index != null ? _etag : null;
+      final page = await ApiClient.instance.fetchProducts(ifNoneMatch: held);
       // Signed out, or another shop signed in, while it was on its way.
       if (session == null || session != ApiClient.instance.token) return;
-      _index = ProductIndex(products);
+      if (page != null) {
+        _index = ProductIndex(page.products);
+        _etag = page.etag;
+      }
+      // null: a 304 — the list held is the server's current one.
       _session = session;
       lastError = null;
     } catch (e) {

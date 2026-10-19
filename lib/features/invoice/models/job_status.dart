@@ -20,6 +20,14 @@ class JobStatusBrief {
   /// (DAS-79).
   final bool saved;
 
+  /// For a `done` job (DAS-105): where our team's review stands
+  /// (`none|pending|done`) and how many fields the shop still has to fix
+  /// (the GSTIN excluded, as everywhere). Null while in flight, and on a
+  /// server older than the fields — then the single-job fetch is the only
+  /// way to know, as before.
+  final String? reviewState;
+  final int? flagCount;
+
   const JobStatusBrief({
     required this.jobId,
     required this.status,
@@ -27,6 +35,8 @@ class JobStatusBrief {
     required this.maxAttempts,
     this.retryAt,
     this.saved = false,
+    this.reviewState,
+    this.flagCount,
   });
 
   bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
@@ -46,6 +56,8 @@ class JobStatusBrief {
         maxAttempts: json.intOr('max_attempts', 3),
         retryAt: json.utc('retry_at'),
         saved: json.boolOr('saved'),
+        reviewState: json.str('review_state'),
+        flagCount: json.integer('flag_count'),
       );
 }
 

@@ -290,23 +290,41 @@ class ApiClient {
     bool auth = true,
     bool json = false,
     Duration timeout = readTimeout,
+    Map<String, String>? headers,
+    bool notModifiedOk = false,
   }) async {
     final sent = auth ? token : null;
-    final headers = {
+    final sendHeaders = {
       if (sent != null) 'Authorization': 'Bearer $sent',
       if (json) 'Content-Type': 'application/json',
       'X-App-Build': '$_appBuild',
       'X-App-Platform': _appPlatform,
+      ...?headers,
     };
-    final res = await request(headers).timeout(timeout);
+    final res = await request(sendHeaders).timeout(timeout);
     if (res.statusCode == 401 && sent != null) await _sessionRefused(sent);
     _applyVersionGate(res);
-    _checkOk(res);
+    // A 304 to a conditional GET is "what you hold is current", not a failure.
+    if (!(notModifiedOk && res.statusCode == 304)) _checkOk(res);
     return res;
   }
 
-  Future<http.Response> get(String path, {Map<String, String>? query, Duration timeout = readTimeout}) =>
-      _send((h) => _http.get(_uri(path, query), headers: h), timeout: timeout);
+  /// [ifNoneMatch] makes it a conditional GET: an `ETag` the caller kept
+  /// from the last answer. The server may then answer `304` with no body,
+  /// which is returned as-is (status 304, empty body) for the caller to read
+  /// as "unchanged". A server without ETags ignores the header.
+  Future<http.Response> get(
+    String path, {
+    Map<String, String>? query,
+    Duration timeout = readTimeout,
+    String? ifNoneMatch,
+  }) =>
+      _send(
+        (h) => _http.get(_uri(path, query), headers: h),
+        timeout: timeout,
+        headers: ifNoneMatch == null ? null : {'If-None-Match': ifNoneMatch},
+        notModifiedOk: ifNoneMatch != null,
+      );
 
   Future<http.Response> post(String path, {Duration timeout = readTimeout}) =>
       _send((h) => _http.post(_uri(path), headers: h), timeout: timeout);

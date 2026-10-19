@@ -291,10 +291,14 @@ class UploadHistoryState extends State<UploadHistory> {
   /// filed), new uploads arrive at the top, and a held row that falls
   /// inside the page's range but is missing from it has gone — discarded,
   /// or moved out — so it is dropped rather than left to linger.
-  Future<void> refresh() async {
+  ///
+  /// [counts] false asks the server to skip its tally (DAS-105): for a
+  /// refresh after coming back from a bill nothing happened to, the boxes
+  /// are already right. Anything that moved a bill keeps the default.
+  Future<void> refresh({bool counts = true}) async {
     try {
       final generation = _generation;
-      final page = await _fetchPage(beforeId: null);
+      final page = await _fetchPage(beforeId: null, counts: counts);
       if (!mounted || generation != _generation) return;
       setState(() {
         _takeTally(page.counts);
@@ -382,7 +386,7 @@ class UploadHistoryState extends State<UploadHistory> {
     });
   }
 
-  Future<UploadPage> _fetchPage({int? beforeId}) {
+  Future<UploadPage> _fetchPage({int? beforeId, bool counts = true}) {
     final filtered = widget.fetchFiltered;
     if (filtered != null) {
       return filtered(
@@ -401,6 +405,7 @@ class UploadHistoryState extends State<UploadHistory> {
       beforeId: beforeId,
       categories: _categories,
       folder: _folderKey(widget.folderId),
+      counts: counts,
     );
   }
 

@@ -46,12 +46,43 @@ mixin _Watching on State<CaptureScreen> {
     // The shop's rows — every bill this phone no longer holds a card for —
     // are brought up to date the same way.
     _scheduleListRefresh();
-    for (final item in List<BatchItem>.of(_items)) {
-      if (!mounted) return;
-      if (item.status == BatchItemStatus.needsReview ||
-          item.status == BatchItemStatus.pendingConfirm) {
+    final held = {
+      for (final item in _items)
+        if ((item.status == BatchItemStatus.needsReview ||
+                item.status == BatchItemStatus.pendingConfirm) &&
+            (item.lastJobId ?? item.jobId) != null)
+          (item.lastJobId ?? item.jobId)!: item,
+    };
+    if (held.isEmpty) return;
+
+    // One status request for every held card (DAS-105): its brief says
+    // whether the bill was saved meanwhile and how many flags are left, so
+    // only a bill that actually changed costs a result fetch. Before, every
+    // held card fetched its full result on each tab reopen.
+    final JobStatusBatch batch;
+    try {
+      batch = await ApiClient.instance.jobStatuses(held.keys.toList(), wait: false);
+    } catch (_) {
+      return; // best-effort, like the per-card check
+    }
+    if (!mounted) return;
+    for (final brief in batch.jobs) {
+      final item = held[brief.jobId];
+      if (item == null) continue;
+      if (brief.saved) {
+        await _applyAutoSave(item, brief);
+        if (item.status == BatchItemStatus.saved) {
+          unawaited(_persistBatch());
+          _scheduleListRefresh();
+        }
+      } else if (brief.flagCount == null) {
+        // An older server: no count in the brief, ask the bill itself.
+        await _recheckNeedsReview(item);
+      } else if (item.status == BatchItemStatus.needsReview && brief.flagCount == 0) {
+        // Our team cleared the last flag: fetch the corrected result once.
         await _recheckNeedsReview(item);
       }
+      if (!mounted) return;
     }
   }
 

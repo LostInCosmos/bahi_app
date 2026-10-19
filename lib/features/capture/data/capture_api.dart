@@ -17,17 +17,23 @@ extension CaptureApi on ApiClient {
   /// [categories] (status boxes: working, check, review, saved, failed) and
   /// [folder] (`root` for home, or a folder id) narrow the list on the server
   /// before it is paged, so a filtered list finds its bills on any page.
+  /// [counts] false skips the server's tally on the first page (DAS-105) —
+  /// for a refresh whose boxes are already right, such as coming back from
+  /// a bill nothing happened to. An older server ignores it and sends the
+  /// tally anyway, which is harmless.
   Future<UploadPage> listUploads({
     int limit = 50,
     int? beforeId,
     Set<String> categories = const {},
     String? folder,
+    bool counts = true,
   }) async {
     final res = await get('/invoices/extract', query: {
       'limit': '$limit',
       if (beforeId != null) 'before_id': '$beforeId',
       if (categories.isNotEmpty) 'category': (categories.toList()..sort()).join(','),
       if (folder != null) 'folder': folder,
+      if (!counts) 'counts': 'false',
     });
     return UploadPage.fromJson(ApiClient.jsonObject(res));
   }
