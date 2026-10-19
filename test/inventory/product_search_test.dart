@@ -115,6 +115,59 @@ void main() {
     test('no match is an empty list', () => expect(index.match('xyz'), isEmpty));
   });
 
+  group('ProductIndex.qualifier — the pack beside a name only when the shop has the name twice (ADR-020)', () {
+    ProductSummary p(int id, String name, {String? pack, double? mrp}) =>
+        ProductSummary(id: id, name: name, pack: pack, mrp: mrp, quantityOnHand: 1);
+
+    test('a name the shop has once gets nothing, pack or not', () {
+      final index = ProductIndex([p(1, 'Dolo 650', pack: '15 Tab', mrp: 31), p(2, 'Volini Gel', pack: '30GM')]);
+      expect(index.qualifier(1), isNull);
+      expect(index.qualifier(2), isNull);
+      expect(index.sharesName(1), isFalse);
+      expect(index.label(1, 'Dolo 650'), 'Dolo 650');
+    });
+
+    test('the same brand in two packs: each shows its pack', () {
+      final index = ProductIndex([
+        p(1, 'Prominent Charcoal', pack: '60GM', mrp: 140),
+        p(2, 'Prominent Charcoal', pack: '100GM', mrp: 185),
+      ]);
+      expect(index.qualifier(1), '60GM');
+      expect(index.qualifier(2), '100GM');
+      expect(index.label(2, 'Prominent Charcoal'), 'Prominent Charcoal · 100GM');
+    });
+
+    test('a namesake with no pack shows its MRP instead', () {
+      final index = ProductIndex([
+        p(1, 'Prominent Charcoal', pack: '60GM', mrp: 140),
+        p(2, 'Prominent Charcoal', mrp: 185),
+      ]);
+      expect(index.qualifier(1), '60GM');
+      expect(index.qualifier(2), '₹185');
+    });
+
+    test('the same pack at two prices: MRP tells them apart, pack would not', () {
+      final index = ProductIndex([
+        p(1, 'Prominent Charcoal', pack: '60GM', mrp: 140),
+        p(2, 'Prominent Charcoal', pack: '60 gm', mrp: 150.5),
+      ]);
+      expect(index.qualifier(1), '₹140');
+      expect(index.qualifier(2), '₹150.50');
+    });
+
+    test('names match the way the server matches them: case and punctuation aside', () {
+      final index = ProductIndex([p(1, 'PROMINENT CHARCOAL', pack: '60GM'), p(2, 'Prominent  Charcoal.', pack: '100GM')]);
+      expect(index.sharesName(1), isTrue);
+      expect(index.sharesName(2), isTrue);
+    });
+
+    test('nothing on record to tell them apart: the name stands alone, not a blank', () {
+      final index = ProductIndex([p(1, 'Prominent Charcoal'), p(2, 'Prominent Charcoal')]);
+      expect(index.qualifier(1), isNull);
+      expect(index.sharesName(1), isTrue);
+    });
+  });
+
   group('ProductCatalog', () {
     test('a list fetched before a sign-out is not shown to the next sign-in', () async {
       final shop = _Shop();

@@ -16,6 +16,7 @@ import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/inventory_api.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../../inventory/models/product.dart';
+import '../../inventory/widgets/product_name.dart';
 import '../../voice/data/voice_api.dart';
 import '../../voice/models/voice.dart';
 import '../../voice/presentation/voice_order_review_screen.dart';
@@ -320,7 +321,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
             final p = products[i - header.length];
             return Card(
               child: ListTile(
-                title: Text(p.name),
+                title: ProductName(p.name, qualifier: index?.qualifier(p.id)),
                 subtitle: Text('${qty(p.quantityOnHand)} in stock'),
                 trailing: IconButton(
                   icon: const Icon(Icons.add_circle_outline),
@@ -467,7 +468,9 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_detail!.name, style: Theme.of(context).textTheme.titleMedium),
+                  ProductName(_detail!.name,
+                      qualifier: ProductCatalog.instance.index?.qualifier(_detail!.id),
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   if (_detail!.batches.isEmpty) const Text('No batches in stock.'),
                   ..._buildBatchRows(),
@@ -540,7 +543,8 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                             }
                             widget.onAdd(CartEntry(
                               productBatchId: b.id,
-                              productName: _detail!.name,
+                              productName:
+                                  ProductCatalog.instance.index?.label(_detail!.id, _detail!.name) ?? _detail!.name,
                               batchNo: b.batchNo,
                               qty: quantity,
                               rate: rate,

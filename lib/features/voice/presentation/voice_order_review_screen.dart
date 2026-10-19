@@ -12,6 +12,7 @@ import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/inventory_api.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../../inventory/models/product.dart';
+import '../../inventory/widgets/product_name.dart';
 import '../../sales/presentation/sale_receipt_screen.dart';
 import '../data/voice_api.dart';
 import '../models/voice.dart';
@@ -526,9 +527,12 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      ProductName(
                         '${line.productName ?? '(unmatched)'}'
                         '${line.strengthSpoken != null ? ' ${line.strengthSpoken}' : ''}',
+                        qualifier: line.productId == null
+                            ? null
+                            : ProductCatalog.instance.index?.qualifier(line.productId!),
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       if (line.schedule != null) ...[
@@ -571,8 +575,9 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                             runSpacing: Spacing.xs,
                             children: [
                               ...line.candidates.take(4).map((c) => ActionChip(
-                                    label: Text(
+                                    label: ProductName(
                                       c.strength != null && c.strength!.isNotEmpty ? '${c.name} ${c.strength}' : c.name,
+                                      qualifier: ProductCatalog.instance.index?.qualifier(c.id),
                                     ),
                                     onPressed: widget.busy ? null : () => widget.onPickCandidate(c),
                                   )),
@@ -827,7 +832,7 @@ class _CandidatePickerSheet extends StatelessWidget {
               )
             else
               ...line.candidates.map((c) => ListTile(
-                    title: Text(c.name),
+                    title: ProductName(c.name, qualifier: ProductCatalog.instance.index?.qualifier(c.id)),
                     subtitle: (c.strength != null || c.unit != null)
                         ? Text([c.strength, c.unit].where((s) => s != null && s.isNotEmpty).join(' · '))
                         : null,
@@ -1086,7 +1091,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                     itemBuilder: (context, i) {
                       final p = results[i];
                       return ListTile(
-                        title: Text(p.name),
+                        title: ProductName(p.name, qualifier: index?.qualifier(p.id)),
                         subtitle: Text('${qty(p.quantityOnHand)} in stock'),
                         enabled: p.quantityOnHand > 0,
                         onTap: () => setState(() => _selected = p),
@@ -1106,7 +1111,8 @@ class _AddItemSheetState extends State<_AddItemSheet> {
             ] else ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(selected.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                title: ProductName(selected.name,
+                    qualifier: index?.qualifier(selected.id), style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text('${qty(selected.quantityOnHand)} in stock'),
                 trailing: TextButton(onPressed: () => setState(() => _selected = null), child: const Text('Change')),
               ),

@@ -9,6 +9,7 @@ import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../data/inventory_api.dart';
 import '../data/product_catalog.dart';
 import '../models/product.dart';
+import '../widgets/product_name.dart';
 
 /// Batches sort soonest-expiry first (FEFO) — the same order the sale
 /// screen's batch picker suggests from, shown here so a shop owner can see
@@ -65,7 +66,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget build(BuildContext context) {
     final detail = _detail;
     return Scaffold(
-      appBar: AppBar(title: Text(detail?.name ?? 'Product')),
+      appBar: AppBar(
+        title: detail == null
+            ? const Text('Product')
+            : ProductName(detail.name, qualifier: ProductCatalog.instance.index?.qualifier(detail.id)),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
