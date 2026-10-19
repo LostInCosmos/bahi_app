@@ -118,6 +118,8 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> with RecordingS
         setState(() => _errorMessage = 'Could not reach the server — check your connection and tap the mic to retry.');
       }
     } finally {
+      // Sent or failed, the recording is finished with: a retry records again.
+      await discardRecording(path);
       if (mounted) setState(() => _processing = false);
     }
   }

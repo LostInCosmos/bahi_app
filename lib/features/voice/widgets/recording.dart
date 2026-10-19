@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -23,6 +24,20 @@ const kVoiceRecordConfig = RecordConfig(encoder: AudioEncoder.wav, sampleRate: 1
 Future<String> newRecordingPath(String prefix) async {
   final dir = await getTemporaryDirectory();
   return '${dir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}.wav';
+}
+
+/// Removes a recording the app has finished with — it was sent, replaced by
+/// a new take, or abandoned with its screen. A spoken sale is personal data
+/// and used to sit in the temp folder until the OS felt like clearing it
+/// (security audit, 2026-10-19). Best effort: a file already gone is fine.
+Future<void> deleteRecordingFile(String? path) async {
+  if (path == null) return;
+  try {
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+  } catch (_) {
+    // Nothing to do: the OS clears the temp folder eventually anyway.
+  }
 }
 
 const kMicPermissionMessage = 'Microphone permission was not granted. Please enable "Microphone" '
@@ -100,24 +115,45 @@ mixin RecordingSupport<T extends StatefulWidget> on State<T> {
 
   void stopElapsed() => _elapsedTimer?.cancel();
 
+  /// The file of the current or last take, until it is sent or discarded.
+  String? recordingPath;
+
   /// Begins a fresh recording into a new file named after [prefix], from zero.
+  /// A previous take that was never sent is deleted first.
   Future<void> startRecordingFile(String prefix) async {
+    await deleteRecordingFile(recordingPath);
+    recordingPath = null;
     elapsed = Duration.zero;
-    await recorder.start(kVoiceRecordConfig, path: await newRecordingPath(prefix));
+    final path = await newRecordingPath(prefix);
+    await recorder.start(kVoiceRecordConfig, path: path);
+    recordingPath = path;
     startElapsed();
   }
 
   /// Stops the recorder; the file's path, or null if nothing was captured.
-  Future<String?> stopRecordingFile() {
+  Future<String?> stopRecordingFile() async {
     stopElapsed();
-    return recorder.stop();
+    final path = await recorder.stop();
+    recordingPath = path ?? recordingPath;
+    return path;
+  }
+
+  /// The take at [path] has been uploaded (or given up on): remove the file.
+  Future<void> discardRecording(String? path) async {
+    await deleteRecordingFile(path);
+    if (recordingPath == path) recordingPath = null;
   }
 
   /// Call from `dispose`. [sessionOpen]: whether a recording is still running,
-  /// so it is stopped before the recorder goes.
+  /// so it is stopped before the recorder goes. An unsent take is deleted.
   void disposeRecording({required bool sessionOpen}) {
     _elapsedTimer?.cancel();
-    if (sessionOpen) recorder.stop();
+    final leftover = recordingPath;
+    if (sessionOpen) {
+      recorder.stop().then((path) => deleteRecordingFile(path ?? leftover));
+    } else {
+      deleteRecordingFile(leftover);
+    }
     recorder.dispose();
   }
 }

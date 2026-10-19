@@ -8,14 +8,18 @@ plugins {
 }
 
 // Real release signing, loaded from android/key.properties (gitignored —
-// see android/.gitignore and https://flutter.dev/to/reference-keystore).
-// Falls back to debug signing only when key.properties doesn't exist yet
-// (a fresh checkout before anyone's generated a keystore), so `flutter run
-// --release` still works out of the box — but a CI/production build MUST
-// provide key.properties, or it silently ships a debug-signed release.
+// see android/.gitignore and android/KEYSTORE_SETUP.md).
+//
+// A release build WITHOUT key.properties fails, on purpose. It used to fall
+// back to debug signing with only a log warning, so a release built on a
+// machine without the keystore was debug-signed and nothing stopped it being
+// handed around or uploaded (security audit, 2026-10-19). A local experiment
+// can still ask for the old behaviour explicitly:
+//   flutter build apk --release -Pdastavez.allowDebugSigning=true
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 val hasReleaseKeystore = keystorePropertiesFile.exists()
+val allowDebugSigning = (project.findProperty("dastavez.allowDebugSigning") as String?) == "true"
 if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
@@ -57,11 +61,16 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                logger.warn("WARNING: android/key.properties not found — release build is DEBUG-SIGNED. See android/KEYSTORE_SETUP.md.")
-                signingConfigs.getByName("debug")
+            signingConfig = when {
+                hasReleaseKeystore -> signingConfigs.getByName("release")
+                allowDebugSigning -> {
+                    logger.warn("WARNING: android/key.properties not found — release build is DEBUG-SIGNED because -Pdastavez.allowDebugSigning=true. Never upload this build. See android/KEYSTORE_SETUP.md.")
+                    signingConfigs.getByName("debug")
+                }
+                else -> throw GradleException(
+                    "android/key.properties not found: a release build must be signed with the release keystore. " +
+                        "See android/KEYSTORE_SETUP.md, or pass -Pdastavez.allowDebugSigning=true for a local, never-uploaded experiment."
+                )
             }
         }
     }
