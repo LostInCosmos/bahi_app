@@ -151,6 +151,8 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> with RecordingSupport
         File(path),
         voiceOrderId: widget.appendToOrderId,
       );
+      // The server has the recording now; the phone's copy is not needed.
+      await discardRecording(path);
       if (!mounted) return;
       Navigator.of(context).pop(jobId);
     } on ApiException catch (e) {

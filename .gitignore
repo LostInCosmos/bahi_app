@@ -18,3 +18,5 @@ ios/Pods/
 ios/.symlinks/
 .claude/
 .claude
+# Working files the shipped app does not need (audit reports, scanner output, k6 scripts) stay local.
+security_audit/
