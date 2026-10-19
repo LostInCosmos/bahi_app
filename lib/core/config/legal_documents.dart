@@ -49,6 +49,20 @@ const kWebsite = 'https://dastavez.co.in';
 /// Bumped whenever either document changes in substance. Recorded with the
 /// shopkeeper's acceptance once the server stores it.
 const kLegalVersion = '1.1';
+
+/// Orders two dotted version strings numerically: `1.2` < `1.10` < `2.0`.
+/// Negative when [a] is older than [b], zero when equal, positive when newer.
+/// A missing or non-numeric part counts as 0, so `1` equals `1.0`.
+int compareLegalVersions(String a, String b) {
+  final pa = a.split('.'), pb = b.split('.');
+  final n = pa.length > pb.length ? pa.length : pb.length;
+  for (var i = 0; i < n; i++) {
+    final x = i < pa.length ? int.tryParse(pa[i].trim()) ?? 0 : 0;
+    final y = i < pb.length ? int.tryParse(pb[i].trim()) ?? 0 : 0;
+    if (x != y) return x.compareTo(y);
+  }
+  return 0;
+}
 const kLegalEffectiveDate = '19 October 2026';
 
 /// One heading and its body: paragraphs, then optional bullet points, then

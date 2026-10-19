@@ -10,6 +10,8 @@ import '../../../core/utils/snack.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/dastavez_logo.dart';
 import '../data/auth_api.dart';
+import '../models/account.dart';
+import 'legal_acceptance_screen.dart';
 import 'legal_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -56,21 +58,36 @@ class _LoginScreenState extends State<LoginScreen> {
       if (kAllowServerOverride) {
         await ApiClient.instance.setBaseUrl(_baseUrlController.text.trim());
       }
+      final AccountInfo? account;
       if (_signupMode) {
-        await ApiClient.instance.signup(
+        account = await ApiClient.instance.signup(
           tenantName: _tenantNameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
           businessType: _businessType,
         );
       } else {
-        await ApiClient.instance.login(
+        account = await ApiClient.instance.login(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
       }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
+      if (account?.needsLegalAcceptance == true) {
+        // The documents changed since this shop accepted them (DAS-104):
+        // accept first, then home. Back cannot skip it.
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => LegalAcceptanceScreen(
+            firstTime: account!.legal?.acceptedVersion == null,
+            onAccept: (ctx) async {
+              await ApiClient.instance.acceptLegal();
+              if (ctx.mounted) Navigator.of(ctx).pushReplacementNamed(AppRoutes.home);
+            },
+          ),
+        ));
+        return;
+      }
       Navigator.of(context).pushReplacementNamed(AppRoutes.home);
     } catch (e) {
       HapticFeedback.heavyImpact();

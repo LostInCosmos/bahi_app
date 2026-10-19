@@ -14,14 +14,14 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/app`](#libapp) | `GstBillApp` | 1 | 1 |
 | [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 13 |
 | [`lib/core/api`](#libcoreapi) | `VersionGateLevel`, `ApiClient`, `ApiException` | 2 | 17 |
-| [`lib/core/config`](#libcoreconfig) | `BusinessType`, `businessTypeItems`, `LegalSection`, `LegalDocument`, `legalDocuments` +3 | 2 | 5 |
+| [`lib/core/config`](#libcoreconfig) | `BusinessType`, `businessTypeItems`, `compareLegalVersions`, `LegalSection`, `LegalDocument` +4 | 2 | 5 |
 | [`lib/core/disk`](#libcoredisk) | `BillImageCache`, `PendingPhotoStore` | 2 | 6 |
 | [`lib/core/navigation`](#libcorenavigation) | `AppRoutes`, `TabScreen` | 2 | 7 |
 | [`lib/core/utils`](#libcoreutils) | `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty` +13 | 6 | 20 |
 | [`lib/core/widgets`](#libcorewidgets) | `ButtonSpinner`, `BusyFilledButton`, `BusyOutlinedButton`, `showConfirmDialog`, `showMessageDialog` +7 | 5 | 10 |
 | [`lib/features/auth/data`](#libfeaturesauthdata) | `AuthApi` | 1 | 2 |
-| [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo` | 1 | 2 |
-| [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut` +1 | 4 | 2 |
+| [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo`, `LegalStatus` | 1 | 3 |
+| [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LegalAcceptanceScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen` +2 | 5 | 2 |
 | [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore`, `CaptureApi` | 2 | 3 |
 | [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState` +42 | 7 | 3 |
 | [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult` | 5 | 1 |
@@ -47,7 +47,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 | [`lib/features/voice/widgets`](#libfeaturesvoicewidgets) | `newRecordingPath`, `deleteRecordingFile`, `hasMicPermission`, `recordingErrorMessage`, `RecordingSupport` +2 | 1 | 1 |
 
-**Coverage:** 0 of 36 modules state their purpose; 51 of 91 files have a purpose line (4 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 36 modules state their purpose; 52 of 92 files have a purpose line (4 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -67,11 +67,11 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `app.dart` | 201 | — |
+| `app.dart` | 221 | — |
 
 **Public:** `GstBillApp`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/navigation`, `lib/core/utils`, `lib/features/auth/data`, `lib/features/auth/presentation`, `lib/features/home/presentation`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/navigation`, `lib/core/utils`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/auth/presentation`, `lib/features/home/presentation`
 
 **Used by:** `lib`
 
@@ -113,9 +113,9 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `business_types.dart` | 25 | — |
-| `legal_documents.dart` | 592 | The Terms of Service and Privacy Policy, as data. |
+| `legal_documents.dart` | 606 | The Terms of Service and Privacy Policy, as data. |
 
-**Public:** `BusinessType`, `businessTypeItems`, `LegalSection`, `LegalDocument`, `legalDocuments`, `legalDocumentById`, `legalPlaceholdersLeft`, `legalDocumentToMarkdown`
+**Public:** `BusinessType`, `businessTypeItems`, `compareLegalVersions`, `LegalSection`, `LegalDocument`, `legalDocuments`, `legalDocumentById`, `legalPlaceholdersLeft`, `legalDocumentToMarkdown`
 
 **Used by:** `lib/app/theme`, `lib/core/api`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/auth/presentation`
 
@@ -190,7 +190,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `auth_api.dart` | 81 | — |
+| `auth_api.dart` | 94 | — |
 
 **Public:** `AuthApi`
 
@@ -202,24 +202,25 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `account.dart` | 29 | — |
+| `account.dart` | 70 | — |
 
-**Public:** `AccountInfo`
+**Public:** `AccountInfo`, `LegalStatus`
 
 **Depends on:** `lib/core/config`, `lib/core/utils`
 
-**Used by:** `lib/features/auth/data`, `lib/features/auth/presentation`
+**Used by:** `lib/app`, `lib/features/auth/data`, `lib/features/auth/presentation`
 
 ### `lib/features/auth/presentation`
 
 | file | lines | purpose |
 |---|---|---|
 | `account_screen.dart` | 294 | Shop details — the mobile counterpart of the web app's Account page.  *[AccountScreen]* |
+| `legal_acceptance_screen.dart` | 122 | "We've updated our Terms and Privacy Policy": shown over the app when the  *[LegalAcceptanceScreen]* |
 | `legal_screen.dart` | 138 | Shows one of the legal documents (`core/config/legal_documents.dart`):  *[LegalScreen]* |
-| `login_screen.dart` | 365 | — |
+| `login_screen.dart` | 382 | — |
 | `sign_out.dart` | 40 | Ends this device's session and lands on the login screen with nothing  *[signOut]* |
 
-**Public:** `AccountScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut`, `forgetShopOnDevice`
+**Public:** `AccountScreen`, `LegalAcceptanceScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut`, `forgetShopOnDevice`
 
 **Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/config`, `lib/core/disk`, `lib/core/navigation`, `lib/core/utils`, `lib/core/widgets`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/capture/data`
 
