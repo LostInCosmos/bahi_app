@@ -35,8 +35,10 @@ class _GstBillAppState extends State<GstBillApp> {
 
   /// The server refused this device's token (signed out elsewhere). Back to
   /// the login screen, saying why — every open screen goes, so nothing keeps
-  /// asking with a token that will only be refused again.
+  /// asking with a token that will only be refused again. Decoded bill
+  /// images go too (DAS-90).
   void _onSessionEnded() {
+    imageCache.clear();
     _navigator.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,

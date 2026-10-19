@@ -33,9 +33,9 @@ import 'package:path_provider/path_provider.dart';
 /// Callers only read paths belonging to the signed-in shop (see
 /// ApiClient.fetchImage), since a hit never reaches the server's check.
 ///
-/// Deliberately NOT cleared on logout: logging out and back in is exactly the
-/// case this is here to make fast. [clear] exists for the account-switch case
-/// if that is ever wanted.
+/// Not cleared on logout: logging out and back in is exactly the case this
+/// is here to make fast. A DIFFERENT shop signing in is what clears it — see
+/// [keepOnlyShop] (DAS-90).
 class BillImageCache {
   BillImageCache._();
 
@@ -151,6 +151,25 @@ class BillImageCache {
       }
     } catch (_) {
       // a cache that cannot be trimmed is still a working cache
+    }
+  }
+
+  /// Deletes every entry that is not [tenantId]'s. Called whenever a token is
+  /// saved, so a different shop signing in leaves none of the previous shop's
+  /// photos on the phone, while the same shop keeps all of its own.
+  ///
+  /// The shop is read off each file's name — `8/abc.jpg` is stored as
+  /// `8_abc.jpg` — so nothing has to remember who was signed in before, and
+  /// it holds across a restart. Never throws.
+  static Future<void> keepOnlyShop(int tenantId) async {
+    try {
+      final dir = await _directory();
+      final own = '${tenantId}_';
+      await for (final entity in dir.list()) {
+        if (entity is File && !entity.uri.pathSegments.last.startsWith(own)) await entity.delete();
+      }
+    } catch (_) {
+      // a cache that cannot be pruned is still only ever read for its own shop
     }
   }
 
