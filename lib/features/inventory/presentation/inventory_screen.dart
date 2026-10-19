@@ -7,6 +7,8 @@ import '../../../core/utils/format.dart';
 import '../../../core/widgets/inline_message.dart';
 import '../data/product_catalog.dart';
 import '../models/product.dart';
+import '../models/product_search.dart';
+import '../widgets/product_name.dart';
 import 'product_detail_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -143,7 +145,7 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
         itemCount: header.length + products.length,
         itemBuilder: (context, i) {
           if (i < header.length) return header[i];
-          return _ProductRow(products[i - header.length]);
+          return _ProductRow(products[i - header.length], index!);
         },
       ),
     );
@@ -152,7 +154,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
 
 class _ProductRow extends StatelessWidget {
   final ProductSummary product;
-  const _ProductRow(this.product);
+  final ProductIndex index;
+  const _ProductRow(this.product, this.index);
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +189,14 @@ class _ProductRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                    // Beside the name only when the shop has this name more
+                    // than once (ADR-020); the pack line below stays for every
+                    // product that has one (user decision, 2026-10-19).
+                    ProductName(p.name,
+                        qualifier: index.qualifier(p.id),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
                     if (p.pack != null && p.pack!.isNotEmpty)
                       Text(p.pack!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
                     if (details != null) ...[
