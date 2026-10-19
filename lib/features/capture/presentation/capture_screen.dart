@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -204,12 +205,25 @@ class CaptureScreenState extends State<CaptureScreen> with _Selection, _Intake, 
 
   // ==================== persistence ====================
 
+  /// [batchState] as of the last write, so [_persistBatchIfChanged] can tell
+  /// whether anything stored has moved since.
+  List<Object>? _writtenState;
+
   /// A disposed screen never writes: the next screen restores from the last
   /// save and redoes whatever this one hadn't recorded yet.
   @override
   Future<void> _persistBatch() async {
     if (!mounted) return;
+    _writtenState = batchState(_items);
     await _store?.save(_items);
+  }
+
+  /// Writes only if something stored has changed since the last write. For
+  /// the status loop alone; every other caller has just changed something
+  /// and writes unconditionally.
+  @override
+  Future<void> _persistBatchIfChanged() async {
+    if (!listEquals(batchState(_items), _writtenState)) await _persistBatch();
   }
 
   Future<void> _restoreBatch() async {
