@@ -18,15 +18,32 @@ extension AuthApi on ApiClient {
           'business_type': businessType,
         },
         auth: false);
-    await saveToken(ApiClient.jsonObject(res)['access_token'] as String);
-    await saveBusinessType(businessType ?? kDefaultBusinessType);
+    final body = ApiClient.jsonObject(res);
+    await saveToken(body['access_token'] as String);
+    final account = _accountIn(body);
+    await saveBusinessType(account?.businessType ?? businessType ?? kDefaultBusinessType);
   }
 
   Future<void> login({required String email, required String password}) async {
     // No token sent, so a 401 here is a wrong password, not a session ending.
     final res = await postJson('/auth/login', {'email': email, 'password': password}, auth: false);
-    await saveToken(ApiClient.jsonObject(res)['access_token'] as String);
-    await getAccount(); // picks up business_type for theming
+    final body = ApiClient.jsonObject(res);
+    await saveToken(body['access_token'] as String);
+    // Since 2026-10-19 the answer carries the account (DAS-105), so the
+    // business type for theming needs no second request; an older server
+    // is asked for it as before.
+    final account = _accountIn(body);
+    if (account != null) {
+      await saveBusinessType(account.businessType);
+    } else {
+      await getAccount();
+    }
+  }
+
+  /// The `account` object a login or signup answer may carry (DAS-105).
+  static AccountInfo? _accountIn(Map<String, dynamic> body) {
+    final account = body['account'];
+    return account is Map<String, dynamic> ? AccountInfo.fromJson(account) : null;
   }
 
   /// Deletes the shop's account (R1 of the 2026-10-19 audit; Play and Apple

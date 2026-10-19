@@ -53,10 +53,17 @@ extension InvoiceApi on ApiClient {
   /// A cache hit never reaches the server's permission check, so it is only
   /// served for the signed-in shop's own paths (`<tenantId>/…`). Anything
   /// else goes to the server, which refuses it the normal way.
-  Future<Uint8List> fetchImage(String sourceImage, {int imageRev = 0}) async {
+  ///
+  /// [width] asks for a copy no wider than needed (DAS-105): the server snaps
+  /// it to 320/640/1280 and answers `X-Image-Width`; a thumbnail at 640 is
+  /// ~60 KB where the original is ~780 KB. Cached under its own key
+  /// (`path?w=640`, then `&v=rev`), so a full-size fetch and a thumbnail of
+  /// the same bill are two entries. An older server ignores `w` and sends
+  /// the original, which is then simply cached under that key.
+  Future<Uint8List> fetchImage(String sourceImage, {int imageRev = 0, int? width}) async {
     final tid = tenantId;
     final ownPath = tid != null && sourceImage.startsWith('$tid/');
-    final key = imageRev > 0 ? '$sourceImage?v=$imageRev' : sourceImage;
+    final key = imageCacheKey(sourceImage, imageRev: imageRev, width: width);
     if (ownPath) {
       final cached = await BillImageCache.read(key);
       if (cached != null) return cached;
@@ -64,6 +71,14 @@ extension InvoiceApi on ApiClient {
     final res = await get('/invoices/image/$key', timeout: ApiClient.transferTimeout);
     await BillImageCache.write(key, res.bodyBytes);
     return res.bodyBytes;
+  }
+
+  /// The cache key, which is also the request path's query: `w` first, then
+  /// `v`, neither when zero/absent — so every entry written before either
+  /// existed is still found.
+  static String imageCacheKey(String sourceImage, {int imageRev = 0, int? width}) {
+    final params = [if (width != null) 'w=$width', if (imageRev > 0) 'v=$imageRev'];
+    return params.isEmpty ? sourceImage : '$sourceImage?${params.join('&')}';
   }
 
   /// [extraSourceImages] are additional pages of the SAME bill (see

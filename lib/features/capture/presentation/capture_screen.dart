@@ -962,12 +962,15 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     }
 
     if (!mounted) return;
+    final before = item.status;
     await _openItem(item);
     if (!mounted) return;
     // Quietly, not reload(): that empties the list and refetches, which
     // would throw away the scroll position you are coming back to. A bill
-    // saved in there shows as Saved; nothing moves.
-    unawaited(_uploadHistory.currentState?.refresh());
+    // saved in there shows as Saved; nothing moves. When nothing happened to
+    // the bill the boxes are already right, so the server's tally is skipped
+    // (DAS-105).
+    unawaited(_uploadHistory.currentState?.refresh(counts: item.status != before));
   }
 
   /// A bill that FAILED, from the shop's list rather than this phone.
