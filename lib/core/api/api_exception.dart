@@ -10,6 +10,15 @@ class ApiException implements Exception {
 
   ApiException(this.statusCode, this.message, [this.detail]);
 
+  /// The server's machine-readable kind, when the body carried one —
+  /// `{"detail": {"error": "account_deleted", …}}` or a top-level
+  /// `{"error": …, "message": …}` (both are read by `ApiClient`). Null for a
+  /// plain-text detail.
+  String? get errorCode {
+    final d = detail;
+    return d is Map ? d['error'] as String? : null;
+  }
+
   @override
   String toString() => message;
 }

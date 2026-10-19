@@ -173,6 +173,20 @@ class BillImageCache {
     }
   }
 
+  /// Deletes [tenantId]'s entries and nobody else's — the shop's account was
+  /// deleted from this device. Never throws.
+  static Future<void> forgetShop(int tenantId) async {
+    try {
+      final dir = await _directory();
+      final own = '${tenantId}_';
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.uri.pathSegments.last.startsWith(own)) await entity.delete();
+      }
+    } catch (_) {
+      // ignored — the next sign-in of another shop prunes it anyway
+    }
+  }
+
   static Future<void> clear() async {
     try {
       final dir = await _directory();

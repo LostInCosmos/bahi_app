@@ -28,6 +28,9 @@ class BatchStore {
     return tid == null ? null : BatchStore._(tid);
   }
 
+  /// A given shop's store — for forgetting it after its account is deleted.
+  static BatchStore forTenant(int tenantId) => BatchStore._(tenantId);
+
   String get _key => 'bahi_batch_$tenantId';
 
   Future<void> save(List<BatchItem> items) async {
