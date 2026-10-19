@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/api/api_client.dart';
+import '../core/utils/share_file.dart';
 import '../features/auth/data/auth_api.dart';
 import '../core/navigation/app_routes.dart';
 import '../features/auth/presentation/sign_out.dart';
@@ -120,6 +123,7 @@ class _StartupGateState extends State<_StartupGate> {
   @override
   void initState() {
     super.initState();
+    unawaited(sweepSharedFiles()); // exports shared yesterday or earlier
     Future.wait([ApiClient.instance.loadFromDisk(), ApiClient.instance.loadAppInfo()]).then((_) {
       if (mounted) setState(() => _ready = true);
       // Refreshes the persisted business type (used for theming immediately

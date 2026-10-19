@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/business_types.dart';
+import '../../../core/config/legal_documents.dart' show kSupportEmail;
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/utils/snack.dart';
 import '../../../core/widgets/busy_button.dart';
@@ -73,11 +74,18 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.of(context).pushReplacementNamed(AppRoutes.home);
     } catch (e) {
       HapticFeedback.heavyImpact();
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = _describe(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// A deleted account is refused with its own code (`403 account_deleted`),
+  /// and must not read as "wrong password": the shop is gone, not mistyped.
+  static String _describe(Object e) => e is ApiException && e.errorCode == 'account_deleted'
+      ? 'This account was deleted and its data is being removed. '
+          'If that was not you, write to $kSupportEmail.'
+      : e.toString();
 
   @override
   Widget build(BuildContext context) {

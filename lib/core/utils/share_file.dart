@@ -21,8 +21,33 @@ Future<void> shareBytes(
   String? text,
 }) async {
   final origin = shareOrigin(context);
-  final dir = await getTemporaryDirectory();
+  final dir = await sharedFilesDirectory();
   final file = File('${dir.path}/$name');
   await file.writeAsBytes(bytes);
   await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: text, sharePositionOrigin: origin));
+}
+
+/// Where shared files are written: a folder of the temp directory that holds
+/// nothing else, so [sweepSharedFiles] can clear it by age without touching
+/// another file. A shared file stays after the sheet closes — on Android the
+/// receiving app may read it only then — which is why it is swept later.
+Future<Directory> sharedFilesDirectory() async {
+  final dir = Directory('${(await getTemporaryDirectory()).path}/shared');
+  if (!await dir.exists()) await dir.create(recursive: true);
+  return dir;
+}
+
+/// Deletes shared files older than [olderThan] from [dir] (default: the
+/// folder above) — a purchase or sales register left in temp after sharing
+/// (R7, 2026-10-19 audit). Run at app start; never throws.
+Future<void> sweepSharedFiles({Directory? dir, Duration olderThan = const Duration(days: 1), DateTime? now}) async {
+  try {
+    final folder = dir ?? await sharedFilesDirectory();
+    final cutoff = (now ?? DateTime.now()).subtract(olderThan);
+    await for (final entity in folder.list()) {
+      if (entity is File && (await entity.lastModified()).isBefore(cutoff)) await entity.delete();
+    }
+  } catch (_) {
+    // housekeeping only
+  }
 }

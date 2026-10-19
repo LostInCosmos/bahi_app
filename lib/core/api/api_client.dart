@@ -368,6 +368,12 @@ class ApiClient {
       if (decoded is Map && decoded['detail'] != null) {
         detail = decoded['detail'];
         message = detail is String ? detail : jsonEncode(detail);
+      } else if (decoded is Map && decoded['error'] is String) {
+        // `{"error": "account_deleted", "message": "…"}` — the shape the
+        // login refusal for a deleted account uses. The whole map is the
+        // detail, so `ApiException.errorCode` reads it the same way.
+        detail = decoded;
+        message = decoded['message'] is String ? decoded['message'] as String : decoded['error'] as String;
       }
     } catch (_) {
       // response wasn't JSON — fall back to raw body

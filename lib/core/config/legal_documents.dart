@@ -48,7 +48,7 @@ const kWebsite = 'https://dastavez.co.in';
 
 /// Bumped whenever either document changes in substance. Recorded with the
 /// shopkeeper's acceptance once the server stores it.
-const kLegalVersion = '1.0';
+const kLegalVersion = '1.1';
 const kLegalEffectiveDate = '19 October 2026';
 
 /// One heading and its body: paragraphs, then optional bullet points, then
@@ -269,10 +269,10 @@ const kTermsOfService = LegalDocument(
     LegalSection(
       '14. Ending the agreement',
       bullets: [
-        'You may stop using the Service at any time and may ask us to delete your account by emailing $kSupportEmail. '
-            'We will confirm the request, then delete your account and your content within 30 days, except what we must '
-            'keep by law (see the Privacy Policy, "How long we keep data"). Export your records first: once deleted they '
-            'cannot be recovered.',
+        'You may stop using the Service at any time and may delete your account in the app (Account › Delete account, '
+            'confirmed with your password) or by emailing $kSupportEmail. Deletion signs out every device of the shop at '
+            'once, and your account and your content are erased within 30 days, except what we must keep by law (see the '
+            'Privacy Policy, "How long we keep data"). Export your records first: once deleted they cannot be recovered.',
         'We may suspend or end your access if you materially breach these Terms, if we are required to by law, or if we '
             'stop providing the Service. If we stop providing it, we will give you at least 30 days\' notice where '
             'reasonably possible and a way to export your records.',
@@ -429,7 +429,8 @@ const kPrivacyPolicy = LegalDocument(
     LegalSection(
       '5. How long we keep data',
       bullets: [
-        'Account and shop details: while your account exists, then deleted within 30 days of your deletion request.',
+        'Account and shop details: while your account exists, then deleted within 30 days of your deleting the account '
+            'in the app (Account › Delete account) or asking us to.',
         'Bills, extracted records, sales and stock: these are your business records. We keep them while your account '
             'exists so that you and your accountant can refer back to them; GST law expects a registered business to keep '
             'its records for 72 months from the due date of the annual return, so we recommend you export them before '
@@ -475,9 +476,10 @@ const kPrivacyPolicy = LegalDocument(
             '(Account, Purchases, Inventory, Sales).',
         'Correct or complete: change your shop details in Account; correct a bill or sale in the app; or ask us to '
             'correct anything you cannot.',
-        'Erase: delete bills, sales and products in the app; ask us to delete your account and everything in it.',
+        'Erase: delete bills, sales and products in the app; delete your account and everything in it from Account › '
+            'Delete account, or ask us to.',
         'Withdraw consent: at any time, as easily as you gave it — stop using a feature, turn a permission off in your '
-            'phone\'s Settings, or ask us to delete your account. Withdrawing consent does not affect what was lawfully '
+            'phone\'s Settings, or delete your account. Withdrawing consent does not affect what was lawfully '
             'done before, and some features cannot work without the data they need.',
         'Nominate: name a person who may exercise these rights for you if you die or become incapacitated, by writing '
             'to us.',

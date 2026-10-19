@@ -29,6 +29,15 @@ extension AuthApi on ApiClient {
     await getAccount(); // picks up business_type for theming
   }
 
+  /// Deletes the shop's account (R1 of the 2026-10-19 audit; Play and Apple
+  /// both require an in-app path). `204` when done: every token of the
+  /// tenant is revoked and the data is purged after 30 days. A wrong
+  /// password is a `403` with `error: wrong_password`, so the shopkeeper is
+  /// asked again — not a `401`, which `_send` reads as a refused token and
+  /// would sign the device out on a typo. The caller signs out afterwards.
+  Future<void> deleteAccount({required String password}) =>
+      postJson('/account/delete', {'password': password});
+
   Future<AccountInfo> getAccount() async {
     final account = AccountInfo.fromJson(ApiClient.jsonObject(await get('/account')));
     await saveBusinessType(account.businessType);

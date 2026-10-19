@@ -15,14 +15,14 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 13 |
 | [`lib/core/api`](#libcoreapi) | `VersionGateLevel`, `ApiClient`, `ApiException` | 2 | 17 |
 | [`lib/core/config`](#libcoreconfig) | `BusinessType`, `businessTypeItems`, `LegalSection`, `LegalDocument`, `legalDocuments` +3 | 2 | 5 |
-| [`lib/core/disk`](#libcoredisk) | `BillImageCache`, `PendingPhotoStore` | 2 | 5 |
+| [`lib/core/disk`](#libcoredisk) | `BillImageCache`, `PendingPhotoStore` | 2 | 6 |
 | [`lib/core/navigation`](#libcorenavigation) | `AppRoutes`, `TabScreen` | 2 | 7 |
-| [`lib/core/utils`](#libcoreutils) | `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty` +11 | 6 | 19 |
+| [`lib/core/utils`](#libcoreutils) | `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty` +13 | 6 | 20 |
 | [`lib/core/widgets`](#libcorewidgets) | `ButtonSpinner`, `BusyFilledButton`, `BusyOutlinedButton`, `showConfirmDialog`, `showMessageDialog` +7 | 5 | 10 |
 | [`lib/features/auth/data`](#libfeaturesauthdata) | `AuthApi` | 1 | 2 |
 | [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo` | 1 | 2 |
-| [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut` | 4 | 2 |
-| [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore`, `CaptureApi` | 2 | 2 |
+| [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut` +1 | 4 | 2 |
+| [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore`, `CaptureApi` | 2 | 3 |
 | [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState` +42 | 7 | 3 |
 | [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult` | 5 | 1 |
 | [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `ChromeButton`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState` +12 | 12 | 1 |
@@ -67,11 +67,11 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `app.dart` | 197 | — |
+| `app.dart` | 201 | — |
 
 **Public:** `GstBillApp`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/navigation`, `lib/features/auth/data`, `lib/features/auth/presentation`, `lib/features/home/presentation`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/navigation`, `lib/core/utils`, `lib/features/auth/data`, `lib/features/auth/presentation`, `lib/features/home/presentation`
 
 **Used by:** `lib`
 
@@ -97,8 +97,8 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `api_client.dart` | 378 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
-| `api_exception.dart` | 16 | — |
+| `api_client.dart` | 384 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
+| `api_exception.dart` | 25 | — |
 
 **Public:** `VersionGateLevel`, `ApiClient`, `ApiException`
 
@@ -113,7 +113,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `business_types.dart` | 25 | — |
-| `legal_documents.dart` | 590 | The Terms of Service and Privacy Policy, as data. |
+| `legal_documents.dart` | 592 | The Terms of Service and Privacy Policy, as data. |
 
 **Public:** `BusinessType`, `businessTypeItems`, `LegalSection`, `LegalDocument`, `legalDocuments`, `legalDocumentById`, `legalPlaceholdersLeft`, `legalDocumentToMarkdown`
 
@@ -125,12 +125,12 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `bill_image_cache.dart` | 186 | On-device store for corrected bill photos, so the same image is pulled  *[BillImageCache]* |
+| `bill_image_cache.dart` | 200 | On-device store for corrected bill photos, so the same image is pulled  *[BillImageCache]* |
 | `pending_photo_store.dart` | 94 | Raw bill photos that have been captured and cropped but not yet uploaded.  *[PendingPhotoStore]* |
 
 **Public:** `BillImageCache`, `PendingPhotoStore`
 
-**Used by:** `lib/core/api`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/invoice/data`
+**Used by:** `lib/core/api`, `lib/features/auth/presentation`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/invoice/data`
 
 ---
 
@@ -155,14 +155,14 @@ Find the module whose names fit what you are adding, then read its section.
 | `json.dart` | 76 | Reading a server JSON object into a model, in one place.  *[JsonReads]* |
 | `offset_2d.dart` | 9 | Minimal (x, y) pair — avoids pulling in dart:ui's Offset in files that  *[Offset2D]* |
 | `poll.dart` | 104 | — |
-| `share_file.dart` | 29 | — |
+| `share_file.dart` | 54 | — |
 | `snack.dart` | 19 | Telling the shopkeeper something in passing.  *[Snack]* |
 
-**Public:** `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty`, `plural`, `isoDate`, `shortDate`, `formatElapsed`, `JsonReads`, `Offset2D`, `PollAbandoned`, `checkWanted`, `shareOrigin`, `shareBytes`, `Snack`
+**Public:** `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty`, `plural`, `isoDate`, `shortDate`, `formatElapsed`, `JsonReads`, `Offset2D`, `PollAbandoned`, `checkWanted`, `shareOrigin`, `shareBytes`, `sharedFilesDirectory`, `sweepSharedFiles`, `Snack`
 
 **Depends on:** `lib/core/api`
 
-**Used by:** `lib/core/widgets`, `lib/features/auth/models`, `lib/features/auth/presentation`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/models`, `lib/features/folders/widgets`, `lib/features/inventory/models`, `lib/features/inventory/presentation`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/invoice/presentation`, `lib/features/sales/models`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/models`, `lib/features/voice/presentation`, `lib/features/voice/widgets`
+**Used by:** `lib/app`, `lib/core/widgets`, `lib/features/auth/models`, `lib/features/auth/presentation`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/models`, `lib/features/folders/widgets`, `lib/features/inventory/models`, `lib/features/inventory/presentation`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/invoice/presentation`, `lib/features/sales/models`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/models`, `lib/features/voice/presentation`, `lib/features/voice/widgets`
 
 ---
 
@@ -190,7 +190,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `auth_api.dart` | 55 | — |
+| `auth_api.dart` | 64 | — |
 
 **Public:** `AuthApi`
 
@@ -214,14 +214,14 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `account_screen.dart` | 185 | Shop details — the mobile counterpart of the web app's Account page.  *[AccountScreen]* |
+| `account_screen.dart` | 294 | Shop details — the mobile counterpart of the web app's Account page.  *[AccountScreen]* |
 | `legal_screen.dart` | 138 | Shows one of the legal documents (`core/config/legal_documents.dart`):  *[LegalScreen]* |
-| `login_screen.dart` | 357 | — |
-| `sign_out.dart` | 23 | Ends this device's session and lands on the login screen with nothing  *[signOut]* |
+| `login_screen.dart` | 365 | — |
+| `sign_out.dart` | 40 | Ends this device's session and lands on the login screen with nothing  *[signOut]* |
 
-**Public:** `AccountScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut`
+**Public:** `AccountScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut`, `forgetShopOnDevice`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/config`, `lib/core/navigation`, `lib/core/utils`, `lib/core/widgets`, `lib/features/auth/data`, `lib/features/auth/models`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/config`, `lib/core/disk`, `lib/core/navigation`, `lib/core/utils`, `lib/core/widgets`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/capture/data`
 
 **Used by:** `lib/app`, `lib/features/home/presentation`
 
@@ -233,14 +233,14 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_store.dart` | 76 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
+| `batch_store.dart` | 79 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
 | `capture_api.dart` | 60 | The capture screen's own endpoints: the shop's uploads list and filing or  *[CaptureApi]* |
 
 **Public:** `BatchStore`, `CaptureApi`
 
 **Depends on:** `lib/core/api`, `lib/core/disk`, `lib/features/capture/models`
 
-**Used by:** `lib/features/capture/presentation`, `lib/features/capture/widgets`
+**Used by:** `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/capture/widgets`
 
 ### `lib/features/capture/models`
 

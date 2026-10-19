@@ -9,6 +9,7 @@ import '../../../core/config/legal_documents.dart';
 import '../data/auth_api.dart';
 import '../models/account.dart';
 import 'legal_screen.dart';
+import 'sign_out.dart';
 
 /// Shop details — the mobile counterpart of the web app's Account page.
 /// Business type in particular tunes how bills are read and validated (see
@@ -47,6 +48,21 @@ class _AccountScreenState extends State<AccountScreen> {
     _gstinController.dispose();
     _addressController.dispose();
     super.dispose();
+  }
+
+  /// Asks for the password, deletes the account on the server, then forgets
+  /// the shop on this device and lands on the login screen (R1, 2026-10-19).
+  Future<void> _confirmDelete() async {
+    final tenantId = ApiClient.instance.tenantId;
+    final deleted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+    if (deleted != true || !mounted) return;
+    if (tenantId != null) await forgetShopOnDevice(tenantId);
+    if (!mounted) return;
+    await signOut(context);
   }
 
   Future<void> _load() async {
@@ -170,15 +186,108 @@ class _AccountScreenState extends State<AccountScreen> {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => LegalScreen.open(context, doc.id),
                     ),
-                  const SizedBox(height: Spacing.s),
+                  const SizedBox(height: Spacing.xl),
+                  Text('Delete account', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: Spacing.xs),
                   Text(
-                    'To delete your account and everything in it, email $kSupportEmail from the address above. '
-                    'We complete deletion within 30 days.',
+                    'Deletes this shop and everything in it — bills, stock, sales and every sign-in — within 30 days. '
+                    'Export your records first; they cannot be recovered. You can also ask by email at $kSupportEmail.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: Spacing.s),
+                  OutlinedButton.icon(
+                    key: const ValueKey('delete-account'),
+                    onPressed: _loading ? null : _confirmDelete,
+                    style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                    icon: const Icon(Icons.delete_forever_outlined),
+                    label: const Text('Delete account'),
                   ),
                 ],
               ),
             ),
+    );
+  }
+}
+
+/// "Type your password to delete": the server refuses a wrong one with
+/// `403 wrong_password` and the shopkeeper tries again; any other failure is
+/// shown as it is. Pops `true` only after the server answered `204`.
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() {})); // Delete enables once something is typed
+  }
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _delete() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ApiClient.instance.deleteAccount(password: _password.text);
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.errorCode == 'wrong_password' ? 'Wrong password. Try again.' : 'Could not delete: $e');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not delete: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Text('Delete this account?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Everything in this shop will be removed within 30 days and cannot be recovered. '
+              'Enter your password to confirm.'),
+          const SizedBox(height: Spacing.m),
+          TextField(
+            key: const ValueKey('delete-password'),
+            controller: _password,
+            obscureText: true,
+            autofocus: true,
+            enabled: !_busy,
+            decoration: const InputDecoration(labelText: 'Password'),
+            onSubmitted: (_) => _busy ? null : _delete(),
+          ),
+          ErrorText(_error, padding: const EdgeInsets.only(top: Spacing.s)),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: _busy ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
+        TextButton(
+          key: const ValueKey('delete-confirm'),
+          onPressed: _busy || _password.text.isEmpty ? null : _delete,
+          child: _busy
+              ? const ButtonSpinner(size: 18)
+              : Text('Delete', style: TextStyle(color: colors.error)),
+        ),
+      ],
     );
   }
 }
