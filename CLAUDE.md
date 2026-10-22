@@ -92,6 +92,19 @@ flutter test
 flutter run
 ```
 
+## End-to-end tests (Android emulator)
+`flutter test` covers widgets against a fake server. The flows in `integration_test/` run the real app on an Android emulator against the backend's local e2e server (`../bahi_backend/ops/e2e_server.sh`, a small seeded shop on the fake extractor, never production), driven by Patrol so the native camera app can be tapped. One command runs them all and prints PASS/FAIL per flow:
+```bash
+tool/e2e/create_avd.sh           # once: the Pixel 7 / Android 15 virtual device
+tool/e2e/run.sh                  # every flow; E2E_PORT=8010 if the server runs elsewhere
+tool/e2e/run.sh flow_03_sell     # one flow (the server is still reset first)
+```
+Screenshots (one per step) and logs land in `build/e2e/<timestamp>/<flow>/` — gitignored, never committed, like the audit files. Setup, knobs and the traps: the vault's `08 - Testing/Mobile End-to-End Tests.md`.
+
+**When a run is required before In Review:** any change to a screen a flow walks through (login/signup, the capture grid, crop, Purchases, Sell, the sale review and receipt, Inventory, export, log out), to `ApiClient` or a `data/*_api.dart`, to `android/`, `pubspec.yaml` dependencies or `integration_test/` itself. Say in the ticket which flows ran and the result folder. A change elsewhere needs only `flutter analyze` and `flutter test`.
+
+**Adding a flow:** one file `integration_test/flow_NN_<name>_test.dart` with one `e2eFlow(...)` (helpers in `integration_test/e2e/e2e.dart`: `startApp`, `signIn`, `openTab`, `field`, `steps.shot`), add its name to `ALL_FLOWS` in `tool/e2e/run.sh`, and keep its waits bounded — `waitUntilVisible` with a timeout, never a sleep. Every flow signs in for itself (Patrol wipes the app's data before each one). Anything the server must hold for it goes to Backend as a seed change, not into the test.
+
 ## Working with other agents (Linear)
 Cross-component work (anything needing a backend, web, or admin change, or a new or changed API contract) is coordinated in the ticket's Linear issue (`DAS-NN`). Agents for the other components read and write the same thread.
 - **Before starting**, read the issue and **all** its comments.

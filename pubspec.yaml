@@ -29,6 +29,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  patrol: 4.10.0   # exact: must pair with the global patrol_cli (4.8.0), see tool/e2e
 
 flutter:
   uses-material-design: true
+
+# End-to-end tests on the Android emulator (DAS-109): `tool/e2e/run.sh`.
+# Patrol runs the Dart tests in integration_test/ as Android instrumentation
+# and drives the native camera app for the photograph step.
+patrol:
+  app_name: Dastavez
+  test_directory: integration_test
+  screenshot_on_failure: true   # Android: the screen at the failing step, beside the per-step shots
+  android:
+    package_name: com.dastavez.bahi
+  ios:
+    bundle_id: com.dastavez.bahi

@@ -16,6 +16,11 @@ plugins {
 // handed around or uploaded (security audit, 2026-10-19). A local experiment
 // can still ask for the old behaviour explicitly:
 //   flutter build apk --release -Pdastavez.allowDebugSigning=true
+//
+// The check runs when a release artifact is about to be packaged or signed
+// (the doFirst below), not while this file is evaluated: evaluation happens
+// for every build, so the first version failed every debug and profile build
+// on a Mac without the keystore too (found by DAS-109, 2026-10-22).
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 val hasReleaseKeystore = keystorePropertiesFile.exists()
@@ -46,6 +51,11 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // End-to-end tests (DAS-109, Patrol). androidTest only: the shipped
+        // APK carries none of this. clearPackageData wipes the app's data
+        // between tests, so every flow starts as on a fresh install.
+        testInstrumentationRunner = "pl.leancode.patrol.PatrolJUnitRunner"
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     signingConfigs {
@@ -61,13 +71,29 @@ android {
 
     buildTypes {
         release {
-            signingConfig = when {
-                hasReleaseKeystore -> signingConfigs.getByName("release")
-                allowDebugSigning -> {
-                    logger.warn("WARNING: android/key.properties not found — release build is DEBUG-SIGNED because -Pdastavez.allowDebugSigning=true. Never upload this build. See android/KEYSTORE_SETUP.md.")
-                    signingConfigs.getByName("debug")
-                }
-                else -> throw GradleException(
+            // Without the keystore this is the debug key, and the guard below
+            // stops a release build before anything is packaged with it.
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+    }
+
+    testOptions {
+        // One process per Patrol test, so a failed test cannot leak state into the next.
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+    }
+}
+
+// The release-keystore guard. Only a task that packages or signs a RELEASE
+// artifact carries it, so debug and profile builds never see it.
+tasks.configureEach {
+    val releaseArtifact = name.contains("Release") &&
+        (name.startsWith("package") || name.startsWith("sign") || name.startsWith("bundle"))
+    if (releaseArtifact && !hasReleaseKeystore) {
+        doFirst {
+            if (allowDebugSigning) {
+                logger.warn("WARNING: android/key.properties not found — release build is DEBUG-SIGNED because -Pdastavez.allowDebugSigning=true. Never upload this build. See android/KEYSTORE_SETUP.md.")
+            } else {
+                throw GradleException(
                     "android/key.properties not found: a release build must be signed with the release keystore. " +
                         "See android/KEYSTORE_SETUP.md, or pass -Pdastavez.allowDebugSigning=true for a local, never-uploaded experiment."
                 )
@@ -84,4 +110,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The orchestrator the testOptions above name (Patrol's documented version).
+    androidTestUtil("androidx.test:orchestrator:1.5.1")
 }
