@@ -51,10 +51,13 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
     if (s == null) return;
     final lines = [
       '${s.saleNo} • ${s.saleDate}',
-      ...s.lineItems.map((li) => '${li.productName} × ${qty(li.qty)} — ${rupees(li.lineAmount)}'),
-      'Subtotal: ${rupees(s.subtotal)}',
-      'CGST + SGST: ${rupees(s.totalCgst + s.totalSgst)}',
+      for (final li in s.lineItems) ...[
+        '${li.productName} × ${qty(li.qty)} — ${rupees(li.lineAmount)}',
+        if (li.discountAmount > 0) '  Discount −${rupees(li.discountAmount)}',
+      ],
+      if (s.discountAmount > 0) 'Discount (whole sale): −${rupees(s.discountAmount)}',
       'Total: ${rupees(s.grandTotal)}',
+      'Includes GST ${rupees(s.tax)} (CGST ${rupees(s.totalCgst)} + SGST ${rupees(s.totalSgst)})',
     ];
     await SharePlus.instance.share(ShareParams(text: lines.join('\n'), sharePositionOrigin: shareOrigin(context)));
   }
@@ -82,16 +85,30 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
                     padding: const EdgeInsets.all(Spacing.m),
                     child: Column(
                       children: [
-                        for (final li in sale.lineItems)
+                        for (final li in sale.lineItems) ...[
                           KeyValueRow('${li.productName} × ${qty(li.qty)}', rupees(li.lineAmount)),
+                          if (li.discountAmount > 0)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: Spacing.xs),
+                                child: Text('Discount −${rupees(li.discountAmount)}',
+                                    style: Theme.of(context).textTheme.bodySmall),
+                              ),
+                            ),
+                        ],
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: Spacing.s),
                 SaleTotalsCard(
-                  subtotal: sale.subtotal,
-                  tax: sale.totalCgst + sale.totalSgst,
+                  items: sale.itemsTotal,
+                  itemDiscounts: sale.lineItems.fold(0.0, (sum, li) => sum + li.discountAmount),
+                  saleDiscount: sale.discountAmount,
+                  tax: sale.tax,
+                  cgst: sale.totalCgst,
+                  sgst: sale.totalSgst,
                   total: sale.grandTotal,
                   totalLabel: 'Total paid',
                 ),

@@ -70,6 +70,11 @@ class ProductBatchInfo {
   final double? freeQty;
   final String? freeScheme;
 
+  /// Whether the shop corrected this batch's MRP itself (DAS-111). Null when
+  /// the server does not send the field at all, i.e. it cannot take an edit —
+  /// the Edit button is hidden then rather than failing.
+  final bool? mrpEdited;
+
   ProductBatchInfo({
     required this.id,
     this.batchNo,
@@ -87,7 +92,29 @@ class ProductBatchInfo {
     this.discountAmount,
     this.freeQty,
     this.freeScheme,
+    this.mrpEdited,
   });
+
+  /// This batch with the MRP the server just saved for it.
+  ProductBatchInfo withMrp(double newMrp) => ProductBatchInfo(
+        id: id,
+        batchNo: batchNo,
+        expiryDate: expiryDate,
+        quantityOnHand: quantityOnHand,
+        mrp: newMrp,
+        gstPct: gstPct,
+        isExpired: isExpired,
+        sourceInvoiceId: sourceInvoiceId,
+        vendorName: vendorName,
+        invoiceNo: invoiceNo,
+        netRate: netRate,
+        rate: rate,
+        discountPct: discountPct,
+        discountAmount: discountAmount,
+        freeQty: freeQty,
+        freeScheme: freeScheme,
+        mrpEdited: true,
+      );
 
   factory ProductBatchInfo.fromJson(Map<String, dynamic> json) => ProductBatchInfo(
         id: json.intReq('id'),
@@ -106,6 +133,7 @@ class ProductBatchInfo {
         discountAmount: json.dbl('discount_amount'),
         freeQty: json.dbl('free_qty'),
         freeScheme: json.str('free_scheme'),
+        mrpEdited: json.boolean('mrp_edited'),
       );
 }
 
@@ -127,6 +155,16 @@ class ProductDetail {
     required this.totalQuantity,
     required this.batches,
   });
+
+  /// The same product with one batch swapped for [batch].
+  ProductDetail withBatch(ProductBatchInfo batch) => ProductDetail(
+        id: id,
+        name: name,
+        hsnCode: hsnCode,
+        pack: pack,
+        totalQuantity: totalQuantity,
+        batches: [for (final b in batches) b.id == batch.id ? batch : b],
+      );
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) => ProductDetail(
         id: json.intReq('id'),

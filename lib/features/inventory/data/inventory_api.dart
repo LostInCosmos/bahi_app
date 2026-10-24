@@ -1,4 +1,5 @@
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/json.dart';
 import '../models/product.dart';
 
 /// The whole product list and the `ETag` it came with, to send back next time.
@@ -26,6 +27,18 @@ extension InventoryApi on ApiClient {
 
   Future<ProductDetail> getProductDetail(int productId) async =>
       ProductDetail.fromJson(ApiClient.jsonObject(await get('/inventory/products/$productId')));
+
+  /// Corrects one batch's MRP (DAS-111): what a sale prefills and every list
+  /// shows. It changes only this batch, and the purchase bill keeps what it
+  /// printed. Throws ApiException: 422 `bad_mrp`, 404 for a batch that is gone
+  /// (merged by our team, DAS-93) or another shop's.
+  Future<double> setBatchMrp(int batchId, double mrp) async {
+    final res = await patchJson('/inventory/batches/$batchId/mrp', {'mrp': mrp});
+    final body = ApiClient.jsonObject(res);
+    // The answer lists every batch changed: `{batches: [{id, mrp, mrp_edited}]}`.
+    final changed = body.listOf('batches', (j) => j).where((j) => j.integer('id') == batchId);
+    return (changed.isEmpty ? body : changed.first).dblReq('mrp');
+  }
 
   /// Creates a product that doesn't exist yet, plus its first batch — for a
   /// screen (like voice order "Add item") that expected to just pick an

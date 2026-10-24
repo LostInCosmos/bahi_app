@@ -2,17 +2,29 @@ import 'dart:typed_data';
 
 import '../../../core/api/api_client.dart';
 import '../models/sale.dart';
+import '../models/sale_totals.dart';
 
 extension SaleApi on ApiClient {
   Future<Map<String, dynamic>> createSale({
     String? buyerName,
     String? buyerGstin,
     required List<CartEntry> lineItems,
+    Discount? discount,
   }) async {
     final res = await postJson('/sales', {
       'buyer_name': (buyerName == null || buyerName.isEmpty) ? null : buyerName,
       'buyer_gstin': (buyerGstin == null || buyerGstin.isEmpty) ? null : buyerGstin,
-      'line_items': lineItems.map((c) => {'product_batch_id': c.productBatchId, 'qty': c.qty, 'rate': c.rate}).toList(),
+      // `rate` is GST-inclusive and a discount is sent as typed; the server
+      // converts it to rupees and decides every total (DAS-111).
+      if (Discount.wireOf(discount) != null) 'discount': Discount.wireOf(discount),
+      'line_items': lineItems
+          .map((c) => {
+                'product_batch_id': c.productBatchId,
+                'qty': c.qty,
+                'rate': c.rate,
+                if (Discount.wireOf(c.discount) != null) 'discount': Discount.wireOf(c.discount),
+              })
+          .toList(),
     });
     return ApiClient.jsonObject(res);
   }

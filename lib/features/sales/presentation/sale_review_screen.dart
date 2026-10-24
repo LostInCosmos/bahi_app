@@ -8,6 +8,8 @@ import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
+import '../models/sale_totals.dart';
+import '../widgets/discount_field.dart';
 import '../widgets/totals_card.dart';
 
 /// Buyer GSTIN stays optional and out of the way — needed for a business
@@ -27,6 +29,8 @@ class SaleReviewScreen extends StatefulWidget {
 class _SaleReviewScreenState extends State<SaleReviewScreen> {
   final _buyerNameController = TextEditingController();
   final _buyerGstinController = TextEditingController();
+  final _saleDiscountController = TextEditingController();
+  DiscountKind _saleDiscountKind = DiscountKind.amount;
   String? _message;
   bool _saving = false;
 
@@ -34,11 +38,18 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
   void dispose() {
     _buyerNameController.dispose();
     _buyerGstinController.dispose();
+    _saleDiscountController.dispose();
     super.dispose();
   }
 
-  double get _subtotal => widget.cart.fold(0.0, (sum, c) => sum + c.lineAmount);
-  double get _totalTax => widget.cart.fold(0.0, (sum, c) => sum + c.lineAmount * c.gstPct / 100);
+  Discount? get _saleDiscount => parseDiscount(_saleDiscountController.text, _saleDiscountKind);
+
+  /// Worked out once per build; the server decides the real numbers when the
+  /// sale is saved, by the same rules (`sale_totals.dart`).
+  SaleTotals get _totals => computeSale([for (final c in widget.cart) c.input], saleDiscount: _saleDiscount);
+
+  static String _offLabel(Discount d) =>
+      d.kind == DiscountKind.percentage ? '${percent(d.value)} off' : '${rupees(d.value)} off';
 
   void _remove(int index) {
     setState(() => widget.cart.removeAt(index));
@@ -72,6 +83,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
         buyerName: _buyerNameController.text.trim(),
         buyerGstin: _buyerGstinController.text.trim(),
         lineItems: widget.cart,
+        discount: _saleDiscount,
       );
       if (!mounted) return;
       Navigator.of(context).pop(result['sale_id'] as int);
@@ -84,6 +96,8 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
             'requested ${detail['requested']}, available ${detail['available']}.');
       } else if (gone != null) {
         _dropGoneBatch(int.parse(gone.group(1)!));
+      } else if (detail is Map && detail['error'] == 'bad_discount') {
+        setState(() => _message = 'The discount is more than the amount it is taken from. Check it and try again.');
       } else {
         setState(() => _message = 'Sale failed: $e');
       }
@@ -96,25 +110,22 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final totals = _totals;
     return Scaffold(
       appBar: AppBar(title: const Text('Review sale')),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.l),
         children: [
-          for (var i = 0; i < widget.cart.length; i++)
-            Card(
-              child: ListTile(
-                title: Text('${widget.cart[i].productName} × ${qty(widget.cart[i].qty)}'),
-                subtitle: Text('Batch ${widget.cart[i].batchNo ?? "—"}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(rupees(widget.cart[i].lineAmount)),
-                    IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _remove(i)),
-                  ],
-                ),
-              ),
-            ),
+          for (var i = 0; i < widget.cart.length; i++) _cartRow(context, i, totals),
+          const SizedBox(height: Spacing.s),
+          DiscountField(
+            label: 'Discount on whole sale',
+            controller: _saleDiscountController,
+            kind: _saleDiscountKind,
+            onKindChanged: (k) => setState(() => _saleDiscountKind = k),
+            onChanged: () => setState(() {}),
+            errorText: totals.saleError,
+          ),
           const SizedBox(height: Spacing.s),
           TextField(
             controller: _buyerNameController,
@@ -126,15 +137,57 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
             decoration: const InputDecoration(labelText: 'Buyer GSTIN (optional — leave blank for a retail sale)'),
           ),
           const SizedBox(height: Spacing.m),
-          SaleTotalsCard(subtotal: _subtotal, tax: _totalTax, total: _subtotal + _totalTax),
+          SaleTotalsCard(
+            items: totals.items,
+            itemDiscounts: totals.itemDiscounts,
+            saleDiscount: totals.saleDiscount,
+            tax: totals.tax,
+            total: totals.grandTotal,
+          ),
           ErrorText(_message),
           const SizedBox(height: Spacing.l),
           BusyFilledButton(
             busy: _saving,
-            onPressed: widget.cart.isEmpty ? null : _complete,
+            onPressed: widget.cart.isEmpty || totals.hasError ? null : _complete,
             label: 'Complete sale',
           ),
         ],
+      ),
+    );
+  }
+
+  /// A line: what it comes to after its own discount, with the undiscounted
+  /// amount struck through and the discount as typed beneath.
+  Widget _cartRow(BuildContext context, int i, SaleTotals totals) {
+    final c = widget.cart[i];
+    final line = totals.lines[i];
+    final off = line.itemDiscountPaise > 0 && c.discount != null;
+    return Card(
+      child: ListTile(
+        title: Text('${c.productName} × ${qty(c.qty)}'),
+        subtitle: Text('Batch ${c.batchNo ?? "—"}'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (off)
+                  Text(
+                    rupees(line.gross),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          decoration: TextDecoration.lineThrough,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                Text(rupees(off ? line.gross - line.itemDiscount : line.gross)),
+                if (off) Text(_offLabel(c.discount!), style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _remove(i)),
+          ],
+        ),
       ),
     );
   }
