@@ -11,6 +11,10 @@ class AccountInfo {
   final String email;
   final String businessType;
 
+  /// Whether the admin has voice switched on for this shop (DAS-112); null
+  /// from a server older than the switch, which leaves voice as it is.
+  final bool? voiceEnabled;
+
   /// Where the shop stands on the legal documents (DAS-104); null from a
   /// server older than the field, which then never asks for acceptance.
   final LegalStatus? legal;
@@ -21,6 +25,7 @@ class AccountInfo {
     this.address,
     required this.email,
     required this.businessType,
+    this.voiceEnabled,
     this.legal,
   });
 
@@ -30,6 +35,7 @@ class AccountInfo {
         address: json.str('address'),
         email: json.strReq('email'),
         businessType: json.strOr('business_type', kDefaultBusinessType),
+        voiceEnabled: json.boolean('voice_enabled'),
         legal: json.objOf('legal', LegalStatus.fromJson),
       );
 

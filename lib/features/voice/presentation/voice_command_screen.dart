@@ -111,7 +111,9 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> with RecordingS
       if (mounted) {
         setState(() => _errorMessage = e.statusCode == 429
             ? "You're sending commands too quickly — please wait a moment and try again."
-            : 'Could not process that: ${e.message}');
+            : e.statusCode == 403
+                ? voiceOffMessage(e)
+                : 'Could not process that: ${e.message}');
       }
     } catch (e) {
       if (mounted) {

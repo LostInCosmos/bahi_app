@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/navigation/tab_screen.dart';
 import '../../../core/widgets/dastavez_logo.dart';
 import '../../auth/presentation/account_screen.dart';
@@ -53,10 +54,16 @@ class _HomeScreenState extends State<HomeScreen> implements HomeTabHost {
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: () => _push(const VoiceCommandScreen()),
-            icon: const Icon(Icons.record_voice_over_outlined),
-            tooltip: 'Voice command',
+          // Hidden when the admin has voice off for this shop (DAS-112).
+          ValueListenableBuilder<bool>(
+            valueListenable: ApiClient.instance.voiceEnabledNotifier,
+            builder: (context, voiceOn, _) => voiceOn
+                ? IconButton(
+                    onPressed: () => _push(const VoiceCommandScreen()),
+                    icon: const Icon(Icons.record_voice_over_outlined),
+                    tooltip: 'Voice command',
+                  )
+                : const SizedBox.shrink(),
           ),
           IconButton(
             onPressed: () => _push(const AccountScreen()),

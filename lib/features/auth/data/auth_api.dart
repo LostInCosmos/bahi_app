@@ -27,6 +27,7 @@ extension AuthApi on ApiClient {
     await saveToken(body['access_token'] as String);
     final account = _accountIn(body);
     await saveBusinessType(account?.businessType ?? businessType ?? kDefaultBusinessType);
+    await _applyVoiceSwitch(account);
     return account;
   }
 
@@ -41,6 +42,7 @@ extension AuthApi on ApiClient {
     final account = _accountIn(body);
     if (account != null) {
       await saveBusinessType(account.businessType);
+      await _applyVoiceSwitch(account);
       return account;
     }
     return getAccount();
@@ -52,6 +54,11 @@ extension AuthApi on ApiClient {
   /// shown when it is not.
   Future<void> acceptLegal({String version = kLegalVersion}) =>
       postJson('/account/accept-legal', {'version': version});
+
+  /// Takes the shop's voice switch from an account answer. A server too old to
+  /// send it cannot have voice off, so no field means on — whatever this
+  /// device remembered from a newer server.
+  Future<void> _applyVoiceSwitch(AccountInfo? account) => setVoiceEnabled(account?.voiceEnabled ?? true);
 
   /// The `account` object a login or signup answer may carry (DAS-105).
   static AccountInfo? _accountIn(Map<String, dynamic> body) {
@@ -71,6 +78,7 @@ extension AuthApi on ApiClient {
   Future<AccountInfo> getAccount() async {
     final account = AccountInfo.fromJson(ApiClient.jsonObject(await get('/account')));
     await saveBusinessType(account.businessType);
+    await _applyVoiceSwitch(account);
     return account;
   }
 

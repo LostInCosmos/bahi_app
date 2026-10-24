@@ -164,6 +164,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> with RecordingSupport
       final msg = switch (e.statusCode) {
         404 => 'This order is no longer available to add more to.',
         409 => e.message.isNotEmpty ? e.message : "This order can't be added to anymore.",
+        403 => voiceOffMessage(e),
         502 => 'Could not store the recording right now: ${e.message}',
         _ => 'Could not send: ${e.message}',
       };

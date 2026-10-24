@@ -336,14 +336,20 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          FloatingActionButton(
-            heroTag: 'voiceSaleFab',
-            tooltip: 'Voice sale',
-            onPressed: _openVoiceSale,
-            child: const Icon(Icons.mic),
+          // Hidden when the admin has voice off for this shop (DAS-112).
+          ValueListenableBuilder<bool>(
+            valueListenable: ApiClient.instance.voiceEnabledNotifier,
+            builder: (context, voiceOn, _) => voiceOn
+                ? FloatingActionButton(
+                    heroTag: 'voiceSaleFab',
+                    tooltip: 'Voice sale',
+                    onPressed: _openVoiceSale,
+                    child: const Icon(Icons.mic),
+                  )
+                : const SizedBox.shrink(),
           ),
           if (_cart.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            if (ApiClient.instance.voiceEnabledNotifier.value) const SizedBox(height: 12),
             FloatingActionButton.extended(
               heroTag: 'cartFab',
               onPressed: _openReview,
