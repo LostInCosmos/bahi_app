@@ -1,6 +1,7 @@
 library;
 
 import '../../../core/utils/json.dart';
+import 'sale_totals.dart';
 
 /// One line the shopkeeper has added to the sale in progress, before it's
 /// submitted — mirrors the web app's in-memory `cart` array.
@@ -12,6 +13,11 @@ class CartEntry {
   final double rate;
   final double gstPct;
 
+  /// Off this line (DAS-111): as typed, `₹` off the line or a percentage of it.
+  /// The server converts it; [lineAmount] stays what the customer would pay
+  /// without it.
+  final Discount? discount;
+
   CartEntry({
     required this.productBatchId,
     required this.productName,
@@ -19,9 +25,12 @@ class CartEntry {
     required this.qty,
     required this.rate,
     required this.gstPct,
+    this.discount,
   });
 
   double get lineAmount => qty * rate;
+
+  SaleLineInput get input => SaleLineInput(qty: qty, rate: rate, gstPct: gstPct, discount: discount);
 }
 
 class SaleLineItemDetail {
@@ -31,7 +40,14 @@ class SaleLineItemDetail {
   final double gstPct;
   final double cgstAmount;
   final double sgstAmount;
+
+  /// What the customer paid for this line before any discount (qty × rate).
   final double lineAmount;
+
+  /// ₹ off this line (DAS-111): its own discount, and its share of a whole-sale
+  /// one. 0 on a server that has no discounts, and on a sale made before them.
+  final double discountAmount;
+  final double saleDiscountShare;
 
   SaleLineItemDetail({
     required this.productName,
@@ -41,7 +57,11 @@ class SaleLineItemDetail {
     required this.cgstAmount,
     required this.sgstAmount,
     required this.lineAmount,
+    this.discountAmount = 0,
+    this.saleDiscountShare = 0,
   });
+
+  double get discountTotal => discountAmount + saleDiscountShare;
 
   factory SaleLineItemDetail.fromJson(Map<String, dynamic> json) => SaleLineItemDetail(
         productName: json.strReq('product_name'),
@@ -51,6 +71,8 @@ class SaleLineItemDetail {
         cgstAmount: json.dblReq('cgst_amount'),
         sgstAmount: json.dblReq('sgst_amount'),
         lineAmount: json.dblReq('line_amount'),
+        discountAmount: json.dblOr('discount_amount'),
+        saleDiscountShare: json.dblOr('sale_discount_share'),
       );
 }
 
@@ -90,6 +112,11 @@ class SaleDetail {
   final double totalCgst;
   final double totalSgst;
   final double grandTotal;
+
+  /// ₹ off the whole sale, and everything taken off (items + whole sale).
+  /// 0 from a server without discounts (DAS-111).
+  final double discountAmount;
+  final double totalDiscount;
   final List<SaleLineItemDetail> lineItems;
 
   SaleDetail({
@@ -102,8 +129,16 @@ class SaleDetail {
     required this.totalCgst,
     required this.totalSgst,
     required this.grandTotal,
+    this.discountAmount = 0,
+    this.totalDiscount = 0,
     required this.lineItems,
   });
+
+  /// The GST inside [grandTotal].
+  double get tax => totalCgst + totalSgst;
+
+  /// Before any discount: what the lines add up to.
+  double get itemsTotal => lineItems.fold(0.0, (sum, li) => sum + li.lineAmount);
 
   factory SaleDetail.fromJson(Map<String, dynamic> json) => SaleDetail(
         id: json.intReq('id'),
@@ -115,6 +150,8 @@ class SaleDetail {
         totalCgst: json.dblReq('total_cgst'),
         totalSgst: json.dblReq('total_sgst'),
         grandTotal: json.dblReq('grand_total'),
+        discountAmount: json.dblOr('discount_amount'),
+        totalDiscount: json.dblOr('total_discount'),
         lineItems: json.listOf('line_items', SaleLineItemDetail.fromJson),
       );
 }

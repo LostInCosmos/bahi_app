@@ -22,6 +22,8 @@ import '../../voice/models/voice.dart';
 import '../../voice/presentation/voice_order_review_screen.dart';
 import '../../voice/presentation/voice_sale_screen.dart';
 import '../models/sale.dart';
+import '../models/sale_totals.dart';
+import '../widgets/discount_field.dart';
 import 'sale_receipt_screen.dart';
 import 'sale_review_screen.dart';
 
@@ -405,6 +407,12 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
   String? _error;
   final Map<int, TextEditingController> _qtyControllers = {};
   final Map<int, TextEditingController> _rateControllers = {};
+  final Map<int, TextEditingController> _discountControllers = {};
+  final Map<int, DiscountKind> _discountKinds = {};
+
+  /// Batches whose Add was pressed with no usable price: only then does the
+  /// empty price field turn red, so it is not an error before it is touched.
+  final Set<int> _priceTried = {};
 
   @override
   void initState() {
@@ -419,6 +427,8 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       for (final b in detail.batches) {
         _qtyControllers[b.id] = TextEditingController(text: '1');
         _rateControllers[b.id] = TextEditingController(text: b.mrp?.toStringAsFixed(2) ?? '');
+        _discountControllers[b.id] = TextEditingController();
+        _discountKinds[b.id] = DiscountKind.percentage;
       }
       setState(() => _detail = detail);
     } on ApiException catch (e) {
@@ -440,6 +450,9 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       c.dispose();
     }
     for (final c in _rateControllers.values) {
+      c.dispose();
+    }
+    for (final c in _discountControllers.values) {
       c.dispose();
     }
     super.dispose();
@@ -473,7 +486,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   if (_detail!.batches.isEmpty) const Text('No batches in stock.'),
-                  ..._buildBatchRows(),
+                  Flexible(child: SingleChildScrollView(child: Column(children: _buildBatchRows()))),
                 ],
               ),
       ),
@@ -486,6 +499,15 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       final isSuggested = !suggestedShown && !b.isExpired && b.quantityOnHand > 0;
       if (isSuggested) suggestedShown = true;
       final disabled = b.isExpired || b.quantityOnHand <= 0;
+      final discountKind = _discountKinds[b.id] ?? DiscountKind.percentage;
+      final quantity = double.tryParse(_qtyControllers[b.id]!.text) ?? 0;
+      final rate = double.tryParse(_rateControllers[b.id]!.text) ?? 0;
+      final discount = parseDiscount(_discountControllers[b.id]!.text, discountKind);
+      final totals = computeSale([SaleLineInput(qty: quantity, rate: rate, gstPct: b.gstPct, discount: discount)]);
+      // With no price there is no line to take a discount off yet.
+      final discountError = rate > 0 ? totals.itemErrors[0] : null;
+      final priceError = rate <= 0 && _priceTried.contains(b.id) ? 'Enter a price above ₹0' : null;
+      final discounted = rate > 0 && discount != null && discountError == null && totals.itemDiscounts > 0;
 
       return Card(
         margin: const EdgeInsets.only(bottom: 10),
@@ -513,47 +535,75 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                   style: TextStyle(color: Theme.of(context).colorScheme.outline)),
               const SizedBox(height: 8),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _qtyControllers[b.id],
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Qty', isDense: true),
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(labelText: 'Qty'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
+                    flex: 2,
                     child: TextField(
                       controller: _rateControllers[b.id],
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Price', isDense: true),
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(labelText: 'Price (incl. GST)', errorText: priceError),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: disabled
-                        ? null
-                        : () {
-                            final quantity = double.tryParse(_qtyControllers[b.id]!.text) ?? 0;
-                            final rate = double.tryParse(_rateControllers[b.id]!.text) ?? 0;
-                            if (quantity <= 0 || quantity > b.quantityOnHand) {
-                              context.say('Enter a quantity between 1 and ${qty(b.quantityOnHand)}');
-                              return;
-                            }
-                            widget.onAdd(CartEntry(
-                              productBatchId: b.id,
-                              productName:
-                                  ProductCatalog.instance.index?.label(_detail!.id, _detail!.name) ?? _detail!.name,
-                              batchNo: b.batchNo,
-                              qty: quantity,
-                              rate: rate,
-                              gstPct: b.gstPct,
-                            ));
-                          },
-                    child: const Text('Add'),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              DiscountField(
+                label: 'Discount on this item',
+                controller: _discountControllers[b.id]!,
+                kind: discountKind,
+                onKindChanged: (k) => setState(() => _discountKinds[b.id] = k),
+                onChanged: () => setState(() {}),
+                errorText: discountError,
+              ),
+              if (discounted)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Line total ${rupees(totals.grandTotal)}  (${rupees(totals.itemDiscounts)} off)',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: disabled || discountError != null
+                      ? null
+                      : () {
+                          if (quantity <= 0 || quantity > b.quantityOnHand) {
+                            context.say('Enter a quantity between 1 and ${qty(b.quantityOnHand)}');
+                            return;
+                          }
+                          // A sale with no price is almost always a missing MRP,
+                          // not a gift: refuse it. A free sample is a 100% discount.
+                          if (rate <= 0) {
+                            setState(() => _priceTried.add(b.id));
+                            return;
+                          }
+                          widget.onAdd(CartEntry(
+                            productBatchId: b.id,
+                            productName:
+                                ProductCatalog.instance.index?.label(_detail!.id, _detail!.name) ?? _detail!.name,
+                            batchNo: b.batchNo,
+                            qty: quantity,
+                            rate: rate,
+                            gstPct: b.gstPct,
+                            discount: discounted ? discount : null,
+                          ));
+                        },
+                  child: const Text('Add'),
+                ),
               ),
             ],
           ),
