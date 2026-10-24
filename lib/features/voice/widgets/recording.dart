@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../app/theme/app_theme.dart';
+import '../../../core/api/api_client.dart';
 
 export '../../../core/utils/format.dart' show formatElapsed;
 
@@ -71,6 +72,16 @@ String recordingErrorMessage(Object e) {
     return 'Microphone permission is off. Turn it on in Settings, then try again.';
   }
   return 'Could not start recording: $raw';
+}
+
+/// What a voice request the server refused with 403 says (DAS-112): the admin
+/// has voice off for this shop. The server's own plain sentence is shown as it
+/// is — an older build would print "Could not send: …" around it. The refusal
+/// also turns this phone's switch off, so both mics go away at once, in case
+/// the `X-Voice-Enabled` header had not arrived yet.
+String voiceOffMessage(ApiException e) {
+  unawaited(ApiClient.instance.setVoiceEnabled(false));
+  return e.message.isNotEmpty ? e.message : 'Voice is turned off for this shop. Please contact us.';
 }
 
 /// The recorder, the permission check and the elapsed-time clock a recording

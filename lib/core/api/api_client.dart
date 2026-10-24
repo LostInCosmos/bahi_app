@@ -68,6 +68,48 @@ class ApiClient {
   /// the account loads or changes, without needing a restart.
   final businessTypeNotifier = ValueNotifier<String>(kDefaultBusinessType);
 
+  /// Whether this shop may use voice (DAS-112). The admin switches it per
+  /// shop; the server says so on every authenticated response
+  /// (`X-Voice-Enabled: 1|0`) and in the login and account answers. True until
+  /// told otherwise, so an older server never hides voice by accident, and
+  /// kept per shop on the device so a restart does not flash the mic on.
+  final voiceEnabledNotifier = ValueNotifier<bool>(true);
+
+  static String _voiceKey(int shop) => 'voice_enabled_$shop';
+
+  /// Records what the server said about voice for the signed-in shop.
+  Future<void> setVoiceEnabled(bool enabled) async {
+    if (voiceEnabledNotifier.value == enabled) return;
+    voiceEnabledNotifier.value = enabled;
+    final shop = tenantId;
+    if (shop == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_voiceKey(shop), enabled);
+    } catch (_) {
+      // Held in memory regardless; the next response says it again.
+    }
+  }
+
+  /// The switch as this device last knew it for [shop]; true when never told.
+  Future<void> _loadVoiceEnabled(int? shop) async {
+    if (shop == null) {
+      voiceEnabledNotifier.value = true;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    voiceEnabledNotifier.value = prefs.getBool(_voiceKey(shop)) ?? true;
+  }
+
+  /// A response to a request that carried the shop's token says whether voice
+  /// is on. No header (an older server, a route that does not load the shop)
+  /// means no change, never off.
+  void _applyVoiceSwitch(http.Response res) {
+    final switchValue = res.headers['x-voice-enabled'];
+    if (switchValue == '1') unawaited(setVoiceEnabled(true));
+    if (switchValue == '0') unawaited(setVoiceEnabled(false));
+  }
+
   Future<void> loadFromDisk() async {
     final prefs = await SharedPreferences.getInstance();
     if (kAllowServerOverride) {
@@ -83,6 +125,7 @@ class ApiClient {
       }
     }
     businessTypeNotifier.value = prefs.getString('business_type') ?? kDefaultBusinessType;
+    await _loadVoiceEnabled(tenantId);
   }
 
   int _appBuild = 0;
@@ -125,6 +168,7 @@ class ApiClient {
     await _secureStorage.write(key: 'token', value: token);
     final shop = tenantId;
     if (shop != null) unawaited(BillImageCache.keepOnlyShop(shop));
+    await _loadVoiceEnabled(shop);
   }
 
   /// Called when the server refuses this device's token — signed out from
@@ -155,6 +199,7 @@ class ApiClient {
   Future<void> _forget() async {
     token = null;
     businessTypeNotifier.value = kDefaultBusinessType;
+    voiceEnabledNotifier.value = true;
     try {
       await _secureStorage.delete(key: 'token');
       final prefs = await SharedPreferences.getInstance();
@@ -304,6 +349,7 @@ class ApiClient {
     final res = await request(sendHeaders).timeout(timeout);
     if (res.statusCode == 401 && sent != null) await _sessionRefused(sent);
     _applyVersionGate(res);
+    if (sent != null && token == sent) _applyVoiceSwitch(res);
     // A 304 to a conditional GET is "what you hold is current", not a failure.
     if (!(notModifiedOk && res.statusCode == 304)) _checkOk(res);
     return res;
