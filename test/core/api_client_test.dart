@@ -189,4 +189,86 @@ void main() {
       expect(levels, [VersionGateLevel.nudge, VersionGateLevel.ok]);
     });
   });
+
+  group('a connection that drops before any answer (DAS-119)', () {
+    test('a read is asked once more, and the second answer is used', () async {
+      var calls = 0;
+      final client = MockClient((req) async {
+        if (++calls == 1) throw http.ClientException('Connection closed before full header was received', req.url);
+        return _json({'ok': true});
+      });
+      await http.runWithClient(() async {
+        final res = await api.get('/invoices');
+        expect(res.statusCode, 200);
+      }, () => client);
+      expect(calls, 2);
+    });
+
+    test('a read that drops twice fails, after exactly one retry', () async {
+      var calls = 0;
+      final client = MockClient((req) async {
+        calls++;
+        throw http.ClientException('Connection attempt cancelled', req.url);
+      });
+      await http.runWithClient(() async {
+        expect(await _outcome(api.get('/invoices')), isA<http.ClientException>());
+      }, () => client);
+      expect(calls, 2);
+    });
+
+    test('a write is never sent twice: it may already have been done', () async {
+      var calls = 0;
+      final client = MockClient((req) async {
+        calls++;
+        throw http.ClientException('Connection closed before full header was received', req.url);
+      });
+      await http.runWithClient(() async {
+        expect(await _outcome(api.postJson('/invoices', {'a': 1})), isA<http.ClientException>());
+        expect(await _outcome(api.delete('/invoices/1')), isA<http.ClientException>());
+      }, () => client);
+      expect(calls, 2, reason: 'one each, no retry');
+    });
+
+    test('an answer the server gave, even a refusal, is not asked again', () async {
+      var calls = 0;
+      final client = MockClient((req) async {
+        calls++;
+        return _json({'detail': 'no'}, 404);
+      });
+      await http.runWithClient(() async {
+        expect(await _outcome(api.get('/invoices/9')), isA<ApiException>());
+      }, () => client);
+      expect(calls, 1);
+    });
+
+    test('a request in another zone does not abort one still loading', () async {
+      // The end-to-end harness runs app code in more than one zone. The shared
+      // client is remade per zone, and closing the old one used to kill
+      // whatever it was still loading.
+      final slow = _ClosableClient();
+      final loading = http.runWithClient(() => api.get('/invoices'), () => slow);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await http.runWithClient(() => api.get('/folders'), () => MockClient((_) async => _json([])));
+      slow.answer.complete();
+      expect((await loading).statusCode, 200);
+      expect(slow.closed, isFalse);
+    });
+  });
+}
+
+/// A client whose requests wait for [answer], and fail if it was closed
+/// meanwhile, the way `IOClient.close()` aborts what is in flight.
+class _ClosableClient extends http.BaseClient {
+  final answer = Completer<void>();
+  bool closed = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await answer.future;
+    if (closed) throw http.ClientException('Connection closed before full header was received', request.url);
+    return http.StreamedResponse(Stream.value(utf8.encode('{}')), 200, headers: {'content-type': 'application/json'});
+  }
+
+  @override
+  void close() => closed = true;
 }
