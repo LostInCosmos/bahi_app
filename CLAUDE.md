@@ -27,6 +27,9 @@ Keep it honest (needs the backend repo checked out beside this one; set `GSTAPP_
 python3 ../backend/ops/check_docs.py      # verifies code_paths + links
 ```
 
+## Engineering knowledge
+**Engineering knowledge.** Session start: read `../Dastavez-memory/Engineering/Mobile-Engineer/INDEX.md` and `Learning-Roadmap.md`; the rules are in `../Dastavez-memory/Engineering/Shared/Protocol.md`. Task end: record durable lessons there; the report names the notes read and written, or says why none.
+
 ## Find before you write
 `codeintel` (`../codeintel/`, its own git repo) indexes every file, symbol and import in backend, mobile and admin panel. Before adding a function, look for one that already exists:
 
