@@ -24,6 +24,7 @@ dependencies:
   file_picker: ^8.1.2
   pdfx: ^2.6.0
   package_info_plus: ^9.0.1
+  pdf: ^3.13.1
 
 dev_dependencies:
   flutter_test:
@@ -33,6 +34,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # The sale bill PDF's font (DAS-121): Noto Sans, SIL Open Font License.
+  # The PDF's built-in fonts have no rupee sign.
+  assets:
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/NotoSans-Bold.ttf
 
 # End-to-end tests on the Android emulator (DAS-109): `tool/e2e/run.sh`.
 # Patrol runs the Dart tests in integration_test/ as Android instrumentation

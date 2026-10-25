@@ -49,6 +49,14 @@ class SaleLineItemDetail {
   final double discountAmount;
   final double saleDiscountShare;
 
+  /// What the bill prints about the medicine (DAS-121). Null from a server
+  /// older than the bill, and where the shop never recorded it.
+  final String? hsn;
+  final String? batchNo;
+  final String? expiryDate;
+  final double? mrp;
+  final String? pack;
+
   SaleLineItemDetail({
     required this.productName,
     required this.qty,
@@ -59,9 +67,20 @@ class SaleLineItemDetail {
     required this.lineAmount,
     this.discountAmount = 0,
     this.saleDiscountShare = 0,
+    this.hsn,
+    this.batchNo,
+    this.expiryDate,
+    this.mrp,
+    this.pack,
   });
 
   double get discountTotal => discountAmount + saleDiscountShare;
+
+  /// What the line came to after every discount — GST included.
+  double get netAmount => lineAmount - discountTotal;
+
+  /// [netAmount] without its GST: what the tax was charged on.
+  double get taxableValue => netAmount - cgstAmount - sgstAmount;
 
   factory SaleLineItemDetail.fromJson(Map<String, dynamic> json) => SaleLineItemDetail(
         productName: json.strReq('product_name'),
@@ -73,6 +92,11 @@ class SaleLineItemDetail {
         lineAmount: json.dblReq('line_amount'),
         discountAmount: json.dblOr('discount_amount'),
         saleDiscountShare: json.dblOr('sale_discount_share'),
+        hsn: json.str('hsn'),
+        batchNo: json.str('batch_no'),
+        expiryDate: json.dateOnly('expiry_date'),
+        mrp: json.dbl('mrp'),
+        pack: json.str('pack'),
       );
 }
 

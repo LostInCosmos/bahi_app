@@ -25,12 +25,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _tenantNameController = TextEditingController();
+  final _dlNoController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _baseUrlController = TextEditingController(text: ApiClient.instance.baseUrl);
 
   bool _signupMode = false;
   bool _busy = false;
   bool _obscurePassword = true;
   String? _error;
+
+  /// The server's refusal of one of the shop fields (DAS-121), shown under it.
+  String? _dlNoError;
+  String? _phoneError;
   String _businessType = kDefaultBusinessType;
 
   /// The shopkeeper has ticked that they accept the Terms of Service and
@@ -45,6 +51,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _tenantNameController.dispose();
+    _dlNoController.dispose();
+    _phoneController.dispose();
     _baseUrlController.dispose();
     super.dispose();
   }
@@ -53,6 +61,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _dlNoError = null;
+      _phoneError = null;
     });
     try {
       if (kAllowServerOverride) {
@@ -65,6 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
           businessType: _businessType,
+          dlNo: _dlNoController.text,
+          phone: _phoneController.text,
         );
       } else {
         account = await ApiClient.instance.login(
@@ -91,7 +103,19 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.of(context).pushReplacementNamed(AppRoutes.home);
     } catch (e) {
       HapticFeedback.heavyImpact();
-      if (mounted) setState(() => _error = _describe(e));
+      if (!mounted) return;
+      // A refused shop field is a plain-string 422 naming it (DAS-121): show
+      // it under that field, in the server's words. Nothing was created.
+      final field = e is ApiException && e.statusCode == 422 && e.detail is String ? e.detail as String : null;
+      setState(() {
+        if (field != null && field.contains('phone')) {
+          _phoneError = field;
+        } else if (field != null && field.contains('drug licence')) {
+          _dlNoError = field;
+        } else {
+          _error = _describe(e);
+        }
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -202,6 +226,30 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
+                                if (_signupMode) ...[
+                                  const SizedBox(height: Spacing.m),
+                                  TextField(
+                                    controller: _dlNoController,
+                                    maxLength: 100,
+                                    decoration: InputDecoration(
+                                      labelText: 'Drug licence no. (optional)',
+                                      helperText: 'As printed on your licence. Shows on your bills.',
+                                      prefixIcon: const Icon(Icons.badge_outlined),
+                                      errorText: _dlNoError,
+                                      counterText: '',
+                                    ),
+                                  ),
+                                  const SizedBox(height: Spacing.m),
+                                  TextField(
+                                    controller: _phoneController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: InputDecoration(
+                                      labelText: 'Shop phone (optional)',
+                                      prefixIcon: const Icon(Icons.phone_outlined),
+                                      errorText: _phoneError,
+                                    ),
+                                  ),
+                                ],
                                 if (!_signupMode)
                                   Align(
                                     alignment: Alignment.centerRight,

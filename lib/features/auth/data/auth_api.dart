@@ -12,6 +12,8 @@ extension AuthApi on ApiClient {
     required String email,
     required String password,
     String? businessType,
+    String? dlNo,
+    String? phone,
   }) async {
     final res = await postJson(
         '/auth/signup',
@@ -20,6 +22,10 @@ extension AuthApi on ApiClient {
           'email': email,
           'password': password,
           'business_type': businessType,
+          // Optional (DAS-121): the server trims, checks and stores them; an
+          // older server ignores them.
+          if (dlNo != null && dlNo.trim().isNotEmpty) 'dl_no': dlNo.trim(),
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
           'legal_version': kLegalVersion,
         },
         auth: false);
@@ -87,12 +93,17 @@ extension AuthApi on ApiClient {
     String? gstin,
     String? address,
     String? businessType,
+    String? dlNo,
+    String? phone,
   }) async {
+    // Null leaves a field as it is; an empty string clears it (DAS-121).
     final res = await patchJson('/account', {
       if (tenantName != null) 'tenant_name': tenantName,
       if (gstin != null) 'gstin': gstin,
       if (address != null) 'address': address,
       if (businessType != null) 'business_type': businessType,
+      if (dlNo != null) 'dl_no': dlNo.trim(),
+      if (phone != null) 'phone': phone.trim(),
     });
     final account = AccountInfo.fromJson(ApiClient.jsonObject(res));
     await saveBusinessType(account.businessType);
