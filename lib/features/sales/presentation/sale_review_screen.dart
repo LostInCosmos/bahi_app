@@ -9,7 +9,9 @@ import '../../inventory/data/product_catalog.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
 import '../models/sale_totals.dart';
+import '../widgets/cart_line_editor.dart';
 import '../widgets/discount_field.dart';
+import '../widgets/stock_note.dart';
 import '../widgets/totals_card.dart';
 
 /// Buyer GSTIN stays optional and out of the way — needed for a business
@@ -17,7 +19,7 @@ import '../widgets/totals_card.dart';
 ///
 /// Pops with the new sale's id on success, or null if the user backed out.
 /// Either way `cart` (owned by [SalesScreen]) may have been mutated in place
-/// by row removals — the caller re-renders off the same list either way.
+/// by row removals and edits — the caller re-renders off the same list either way.
 class SaleReviewScreen extends StatefulWidget {
   final List<CartEntry> cart;
   const SaleReviewScreen({super.key, required this.cart});
@@ -50,6 +52,14 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
 
   static String _offLabel(Discount d) =>
       d.kind == DiscountKind.percentage ? '${percent(d.value)} off' : '${rupees(d.value)} off';
+
+  /// Qty, price and the line's own discount, by the add sheet's rules. The
+  /// line keeps its place; everything else on the screen stays as typed.
+  Future<void> _edit(int index) async {
+    final edited = await showCartLineEditor(context, widget.cart[index]);
+    if (edited == null || !mounted) return;
+    setState(() => widget.cart[index] = edited);
+  }
 
   void _remove(int index) {
     setState(() => widget.cart.removeAt(index));
@@ -164,8 +174,14 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
     final off = line.itemDiscountPaise > 0 && c.discount != null;
     return Card(
       child: ListTile(
+        onTap: () => _edit(i),
         title: Text('${c.productName} × ${qty(c.qty)}'),
-        subtitle: Text('Batch ${c.batchNo ?? "—"}'),
+        subtitle: c.shortStockNote == null
+            ? Text('Batch ${c.batchNo ?? "—"}')
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [Text('Batch ${c.batchNo ?? "—"}'), StockNote(c.shortStockNote!)],
+              ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -185,7 +201,8 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
                 if (off) Text(_offLabel(c.discount!), style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
-            IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _remove(i)),
+            IconButton(icon: const Icon(Icons.edit_outlined), tooltip: 'Edit', onPressed: () => _edit(i)),
+            IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Remove', onPressed: () => _remove(i)),
           ],
         ),
       ),

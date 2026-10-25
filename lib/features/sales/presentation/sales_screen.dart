@@ -24,6 +24,7 @@ import '../../voice/presentation/voice_sale_screen.dart';
 import '../models/sale.dart';
 import '../models/sale_totals.dart';
 import '../widgets/discount_field.dart';
+import '../widgets/stock_note.dart';
 import 'sale_receipt_screen.dart';
 import 'sale_review_screen.dart';
 
@@ -157,7 +158,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
     final saleId = await Navigator.of(context).push<int>(
       MaterialPageRoute(builder: (_) => SaleReviewScreen(cart: _cart)),
     );
-    // The review screen mutates `_cart` in place (removals), so always
+    // The review screen mutates `_cart` in place (removals, edits), so always
     // rebuild to reflect that even when the sale wasn't completed.
     if (!mounted) return;
     setState(() {
@@ -327,7 +328,9 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
                 subtitle: Text('${qty(p.quantityOnHand)} in stock'),
                 trailing: IconButton(
                   icon: const Icon(Icons.add_circle_outline),
-                  onPressed: p.quantityOnHand > 0 ? () => _openPicker(p) : null,
+                  // Opens with none in stock too: a sale may go beyond the stock,
+                  // with a note (DAS-111). Its batch picker still blocks expiry.
+                  onPressed: () => _openPicker(p),
                 ),
               ),
             );
@@ -504,7 +507,9 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
     return _detail!.batches.map((b) {
       final isSuggested = !suggestedShown && !b.isExpired && b.quantityOnHand > 0;
       if (isSuggested) suggestedShown = true;
-      final disabled = b.isExpired || b.quantityOnHand <= 0;
+      // A batch with none left may still be sold, with a note (DAS-111); an
+      // expired one never — the server refuses it too.
+      final disabled = b.isExpired;
       final discountKind = _discountKinds[b.id] ?? DiscountKind.percentage;
       final quantity = double.tryParse(_qtyControllers[b.id]!.text) ?? 0;
       final rate = double.tryParse(_rateControllers[b.id]!.text) ?? 0;
@@ -514,6 +519,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       final discountError = rate > 0 ? totals.itemErrors[0] : null;
       final priceError = rate <= 0 && _priceTried.contains(b.id) ? 'Enter a price above ₹0' : null;
       final discounted = rate > 0 && discount != null && discountError == null && totals.itemDiscounts > 0;
+      final note = quantity > 0 ? stockNote(quantity, b.quantityOnHand) : null;
 
       return Card(
         margin: const EdgeInsets.only(bottom: 10),
@@ -563,6 +569,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                   ),
                 ],
               ),
+              if (note != null) StockNote(note),
               const SizedBox(height: 12),
               DiscountField(
                 label: 'Discount on this item',
@@ -587,8 +594,8 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                   onPressed: disabled || discountError != null
                       ? null
                       : () {
-                          if (quantity <= 0 || quantity > b.quantityOnHand) {
-                            context.say('Enter a quantity between 1 and ${qty(b.quantityOnHand)}');
+                          if (quantity <= 0) {
+                            context.say('Enter a quantity above 0');
                             return;
                           }
                           // A sale with no price is almost always a missing MRP,
@@ -606,6 +613,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                             rate: rate,
                             gstPct: b.gstPct,
                             discount: discounted ? discount : null,
+                            available: b.quantityOnHand,
                           ));
                         },
                   child: const Text('Add'),
