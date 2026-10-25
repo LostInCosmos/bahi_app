@@ -272,7 +272,8 @@ mixin _Intake on State<CaptureScreen> {
   /// it — so the add buttons are free again immediately.
   Future<void> _uploadAndExtract(BatchItem item) async {
     await _uploadItem(item);
-    if (mounted && item.status == BatchItemStatus.ready) {
+    // Not for a bill discarded while its photos were going up (DAS-115).
+    if (mounted && item.status == BatchItemStatus.ready && _items.contains(item)) {
       unawaited(_processOne(item));
     }
   }

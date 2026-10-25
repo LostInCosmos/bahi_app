@@ -72,7 +72,7 @@ mixin _Selection on State<CaptureScreen> {
     final plan = planDiscard(_chosenEntries());
     if (plan.take.isEmpty) {
       _say(summarise('Discarded', const BulkResult(0, []),
-          savedLeft: plan.savedLeft, readingLeft: plan.readingLeft));
+          savedLeft: plan.savedLeft));
       return;
     }
     final n = plan.take.length;
@@ -133,7 +133,7 @@ mixin _Selection on State<CaptureScreen> {
       _moving = null;
     });
     final result = BulkResult(done, [for (final e in refused) BulkFailure(e, firstError.isEmpty ? 'refused' : firstError)]);
-    _say(summarise('Discarded', result, savedLeft: plan.savedLeft, readingLeft: plan.readingLeft) +
+    _say(summarise('Discarded', result, savedLeft: plan.savedLeft) +
         (firstError.isEmpty ? '' : ' ($firstError)'));
     unawaited(_folders.load());
   }

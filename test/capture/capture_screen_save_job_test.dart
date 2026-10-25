@@ -8,12 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/features/capture/presentation/capture_screen.dart';
 
-/// Saving a bill from the capture list (DAS-71).
+/// Saving a bill from the capture list (DAS-71, DAS-115).
 ///
-/// The shopkeeper no longer corrects a flagged bill, and no longer answers a
-/// question about the supplier's GSTIN. A bill — clean or flagged — is saved
-/// by job: the phone sends no values, and the server saves what it read (its
-/// own, or our team's correction, so the phone can never overwrite one).
+/// The shopkeeper no longer answers a question about the supplier's GSTIN. A
+/// Not saved bill is saved by job: the phone sends no values, and the server
+/// saves what it read (its own, or our team's correction, so the phone can
+/// never overwrite one). A bill in Processing — being read, or read and
+/// flagged — has no Save at all: Discard always, and Edit once it is read.
 
 http.Response _json(Object body, [int status = 200]) =>
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
@@ -39,9 +40,18 @@ class _Server {
   final requests = <String>[];
   final saveBodies = <Map<String, dynamic>>[];
   final unsaveBodies = <Map<String, dynamic>>[];
+  final discardBodies = <Map<String, dynamic>>[];
 
   /// The rows of the shop's list.
   final jobs = <Map<String, dynamic>>[
+    {
+      'job_id': 6,
+      'status': 'processing',
+      'source_image': '8/6.jpg',
+      'created_at': '2026-10-08T13:00:00Z',
+      'issue_count': 0,
+      'review_state': 'none',
+    },
     {
       'job_id': 9,
       'status': 'done',
@@ -70,6 +80,17 @@ class _Server {
       'invoice_id': 70,
       'seller_name': 'SAVED CO',
     },
+    {
+      // Saved, and being read again by our team.
+      'job_id': 5,
+      'status': 'processing',
+      'source_image': '8/5.jpg',
+      'created_at': '2026-10-08T09:00:00Z',
+      'issue_count': 2,
+      'review_state': 'pending',
+      'invoice_id': 70,
+      'seller_name': 'SAVED CO',
+    },
   ];
 
   MockClient get client => MockClient((req) async {
@@ -80,6 +101,9 @@ class _Server {
           return _json({'jobs': jobs, 'next_before_id': null});
         }
         final job = RegExp(r'^/invoices/extract/(\d+)$').firstMatch(path);
+        if (req.method == 'GET' && job != null && (job.group(1) == '6' || job.group(1) == '5')) {
+          return _json({'job_id': int.parse(job.group(1)!), 'status': 'processing'});
+        }
         if (req.method == 'GET' && job != null) {
           return _json({
             'job_id': int.parse(job.group(1)!),
@@ -121,6 +145,12 @@ class _Server {
         if (req.method == 'POST' && path == '/invoices/70/unsave') {
           unsaveBodies.add(jsonDecode(req.body) as Map<String, dynamic>);
           return _json({'ok': true, 'job_id': 7, 'folder_id': null, 'stock_removed': true});
+        }
+        if (req.method == 'POST' && path == '/invoices/bulk-discard') {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          discardBodies.add(body);
+          jobs.removeWhere((j) => (body['job_ids'] as List).contains(j['job_id']));
+          return _json({'discarded': body['job_ids'], 'skipped': []});
         }
         if (req.method == 'POST' && path == '/invoices/extract/status') {
           await Future<void>.delayed(const Duration(seconds: 25));
@@ -181,7 +211,7 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('a flagged bill can be saved with one tap, and has no Edit', (tester) async {
+  testWidgets('a flagged bill offers Discard and Edit, never Save; Edit opens the review form', (tester) async {
     _ignoreOverflow();
     final server = _Server();
     await http.runWithClient(() async {
@@ -189,15 +219,74 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('j:8')));
       await _settle(tester);
 
-      expect(find.text('Edit'), findsNothing, reason: 'it is with our team, not the shopkeeper');
-      expect(find.text('Review & save'), findsNothing, reason: 'the review form does not open');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await _settle(tester);
-      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Bill is already processed'), findsOneWidget);
+      expect(find.text('Discard'), findsOneWidget);
+      expect(find.text('Save'), findsNothing, reason: 'a flagged bill is saved from the review form');
+      await tester.tap(find.widgetWithText(FilledButton, 'Edit'));
       await _settle(tester);
 
-      expect(server.requests, contains('POST /invoices/extract/8/save'));
-      expect(server.requests, isNot(contains('POST /invoices')));
+      expect(find.text('Review & save'), findsOneWidget);
+      expect(server.requests, isNot(contains('POST /invoices/extract/8/save')));
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  testWidgets('a flagged bill can be discarded from its dialog', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:8')));
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Discard'));
+      await _settle(tester);
+      expect(find.text('Discard this bill?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+      await _settle(tester);
+
+      expect(server.discardBodies.single, {'job_ids': [8]});
+      expect(find.byKey(const ValueKey('j:8')), findsNothing);
+      expect(find.text('Bill discarded.'), findsOneWidget);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  testWidgets('a bill still being read offers Discard only, and can be discarded', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:6')));
+      await _settle(tester);
+
+      expect(find.text('This bill is still being read.'), findsOneWidget);
+      expect(find.text('Bill is already processed'), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+      expect(find.text('Save'), findsNothing);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Discard'));
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+      await _settle(tester);
+
+      expect(server.discardBodies.single, {'job_ids': [6]});
+      expect(find.byKey(const ValueKey('j:6')), findsNothing);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  testWidgets('a saved bill our team is reading again stays Saved and opens its invoice', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      final card = find.byKey(const ValueKey('j:5'));
+      expect(find.descendant(of: card, matching: find.text('Saved')), findsOneWidget);
+      await tester.tap(card);
+      await _settle(tester);
+
+      expect(find.text('This bill is still being read.'), findsNothing);
+      expect(find.text('A-70'), findsWidgets, reason: 'the saved invoice is open');
+      expect(server.requests, isNot(contains('GET /invoices/extract/5')));
       await _finish(tester);
     }, () => server.client);
   });

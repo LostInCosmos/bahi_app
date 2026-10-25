@@ -56,8 +56,6 @@ class BatchItemCard extends StatelessWidget {
     }
     final pageCount =
         item.isUploaded ? item.sourceImages.length : item.pages.length;
-    final busy = item.status == BatchItemStatus.preparing ||
-        item.status == BatchItemStatus.processing;
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(AppRadius.card),
@@ -65,14 +63,12 @@ class BatchItemCard extends StatelessWidget {
       elevation: 1,
       shadowColor: Colors.black.withValues(alpha: 0.15),
       child: InkWell(
-        // A bill still being read cannot be opened, but it can be CHOSEN:
-        // the selection decides later what may be done to it.
-        onTap: busy && !choosing
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onTap();
-              },
+        // A bill still being read opens too: its dialog offers Discard
+        // (DAS-115).
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
         child: Stack(
           fit: StackFit.expand,
           children: [
