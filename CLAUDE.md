@@ -148,4 +148,4 @@ Working agreement:
 1. `flutter analyze` is clean and `flutter test` passes.
 2. Test on a **real device** if you touched camera, mic or permissions — the simulator hides these failures.
 3. After each task, update the vault with anything worth remembering (changed flow, new feature, architecture or contract change, new known issue); skip minor fixes. `06 - Mobile/Flutter App.md` is the usual home for mobile behaviour. State in the report which notes were updated, or that none were needed.
-4. Never commit or push unless asked.
+4. Commit finished, tested work on its own ticket branch (named for the ticket), and commit again on that branch after any change the user asks for; this is the user's standing approval (2026-10-25), so no separate "commit" is needed. Work in progress is never committed. Never push or merge unless asked.
