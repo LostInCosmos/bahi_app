@@ -291,10 +291,15 @@ class ApiClient {
   /// `http.runWithClient`, and remade whenever the zone changes: a test's
   /// `runWithClient` runs in its own zone and must never be answered by the
   /// client a previous test created. In the app the zone never changes.
+  ///
+  /// The old client is dropped, not closed (DAS-119): `IOClient.close()` is a
+  /// forced close that aborts every request still in flight. The end-to-end
+  /// harness runs the app's code in more than one zone, and each switch used
+  /// to kill whatever was loading ("Connection closed before full header was
+  /// received"). A dropped client's idle connections time out by themselves.
   http.Client get _http {
     final zone = Zone.current;
     if (_client == null || _clientZone != zone) {
-      _client?.close();
       _client = http.Client();
       _clientZone = zone;
     }
@@ -330,6 +335,13 @@ class ApiClient {
   /// in has no token to send) and a JSON content type when [json]. Throws
   /// [ApiException] for a non-2xx answer and `TimeoutException` past
   /// [timeout]. A 401 to a request that carried a token ends the session.
+  ///
+  /// An [idempotent] request whose connection fails before any answer is sent
+  /// once more (DAS-119): a pooled connection the network or server has
+  /// already closed fails the first time it is reused, and asking again opens
+  /// a fresh one. Only reads: a write that failed this way may still have been
+  /// done, and is never sent twice. A timeout is not retried — the server may
+  /// be working, and a second wait doubles the spinner.
   Future<http.Response> _send(
     Future<http.Response> Function(Map<String, String> headers) request, {
     bool auth = true,
@@ -337,6 +349,7 @@ class ApiClient {
     Duration timeout = readTimeout,
     Map<String, String>? headers,
     bool notModifiedOk = false,
+    bool idempotent = false,
   }) async {
     final sent = auth ? token : null;
     final sendHeaders = {
@@ -346,7 +359,13 @@ class ApiClient {
       'X-App-Platform': _appPlatform,
       ...?headers,
     };
-    final res = await request(sendHeaders).timeout(timeout);
+    http.Response res;
+    try {
+      res = await request(sendHeaders).timeout(timeout);
+    } on http.ClientException {
+      if (!idempotent) rethrow;
+      res = await request(sendHeaders).timeout(timeout);
+    }
     if (res.statusCode == 401 && sent != null) await _sessionRefused(sent);
     _applyVersionGate(res);
     if (sent != null && token == sent) _applyVoiceSwitch(res);
@@ -370,6 +389,7 @@ class ApiClient {
         timeout: timeout,
         headers: ifNoneMatch == null ? null : {'If-None-Match': ifNoneMatch},
         notModifiedOk: ifNoneMatch != null,
+        idempotent: true,
       );
 
   Future<http.Response> post(String path, {Duration timeout = readTimeout}) =>
