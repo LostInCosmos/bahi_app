@@ -17,6 +17,10 @@ extension SaleApi on ApiClient {
       // `rate` is GST-inclusive and a discount is sent as typed; the server
       // converts it to rupees and decides every total (DAS-111).
       if (Discount.wireOf(discount) != null) 'discount': Discount.wireOf(discount),
+      // A line may ask for more than its batch holds (DAS-111): the shopkeeper
+      // was told on the phone, and the server floors the batch at 0 and records
+      // the shortfall. An older server ignores this and refuses as before.
+      'allow_oversell': true,
       'line_items': lineItems
           .map((c) => {
                 'product_batch_id': c.productBatchId,

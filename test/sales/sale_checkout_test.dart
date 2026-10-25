@@ -99,6 +99,7 @@ void main() {
           return http.Response('no', 404);
         }));
     expect(body!['discount'], {'type': 'amount', 'value': 15.0});
+    expect(body!['allow_oversell'], isTrue, reason: 'DAS-111: the shopkeeper was told on the phone');
     final lines = body!['line_items'] as List;
     expect(lines[0], {
       'product_batch_id': 1,

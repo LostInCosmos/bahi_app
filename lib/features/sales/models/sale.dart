@@ -3,6 +3,15 @@ library;
 import '../../../core/utils/json.dart';
 import 'sale_totals.dart';
 
+/// What the shopkeeper is told when a sale asks for more than a batch holds
+/// (DAS-111). It never appears on the bill. Null when there is enough, or the
+/// stock is not known.
+String? stockNote(double qty, double? available) {
+  if (available == null || qty <= available) return null;
+  final have = available <= 0 ? 'None' : 'Only ${available.toStringAsFixed(0)}';
+  return '$have in inventory. This note will not appear on the bill.';
+}
+
 /// One line the shopkeeper has added to the sale in progress, before it's
 /// submitted — mirrors the web app's in-memory `cart` array.
 class CartEntry {
@@ -18,6 +27,10 @@ class CartEntry {
   /// without it.
   final Discount? discount;
 
+  /// The batch's stock when the line was added. Asking for more is allowed
+  /// (DAS-111): the shopkeeper sees [stockNote], never the customer.
+  final double? available;
+
   CartEntry({
     required this.productBatchId,
     required this.productName,
@@ -26,9 +39,29 @@ class CartEntry {
     required this.rate,
     required this.gstPct,
     this.discount,
+    this.available,
   });
 
+  /// The same line with what the shopkeeper changed on the review screen.
+  CartEntry edited({required double qty, required double rate, Discount? discount}) => CartEntry(
+        productBatchId: productBatchId,
+        productName: productName,
+        batchNo: batchNo,
+        qty: qty,
+        rate: rate,
+        gstPct: gstPct,
+        discount: discount,
+        available: available,
+      );
+
   double get lineAmount => qty * rate;
+
+  /// The short form of [stockNote] for the review list, or null.
+  String? get shortStockNote {
+    final a = available;
+    if (a == null || qty <= a) return null;
+    return '${a <= 0 ? 'None' : 'Only ${a.toStringAsFixed(0)}'} in inventory · not on the bill';
+  }
 
   SaleLineInput get input => SaleLineInput(qty: qty, rate: rate, gstPct: gstPct, discount: discount);
 }
