@@ -79,25 +79,25 @@ void main() {
 
   group('what Discard may take', () {
     test('takes a read bill that was never saved', () {
-      expect(whyNotDiscard(_local()), isNull);
-      expect(whyNotDiscard(_job()), isNull);
+      expect(mayDiscard(_local()), isTrue);
+      expect(mayDiscard(_job()), isTrue);
     });
 
     test('refuses a saved bill — that is a stock decision, not tidying', () {
-      expect(whyNotDiscard(_local(status: BatchItemStatus.saved, savedInvoiceId: 3)), DiscardRefusal.saved);
-      expect(whyNotDiscard(_job(invoiceId: 3)), DiscardRefusal.saved);
+      expect(mayDiscard(_local(status: BatchItemStatus.saved, savedInvoiceId: 3)), isFalse);
+      expect(mayDiscard(_job(invoiceId: 3)), isFalse);
     });
 
-    test('refuses a bill the server is still reading', () {
+    test('takes a bill the server is still reading (DAS-115: the server stops it saving itself)', () {
       for (final status in ['pending', 'queued', 'processing', 'retrying']) {
-        expect(whyNotDiscard(_job(status: status)), DiscardRefusal.reading, reason: status);
+        expect(mayDiscard(_job(status: status)), isTrue, reason: status);
       }
-      expect(whyNotDiscard(_local(status: BatchItemStatus.processing)), DiscardRefusal.reading);
+      expect(mayDiscard(_local(status: BatchItemStatus.processing)), isTrue);
     });
 
     test('takes a failed bill, which nothing is working on', () {
-      expect(whyNotDiscard(_job(status: 'failed')), isNull);
-      expect(whyNotDiscard(_local(status: BatchItemStatus.failed)), isNull);
+      expect(mayDiscard(_job(status: 'failed')), isTrue);
+      expect(mayDiscard(_local(status: BatchItemStatus.failed)), isTrue);
     });
 
     test('splits a mixed selection and counts what was left', () {
@@ -108,9 +108,8 @@ void main() {
         _local(status: BatchItemStatus.saved, savedInvoiceId: 4),
         _job(id: 7, status: 'processing'),
       ]);
-      expect(plan.take, hasLength(2));
+      expect(plan.take, hasLength(3));
       expect(plan.savedLeft, 2);
-      expect(plan.readingLeft, 1);
     });
   });
 
@@ -169,13 +168,11 @@ void main() {
         'Discarded',
         BulkResult(2, [BulkFailure(_job(), Exception('x'))]),
         savedLeft: 2,
-        readingLeft: 1,
       );
       expect(text, contains('Discarded 2 bills'));
       expect(text, contains("1 couldn't be discarded"));
       expect(text, contains('2 saved bills were left'));
       expect(text, contains('puts their stock back'));
-      expect(text, contains('1 still being read'));
     });
   });
 

@@ -38,6 +38,7 @@ import '../widgets/capture_empty_state.dart';
 import '../widgets/selection_bar.dart';
 import '../widgets/upload_history.dart';
 import '../widgets/confirm_bill_dialog.dart';
+import '../widgets/processing_bill_dialog.dart';
 import '../widgets/unsave_dialog.dart';
 import 'crop_screen.dart';
 
@@ -64,8 +65,9 @@ part 'capture_watching.dart';
 /// was attempted and failed (a duplicate invoice number, a FEFO surprise,
 /// a missing stored subtotal) or the shopkeeper deliberately unsaved a
 /// bill — never as a routine step for an ordinary clean bill any more. A
-/// one-tap summary lets them save (or edit) it from there; anything with a
-/// real issue goes to `needsReview` and the full edit form.
+/// one-tap summary lets them save (or edit) it from there. A bill with a real
+/// issue goes to `needsReview`, shown with the ones being read as Processing:
+/// its dialog offers Discard and Edit, never Save (DAS-115).
 class CaptureScreen extends StatefulWidget {
   final VoidCallback onBatchFinished;
   const CaptureScreen({super.key, required this.onBatchFinished});
@@ -90,6 +92,10 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   @override
   final FolderController _folders = FolderController();
   bool _foldersLoaded = false;
+
+  /// Bumped on every write of the batch, so an open dialog can follow its bill
+  /// as it changes (DAS-115).
+  final ValueNotifier<int> _batchRevision = ValueNotifier(0);
 
   /// Ticked statuses (DAS-26). Held on the State, so it survives
   /// switching tabs — the screen stays alive in the home IndexedStack —
@@ -127,6 +133,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     _retryLock?.cancel();
     _folders.removeListener(_onFoldersChanged);
     _folders.dispose();
+    _batchRevision.dispose();
     super.dispose();
   }
 
@@ -224,6 +231,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   Future<void> _persistBatch() async {
     if (!mounted) return;
     _writtenState = batchState(_items);
+    _batchRevision.value++;
     await _store?.save(_items);
   }
 
@@ -300,12 +308,12 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   /// nothing: the bill reappears from the server a moment later. So anything
   /// the server knows about is discarded there, and the row stays for our
   /// team with a "discarded" mark.
-  Future<void> _removeItem(BatchItem item) async {
+  /// True when the bill was discarded.
+  Future<bool> _removeItem(BatchItem item) async {
     if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) {
       final invoiceId = item.savedInvoiceId;
-      return invoiceId == null
-          ? _say(_savedNoId)
-          : _unsave(invoiceId, item: item);
+      invoiceId == null ? _say(_savedNoId) : await _unsave(invoiceId, item: item);
+      return false;
     }
     final jobId = item.jobId ?? item.lastJobId;
     if (jobId != null) {
@@ -315,17 +323,21 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         if (!reply.discarded.contains(jobId)) {
           throw 'it is saved or still being read';
         }
+        // A bill from the shop's list has no card here, only its row.
+        _uploadHistory.currentState?.forget([jobId]);
+        _watchedRows.remove(jobId);
       } catch (e) {
-        if (!mounted) return;
+        if (!mounted) return false;
         // Left on screen deliberately: a bill that is still on the server
         // must keep its card, or the shopkeeper thinks it is gone.
         _say("Couldn't remove that bill: $e");
-        return;
+        return false;
       }
     }
-    if (!mounted) return;
+    if (!mounted) return false;
     _dropLocal(item);
     unawaited(_uploadHistory.currentState?.refresh());
+    return true;
   }
 
   static const _savedNoId = 'This bill is saved. Open it to change it.';
@@ -487,23 +499,44 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
           await _openReview(item, result);
         }
         return;
+      case BatchItemStatus.preparing:
+      case BatchItemStatus.ready:
+      case BatchItemStatus.processing:
       case BatchItemStatus.needsReview:
-        // A flagged bill is with our team (DAS-71): the shopkeeper may save
-        // what was read, but is not asked to correct it, so there is no Edit.
-        final result = item.result;
-        if (result == null) {
-          _say('That bill has not finished being read yet.');
-          return;
-        }
-        final action = await showConfirmBillDialog(
-            context, item.label, result.invoice,
-            allowEdit: false);
-        if (!mounted) return;
-        if (action == ConfirmBillAction.save) await _saveBill(item);
+        await _openProcessing(item);
         return;
-      default:
+    }
+  }
+
+  /// A bill in Processing (DAS-115): still being read, or read and flagged.
+  /// Discard at every stage; Edit once it is read. No Save from here: a
+  /// flagged bill is saved from the review form, and a clean one saves itself.
+  Future<void> _openProcessing(BatchItem item) async {
+    ProcessingBillView view() => switch (item.status) {
+          BatchItemStatus.preparing ||
+          BatchItemStatus.ready ||
+          BatchItemStatus.processing =>
+            const ProcessingBillView(),
+          BatchItemStatus.needsReview => ProcessingBillView(invoice: item.result?.invoice),
+          _ => const ProcessingBillView(inProcessing: false),
+        };
+    final action = await showProcessingBillDialog(context,
+        label: item.label, view: view, changes: _batchRevision);
+    if (!mounted || action == null) return;
+    switch (action) {
+      case ProcessingBillAction.edit:
         final result = item.result;
         if (result != null) await _openReview(item, result);
+      case ProcessingBillAction.discard:
+        final ok = await showConfirmDialog(
+          context,
+          title: 'Discard this bill?',
+          message: 'It will disappear from this shop on every device.',
+          confirmLabel: 'Discard',
+          destructive: true,
+        );
+        if (!ok || !mounted) return;
+        if (await _removeItem(item) && mounted) _say('Bill discarded.');
     }
   }
 
@@ -577,9 +610,9 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   }
 
   /// Saves what the server read, by job: the phone sends no values (DAS-71), so
-  /// it cannot overwrite a correction from our team, and a clean bill and a
-  /// flagged one save the same way. Only reached from the confirm dialog —
-  /// never automatic. Stock goes in at once; our team corrects any difference
+  /// it cannot overwrite a correction from our team. Only reached from the
+  /// Not saved dialog — never automatic, and never for a flagged bill, which is
+  /// saved from the review form (DAS-115). Stock goes in at once; our team corrects any difference
   /// later. Nothing is asked about the supplier's GSTIN: that is theirs to check.
   Future<void> _saveBill(BatchItem item) async {
     final jobId = item.jobId ?? item.lastJobId;
@@ -930,6 +963,15 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       return;
     }
 
+    // A saved bill opens its invoice, whatever its read is doing: our team may
+    // be reading it again, and that is theirs to show, not the shop's (DAS-115).
+    final invoiceId = upload.invoiceId;
+    if (invoiceId != null) {
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => InvoiceDetailScreen(invoiceId: invoiceId)));
+      return;
+    }
+
     final item = BatchItem(label: 'Bill', pages: [])
       ..sourceImages = [upload.sourceImage]
       ..jobId = upload.jobId
@@ -944,7 +986,10 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       final job = await ApiClient.instance.getExtractionJob(upload.jobId);
       final result = job.result;
       if (result == null) {
-        _say('That bill has not finished being read yet.');
+        // Still being read: its dialog offers Discard. It does not follow the
+        // read, since nothing on this phone is watching a row from the list.
+        if (!mounted) return;
+        await _openProcessing(item);
         return;
       }
       item

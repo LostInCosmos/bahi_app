@@ -99,7 +99,9 @@ class _LineItemForm {
         cgstPct = item.cgstPct,
         sgstPct = item.sgstPct,
         igstPct = item.igstPct,
-        showDiscountAmount = (item.discountPct == null || item.discountPct == 0) && item.discountAmount != null,
+        showDiscountAmount =
+            (item.discountPct == null || item.discountPct == 0) &&
+                item.discountAmount != null,
         productName = TextEditingController(text: item.productName),
         pack = TextEditingController(text: item.pack ?? ''),
         batchNo = TextEditingController(text: item.batchNo ?? ''),
@@ -110,8 +112,10 @@ class _LineItemForm {
         freeScheme = TextEditingController(text: item.freeScheme ?? ''),
         mrp = TextEditingController(text: _fmtNullable(item.mrp)),
         rate = TextEditingController(text: _fmt(item.rate)),
-        discountPct = TextEditingController(text: _fmtNullable(item.discountPct)),
-        discountAmount = TextEditingController(text: _fmtNullable(item.discountAmount)),
+        discountPct =
+            TextEditingController(text: _fmtNullable(item.discountPct)),
+        discountAmount =
+            TextEditingController(text: _fmtNullable(item.discountAmount)),
         gstPct = TextEditingController(text: _fmt(_computeGstPct(item))),
         cgstAmount = TextEditingController(text: _fmtNullable(item.cgstAmount)),
         sgstAmount = TextEditingController(text: _fmtNullable(item.sgstAmount)),
@@ -123,7 +127,8 @@ class _LineItemForm {
   /// True once the user has typed over either discount box, so their value
   /// must win over the printed figure the server resolved earlier.
   bool get discountEdited =>
-      discountPct.text != _origDiscountPct || discountAmount.text != _origDiscountAmount;
+      discountPct.text != _origDiscountPct ||
+      discountAmount.text != _origDiscountAmount;
 
   LineItem toLineItem() => LineItem(
         productName: productName.text,
@@ -151,8 +156,23 @@ class _LineItemForm {
 
   void dispose() {
     for (final c in [
-      productName, pack, batchNo, expiry, hsnCode, qty, freeQty, freeScheme, mrp, rate,
-      discountPct, discountAmount, gstPct, cgstAmount, sgstAmount, igstAmount, grossAmount,
+      productName,
+      pack,
+      batchNo,
+      expiry,
+      hsnCode,
+      qty,
+      freeQty,
+      freeScheme,
+      mrp,
+      rate,
+      discountPct,
+      discountAmount,
+      gstPct,
+      cgstAmount,
+      sgstAmount,
+      igstAmount,
+      grossAmount,
     ]) {
       c.dispose();
     }
@@ -167,10 +187,13 @@ class ReviewScreen extends StatefulWidget {
   // that was pushed here because it needed review, then got cleanly fixed
   // and revalidated, would still show the stale "needs review" badge on the
   // batch grid until it's actually saved.
-  final void Function(ExtractionResult updatedResult, bool hasErrors)? onRevalidated;
+  final void Function(ExtractionResult updatedResult, bool hasErrors)?
+      onRevalidated;
+
   /// The folder the bill is saved into; null is home.
   final int? folderId;
-  const ReviewScreen({super.key, required this.result, this.onRevalidated, this.folderId});
+  const ReviewScreen(
+      {super.key, required this.result, this.onRevalidated, this.folderId});
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -211,6 +234,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _photoFailed = false;
   bool _photoMinimized = false;
 
+  /// The photo stays at the top while the form scrolls under it, zoomed in
+  /// place (DAS-115). Its height is the shopkeeper's to drag; null is the
+  /// default share of the screen. [_dragHeight] is the finger's own height
+  /// during a drag, unclamped, so dragging well past the top collapses it.
+  double? _photoHeight;
+  double _dragHeight = 0;
+  final TransformationController _photoZoom = TransformationController();
+
+  static const _photoMinHeight = 96.0;
+  static const _photoDefaultShare = 0.3;
+  static const _photoMaxShare = 0.5;
+
   /// The issues split once per change of [_issues], not once per field: the
   /// form has some thirty decorated fields, and each used to rebuild this map
   /// from the whole list on every build.
@@ -232,7 +267,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     _lineIssues = lines;
   }
 
-  List<ValidationIssue> _issuesForLineItem(int index) => _lineIssues[index] ?? const [];
+  List<ValidationIssue> _issuesForLineItem(int index) =>
+      _lineIssues[index] ?? const [];
 
   InputDecoration _decoration(String label, String field) {
     // The supplier's GSTIN is settled by our team, not flagged to the shop
@@ -241,7 +277,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final issue = field == 'seller_gstin' ? null : _headerIssues[field];
     if (issue == null) return InputDecoration(labelText: label);
     if (issue.isError) {
-      return InputDecoration(labelText: label, errorText: issue.message, errorMaxLines: 3);
+      return InputDecoration(
+          labelText: label, errorText: issue.message, errorMaxLines: 3);
     }
     return InputDecoration(
       labelText: label,
@@ -271,7 +308,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
 
     subtotal = TextEditingController(text: _fmt(inv.totals.subtotal));
-    totalDiscount = TextEditingController(text: _fmtNullable(inv.totals.totalDiscount));
+    totalDiscount =
+        TextEditingController(text: _fmtNullable(inv.totals.totalDiscount));
     totalCgst = TextEditingController(text: _fmt(inv.totals.totalCgst));
     totalSgst = TextEditingController(text: _fmt(inv.totals.totalSgst));
     totalIgst = TextEditingController(text: _fmtNullable(inv.totals.totalIgst));
@@ -281,6 +319,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _loadPhoto() async {
+    if (_photoFailed) setState(() => _photoFailed = false);
     try {
       final bytes = await ApiClient.instance.fetchImage(
         widget.result.meta.sourceImage,
@@ -302,17 +341,32 @@ class _ReviewScreenState extends State<ReviewScreen> {
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.all(Spacing.s),
         backgroundColor: Colors.black,
-        child: InteractiveViewer(minScale: 0.5, maxScale: 5, child: Image.memory(bytes)),
+        child: InteractiveViewer(
+            minScale: 0.5, maxScale: 5, child: Image.memory(bytes)),
       ),
     );
   }
 
   @override
   void dispose() {
+    _photoZoom.dispose();
     for (final c in [
-      sellerName, sellerGstin, sellerAddress, sellerDlNo, buyerName, buyerDlNo,
-      invoiceNo, invoiceDate, placeOfSupply,
-      subtotal, totalDiscount, totalCgst, totalSgst, totalIgst, roundOff, grandTotal,
+      sellerName,
+      sellerGstin,
+      sellerAddress,
+      sellerDlNo,
+      buyerName,
+      buyerDlNo,
+      invoiceNo,
+      invoiceDate,
+      placeOfSupply,
+      subtotal,
+      totalDiscount,
+      totalCgst,
+      totalSgst,
+      totalIgst,
+      roundOff,
+      grandTotal,
     ]) {
       c.dispose();
     }
@@ -338,7 +392,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       lastDate: DateTime(2100),
     );
     if (picked != null) {
-      setState(() => invoiceDate.text = picked.toIso8601String().split('T').first);
+      setState(
+          () => invoiceDate.text = picked.toIso8601String().split('T').first);
     }
   }
 
@@ -445,7 +500,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient.instance.revalidateInvoice(_buildInvoiceData(forceRederiveTax: true));
+      final result = await ApiClient.instance
+          .revalidateInvoice(_buildInvoiceData(forceRederiveTax: true));
       if (!mounted) return;
       final hasErrors = result.issues.any((i) => i.isError);
       setState(() {
@@ -454,10 +510,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _applyInvoiceToControllers(result.invoice);
         _error = hasErrors
             ? "Still has flagged fields below — fix and revalidate again, or tick the box to save anyway."
-            : (_issues.isNotEmpty ? "No errors — just warnings below." : "Looks good — no issues found.");
+            : (_issues.isNotEmpty
+                ? "No errors — just warnings below."
+                : "Looks good — no issues found.");
       });
       widget.onRevalidated?.call(
-        ExtractionResult(invoice: result.invoice, meta: widget.result.meta, issues: result.issues),
+        ExtractionResult(
+            invoice: result.invoice,
+            meta: widget.result.meta,
+            issues: result.issues),
         hasErrors,
       );
       HapticFeedback.mediumImpact();
@@ -479,7 +540,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       final invoice = _buildInvoiceData();
       final meta = widget.result.meta.reviewed();
       final id = await ApiClient.instance.saveInvoice(
-        invoice, meta,
+        invoice,
+        meta,
         overrideErrors: _overrideErrors,
         folderId: widget.folderId,
       );
@@ -496,9 +558,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
       if (e.detail is Map && e.detail['error'] == 'validation_failed') {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
         setState(() {
-          _issues = rawIssues.map((j) => ValidationIssue.fromJson(j as Map<String, dynamic>)).toList();
+          _issues = rawIssues
+              .map((j) => ValidationIssue.fromJson(j as Map<String, dynamic>))
+              .toList();
           _indexIssues();
-          _error = "Fix the flagged fields, or tick the box below to save anyway.";
+          _error =
+              "Fix the flagged fields, or tick the box below to save anyway.";
         });
       } else {
         setState(() => _error = 'Save failed: $e');
@@ -517,241 +582,390 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Review & save')),
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, 0),
-              child: _buildPhotoHeader(context),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(Spacing.l),
-                children: [
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              alignment: Alignment.topCenter,
-              child: _issues.isEmpty
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.only(bottom: Spacing.l),
-                      child: Card(
-                        color: _issues.any((i) => i.isError) ? colors.errorContainer : colors.surfaceContainerHighest,
-                        child: Padding(
-                          padding: const EdgeInsets.all(Spacing.m),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: [
-                                Icon(
-                                  _issues.any((i) => i.isError) ? Icons.error_outline : Icons.info_outline,
-                                  size: 18,
-                                  color: _issues.any((i) => i.isError) ? colors.error : AppColors.statusNeedsReview,
+        child: LayoutBuilder(
+          builder: (context, box) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Spacing.l, Spacing.s, Spacing.l, 0),
+                child: _buildPhotoPane(context, box.maxHeight),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(Spacing.l),
+                  children: [
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      alignment: Alignment.topCenter,
+                      child: _issues.isEmpty
+                          ? const SizedBox.shrink()
+                          : Padding(
+                              padding: const EdgeInsets.only(bottom: Spacing.l),
+                              child: Card(
+                                color: _issues.any((i) => i.isError)
+                                    ? colors.errorContainer
+                                    : colors.surfaceContainerHighest,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(Spacing.m),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(children: [
+                                        Icon(
+                                          _issues.any((i) => i.isError)
+                                              ? Icons.error_outline
+                                              : Icons.info_outline,
+                                          size: 18,
+                                          color: _issues.any((i) => i.isError)
+                                              ? colors.error
+                                              : AppColors.statusNeedsReview,
+                                        ),
+                                        const SizedBox(width: Spacing.xs),
+                                        Text('Check before saving',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall),
+                                      ]),
+                                      const SizedBox(height: Spacing.xs),
+                                      ..._issues.map((i) => Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              '${i.isError ? '⚠' : '•'} ${i.message}',
+                                              style: TextStyle(
+                                                  color: i.isError
+                                                      ? colors.error
+                                                      : AppColors
+                                                          .statusNeedsReview),
+                                            ),
+                                          )),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(width: Spacing.xs),
-                                Text('Check before saving', style: Theme.of(context).textTheme.titleSmall),
-                              ]),
-                              const SizedBox(height: Spacing.xs),
-                              ..._issues.map((i) => Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      '${i.isError ? '⚠' : '•'} ${i.message}',
-                                      style: TextStyle(color: i.isError ? colors.error : AppColors.statusNeedsReview),
-                                    ),
-                                  )),
-                            ],
-                          ),
+                              ),
+                            ),
+                    ),
+                    _SectionCard(
+                      title: 'Seller',
+                      icon: Icons.storefront_outlined,
+                      children: [
+                        TextField(
+                            controller: sellerName,
+                            decoration:
+                                _decoration('Seller name', 'seller_name')),
+                        const SizedBox(height: Spacing.s),
+                        TextField(
+                            controller: sellerGstin,
+                            maxLength: 15,
+                            decoration:
+                                _decoration('Seller GSTIN', 'seller_gstin')),
+                        const SizedBox(height: Spacing.s),
+                        TextField(
+                            controller: sellerAddress,
+                            decoration: _decoration(
+                                'Seller address', 'seller_address')),
+                        const SizedBox(height: Spacing.s),
+                        TextField(
+                            controller: sellerDlNo,
+                            decoration:
+                                _decoration('Seller D.L. no.', 'seller_dl_no')),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.l),
+                    _SectionCard(
+                      title: 'Invoice details',
+                      icon: Icons.description_outlined,
+                      children: [
+                        Row(children: [
+                          Expanded(
+                              child: TextField(
+                                  controller: buyerName,
+                                  decoration:
+                                      _decoration('Buyer name', 'buyer_name'))),
+                          const SizedBox(width: Spacing.s),
+                          Expanded(
+                              child: TextField(
+                                  controller: buyerDlNo,
+                                  decoration: _decoration(
+                                      'Buyer D.L. no.', 'buyer_dl_no'))),
+                        ]),
+                        const SizedBox(height: Spacing.s),
+                        TextField(
+                            controller: invoiceNo,
+                            decoration:
+                                _decoration('Invoice number', 'invoice_no')),
+                        const SizedBox(height: Spacing.s),
+                        TextField(
+                          controller: invoiceDate,
+                          readOnly: true,
+                          onTap: _pickDate,
+                          decoration: _decoration(
+                                  'Invoice date', 'invoice_date')
+                              .copyWith(
+                                  suffixIcon: const Icon(Icons.calendar_today)),
                         ),
+                        const SizedBox(height: Spacing.s),
+                        DropdownButtonFormField<String?>(
+                          initialValue: invoiceType,
+                          decoration:
+                              const InputDecoration(labelText: 'Invoice type'),
+                          items: const [
+                            DropdownMenuItem(value: null, child: Text('—')),
+                            DropdownMenuItem(
+                                value: 'cash', child: Text('cash')),
+                            DropdownMenuItem(
+                                value: 'credit', child: Text('credit')),
+                          ],
+                          onChanged: (v) => setState(() => invoiceType = v),
+                        ),
+                        const SizedBox(height: Spacing.s),
+                        TextField(
+                            controller: placeOfSupply,
+                            decoration: _decoration(
+                                'Place of supply', 'place_of_supply')),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.l),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Line items',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        TextButton.icon(
+                            onPressed: _addItem,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add item')),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.s),
+                    ...List.generate(
+                      items.length,
+                      (i) => _LineItemCard(
+                          form: items[i],
+                          issues: _issuesForLineItem(i),
+                          onRemove: () => _removeItem(i)),
+                    ),
+                    const SizedBox(height: Spacing.l),
+                    _SectionCard(
+                      title: 'Totals',
+                      icon: Icons.calculate_outlined,
+                      children: [
+                        _numRow('Subtotal', subtotal, 'totals.subtotal',
+                            'Discount', totalDiscount, 'totals.total_discount'),
+                        _numRow('CGST', totalCgst, 'totals.total_cgst', 'SGST',
+                            totalSgst, 'totals.total_sgst'),
+                        _numRow('IGST', totalIgst, 'totals.total_igst',
+                            'Round off', roundOff, 'totals.round_off'),
+                        const Divider(height: Spacing.l),
+                        TextField(
+                          controller: grandTotal,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          style: amountTextStyle(context, emphasized: true),
+                          decoration:
+                              _decoration('Grand total', 'totals.grand_total'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.l),
+                    if (_issues.any((i) => i.isError))
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _overrideErrors,
+                        onChanged: (v) =>
+                            setState(() => _overrideErrors = v ?? false),
+                        title: const Text(
+                            "I've checked the flagged fields — save anyway"),
                       ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: _error == null
+                          ? const SizedBox.shrink()
+                          : Padding(
+                              key: ValueKey(_error),
+                              padding: const EdgeInsets.only(bottom: Spacing.m),
+                              child: Text(_error!,
+                                  style: TextStyle(color: colors.error)),
+                            ),
                     ),
-            ),
-            _SectionCard(
-              title: 'Seller',
-              icon: Icons.storefront_outlined,
-              children: [
-                TextField(controller: sellerName, decoration: _decoration('Seller name', 'seller_name')),
-                const SizedBox(height: Spacing.s),
-                TextField(controller: sellerGstin, maxLength: 15, decoration: _decoration('Seller GSTIN', 'seller_gstin')),
-                const SizedBox(height: Spacing.s),
-                TextField(controller: sellerAddress, decoration: _decoration('Seller address', 'seller_address')),
-                const SizedBox(height: Spacing.s),
-                TextField(controller: sellerDlNo, decoration: _decoration('Seller D.L. no.', 'seller_dl_no')),
-              ],
-            ),
-            const SizedBox(height: Spacing.l),
-            _SectionCard(
-              title: 'Invoice details',
-              icon: Icons.description_outlined,
-              children: [
-                Row(children: [
-                  Expanded(child: TextField(controller: buyerName, decoration: _decoration('Buyer name', 'buyer_name'))),
-                  const SizedBox(width: Spacing.s),
-                  Expanded(child: TextField(controller: buyerDlNo, decoration: _decoration('Buyer D.L. no.', 'buyer_dl_no'))),
-                ]),
-                const SizedBox(height: Spacing.s),
-                TextField(controller: invoiceNo, decoration: _decoration('Invoice number', 'invoice_no')),
-                const SizedBox(height: Spacing.s),
-                TextField(
-                  controller: invoiceDate,
-                  readOnly: true,
-                  onTap: _pickDate,
-                  decoration: _decoration('Invoice date', 'invoice_date').copyWith(suffixIcon: const Icon(Icons.calendar_today)),
-                ),
-                const SizedBox(height: Spacing.s),
-                DropdownButtonFormField<String?>(
-                  initialValue: invoiceType,
-                  decoration: const InputDecoration(labelText: 'Invoice type'),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('—')),
-                    DropdownMenuItem(value: 'cash', child: Text('cash')),
-                    DropdownMenuItem(value: 'credit', child: Text('credit')),
+                    BusyOutlinedButton(
+                      busy: _revalidating,
+                      onPressed: _revalidate,
+                      icon: Icons.fact_check_outlined,
+                      label: 'Revalidate',
+                    ),
+                    const SizedBox(height: Spacing.s),
+                    BusyFilledButton(
+                      busy: _saving,
+                      onPressed: _save,
+                      icon: Icons.check_circle_outline,
+                      label: 'Save invoice',
+                      busyLabel: 'Saving…',
+                    ),
+                    const SizedBox(height: Spacing.xl),
                   ],
-                  onChanged: (v) => setState(() => invoiceType = v),
                 ),
-                const SizedBox(height: Spacing.s),
-                TextField(controller: placeOfSupply, decoration: _decoration('Place of supply', 'place_of_supply')),
-              ],
-            ),
-            const SizedBox(height: Spacing.l),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Line items', style: Theme.of(context).textTheme.titleMedium),
-                TextButton.icon(onPressed: _addItem, icon: const Icon(Icons.add), label: const Text('Add item')),
-              ],
-            ),
-            const SizedBox(height: Spacing.s),
-            ...List.generate(
-              items.length,
-              (i) => _LineItemCard(form: items[i], issues: _issuesForLineItem(i), onRemove: () => _removeItem(i)),
-            ),
-            const SizedBox(height: Spacing.l),
-            _SectionCard(
-              title: 'Totals',
-              icon: Icons.calculate_outlined,
-              children: [
-                _numRow('Subtotal', subtotal, 'totals.subtotal', 'Discount', totalDiscount, 'totals.total_discount'),
-                _numRow('CGST', totalCgst, 'totals.total_cgst', 'SGST', totalSgst, 'totals.total_sgst'),
-                _numRow('IGST', totalIgst, 'totals.total_igst', 'Round off', roundOff, 'totals.round_off'),
-                const Divider(height: Spacing.l),
-                TextField(
-                  controller: grandTotal,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: amountTextStyle(context, emphasized: true),
-                  decoration: _decoration('Grand total', 'totals.grand_total'),
-                ),
-              ],
-            ),
-            const SizedBox(height: Spacing.l),
-            if (_issues.any((i) => i.isError))
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: _overrideErrors,
-                onChanged: (v) => setState(() => _overrideErrors = v ?? false),
-                title: const Text("I've checked the flagged fields — save anyway"),
               ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: _error == null
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      key: ValueKey(_error),
-                      padding: const EdgeInsets.only(bottom: Spacing.m),
-                      child: Text(_error!, style: TextStyle(color: colors.error)),
-                    ),
-            ),
-            BusyOutlinedButton(
-              busy: _revalidating,
-              onPressed: _revalidate,
-              icon: Icons.fact_check_outlined,
-              label: 'Revalidate',
-            ),
-            const SizedBox(height: Spacing.s),
-            BusyFilledButton(
-              busy: _saving,
-              onPressed: _save,
-              icon: Icons.check_circle_outline,
-              label: 'Save invoice',
-              busyLabel: 'Saving…',
-            ),
-            const SizedBox(height: Spacing.xl),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPhotoHeader(BuildContext context) {
+  /// The bill photo, pinned above the form. Pinch and drag zoom it in place
+  /// (double-tap resets); the handle under it sets its height, up to half the
+  /// screen, and dragging it up past the top collapses it to a strip. It also
+  /// folds while the keyboard is up, so the field being typed is never under it.
+  Widget _buildPhotoPane(BuildContext context, double available) {
     final colors = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-      height: _photoMinimized ? 44 : 180,
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: Spacing.l),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _photoMinimized
-          ? InkWell(
-              onTap: () => setState(() => _photoMinimized = false),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
-                child: Row(
-                  children: [
-                    Icon(Icons.image_outlined, size: 18, color: colors.onSurfaceVariant),
-                    const SizedBox(width: Spacing.s),
-                    Text('Bill photo', style: TextStyle(color: colors.onSurfaceVariant)),
-                    const Spacer(),
-                    Icon(Icons.expand_more, color: colors.onSurfaceVariant),
-                  ],
-                ),
-              ),
-            )
-          : Stack(
-              fit: StackFit.expand,
+    // Read above the Scaffold: it takes the keyboard out of its body's insets.
+    final keyboardUp = MediaQuery.viewInsetsOf(this.context).bottom > 0;
+    final decoration = BoxDecoration(
+      color: colors.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(AppRadius.card),
+    );
+    if (_photoMinimized || keyboardUp) {
+      return Container(
+        height: 44,
+        margin: const EdgeInsets.only(bottom: Spacing.s),
+        decoration: decoration,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            setState(() => _photoMinimized = false);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.m),
+            child: Row(
               children: [
-                if (_photoBytes != null)
-                  GestureDetector(
-                    onTap: _viewPhotoFullScreen,
-                    child: Image.memory(_photoBytes!, fit: BoxFit.contain),
-                  )
-                else
-                  Center(
-                    child: _photoFailed
-                        ? Icon(Icons.broken_image_outlined, size: 36, color: colors.outline)
-                        : const CircularProgressIndicator(),
-                  ),
-                if (_photoBytes != null)
-                  Positioned(
-                    right: 6,
-                    bottom: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.zoom_in, color: Colors.white, size: 18),
-                    ),
-                  ),
-                Positioned(
-                  left: 6,
-                  top: 6,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: () => setState(() => _photoMinimized = true),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.expand_less, color: Colors.white, size: 18),
-                    ),
-                  ),
-                ),
+                Icon(Icons.image_outlined,
+                    size: 18, color: colors.onSurfaceVariant),
+                const SizedBox(width: Spacing.s),
+                Text('Bill photo',
+                    style: TextStyle(color: colors.onSurfaceVariant)),
+                const Spacer(),
+                Icon(Icons.expand_more, color: colors.onSurfaceVariant),
               ],
             ),
+          ),
+        ),
+      );
+    }
+
+    final maxHeight =
+        (available * _photoMaxShare).clamp(_photoMinHeight, double.infinity);
+    final height = (_photoHeight ?? available * _photoDefaultShare)
+        .clamp(_photoMinHeight, maxHeight);
+    final bytes = _photoBytes;
+    return Column(
+      children: [
+        Container(
+          height: height,
+          width: double.infinity,
+          decoration: decoration,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (bytes != null)
+                LayoutBuilder(
+                  // Decoded near twice the pane's width, never the camera's
+                  // full size (DAS-19): sharp to about 2× zoom, and one bitmap
+                  // of a few MB instead of the whole photo.
+                  builder: (context, box) => GestureDetector(
+                    onDoubleTap: () => _photoZoom.value = Matrix4.identity(),
+                    child: InteractiveViewer(
+                      transformationController: _photoZoom,
+                      maxScale: 5,
+                      child: Image.memory(
+                        bytes,
+                        fit: BoxFit.contain,
+                        cacheWidth: (box.maxWidth *
+                                MediaQuery.devicePixelRatioOf(context) *
+                                2)
+                            .round(),
+                      ),
+                    ),
+                  ),
+                )
+              else if (_photoFailed)
+                InkWell(
+                  onTap: _loadPhoto,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.broken_image_outlined,
+                            size: 32, color: colors.outline),
+                        const SizedBox(height: Spacing.xs),
+                        Text("Couldn't load the photo. Tap to retry.",
+                            style: TextStyle(color: colors.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                const Center(child: CircularProgressIndicator()),
+              Positioned(
+                left: 6,
+                top: 6,
+                child: _PhotoButton(
+                  icon: Icons.expand_less,
+                  tooltip: 'Hide bill photo',
+                  onTap: () => setState(() => _photoMinimized = true),
+                ),
+              ),
+              if (bytes != null)
+                Positioned(
+                  right: 6,
+                  bottom: 6,
+                  child: _PhotoButton(
+                    icon: Icons.open_in_full,
+                    tooltip: 'Full screen',
+                    onTap: _viewPhotoFullScreen,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Semantics(
+          label: 'Resize bill photo',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: (_) => _dragHeight = height,
+            onVerticalDragUpdate: (d) => setState(() {
+              _dragHeight += d.delta.dy;
+              _photoHeight = _dragHeight.clamp(_photoMinHeight, maxHeight);
+            }),
+            onVerticalDragEnd: (_) {
+              if (_dragHeight < _photoMinHeight - 40) {
+                setState(() {
+                  _photoMinimized = true;
+                  _photoHeight = null;
+                });
+              }
+            },
+            child: SizedBox(
+              height: 24,
+              width: double.infinity,
+              child: Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: colors.outline,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -767,10 +981,44 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(children: [
-        Expanded(child: TextField(controller: c1, keyboardType: numType, decoration: _decoration(label1, field1))),
+        Expanded(
+            child: TextField(
+                controller: c1,
+                keyboardType: numType,
+                decoration: _decoration(label1, field1))),
         const SizedBox(width: 8),
-        Expanded(child: TextField(controller: c2, keyboardType: numType, decoration: _decoration(label2, field2))),
+        Expanded(
+            child: TextField(
+                controller: c2,
+                keyboardType: numType,
+                decoration: _decoration(label2, field2))),
       ]),
+    );
+  }
+}
+
+/// A small dark button laid over the bill photo.
+class _PhotoButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _PhotoButton(
+      {required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+              color: Colors.black45, borderRadius: BorderRadius.circular(6)),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ),
     );
   }
 }
@@ -782,7 +1030,8 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final List<Widget> children;
-  const _SectionCard({required this.title, required this.icon, required this.children});
+  const _SectionCard(
+      {required this.title, required this.icon, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -793,7 +1042,8 @@ class _SectionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(children: [
-              Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 18, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: Spacing.xs),
               Text(title, style: Theme.of(context).textTheme.titleSmall),
             ]),
@@ -810,7 +1060,8 @@ class _LineItemCard extends StatefulWidget {
   final _LineItemForm form;
   final List<ValidationIssue> issues;
   final VoidCallback onRemove;
-  const _LineItemCard({required this.form, required this.issues, required this.onRemove});
+  const _LineItemCard(
+      {required this.form, required this.issues, required this.onRemove});
 
   @override
   State<_LineItemCard> createState() => _LineItemCardState();
@@ -853,7 +1104,8 @@ class _LineItemCardState extends State<_LineItemCard> {
     }
     if (issue == null) return InputDecoration(labelText: label);
     if (issue.isError) {
-      return InputDecoration(labelText: label, errorText: issue.message, errorMaxLines: 3);
+      return InputDecoration(
+          labelText: label, errorText: issue.message, errorMaxLines: 3);
     }
     return InputDecoration(
       labelText: label,
@@ -868,14 +1120,18 @@ class _LineItemCardState extends State<_LineItemCard> {
     final form = widget.form;
     final hasError = widget.issues.any((i) => i.isError);
     final hasIssue = widget.issues.isNotEmpty;
-    _bySuffix = {for (final i in widget.issues) _lineItemIssuePattern.firstMatch(i.field)!.group(2)!: i};
+    _bySuffix = {
+      for (final i in widget.issues)
+        _lineItemIssuePattern.firstMatch(i.field)!.group(2)!: i
+    };
 
     return Card(
       margin: const EdgeInsets.only(top: Spacing.m),
       shape: hasError
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.card),
-              side: BorderSide(color: Theme.of(context).colorScheme.error, width: 1.5),
+              side: BorderSide(
+                  color: Theme.of(context).colorScheme.error, width: 1.5),
             )
           : null,
       child: Padding(
@@ -891,8 +1147,12 @@ class _LineItemCardState extends State<_LineItemCard> {
                     Padding(
                       padding: const EdgeInsets.only(right: Spacing.xs),
                       child: Icon(
-                        hasError ? Icons.error_outline : Icons.warning_amber_outlined,
-                        color: hasError ? Theme.of(context).colorScheme.error : const Color(0xFFB45309),
+                        hasError
+                            ? Icons.error_outline
+                            : Icons.warning_amber_outlined,
+                        color: hasError
+                            ? Theme.of(context).colorScheme.error
+                            : const Color(0xFFB45309),
                         size: 20,
                       ),
                     ),
@@ -906,22 +1166,32 @@ class _LineItemCardState extends State<_LineItemCard> {
                       ),
                     ),
                   ),
-                  IconButton(onPressed: widget.onRemove, icon: const Icon(Icons.delete_outline)),
+                  IconButton(
+                      onPressed: widget.onRemove,
+                      icon: const Icon(Icons.delete_outline)),
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                 ],
               ),
             ),
             if (_expanded) ...[
               const SizedBox(height: Spacing.xs),
-              TextField(controller: form.productName, decoration: _decoration('Product name', 'product_name')),
-              _pairRow(form.pack, 'Pack', 'pack', form.batchNo, 'Batch no.', 'batch_no'),
-              _pairRow(form.expiry, 'Expiry (MM/YY)', 'expiry', form.qty, 'Qty', 'qty', numeric: true),
+              TextField(
+                  controller: form.productName,
+                  decoration: _decoration('Product name', 'product_name')),
+              _pairRow(form.pack, 'Pack', 'pack', form.batchNo, 'Batch no.',
+                  'batch_no'),
+              _pairRow(form.expiry, 'Expiry (MM/YY)', 'expiry', form.qty, 'Qty',
+                  'qty',
+                  numeric: true),
               if (form.freeScheme.text.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: TextField(controller: form.freeScheme, decoration: _decoration('Free scheme', 'free_scheme')),
+                  child: TextField(
+                      controller: form.freeScheme,
+                      decoration: _decoration('Free scheme', 'free_scheme')),
                 ),
-              _pairRow(form.mrp, 'MRP', 'mrp', form.rate, 'Rate', 'rate', numeric: true),
+              _pairRow(form.mrp, 'MRP', 'mrp', form.rate, 'Rate', 'rate',
+                  numeric: true),
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Row(
@@ -930,28 +1200,39 @@ class _LineItemCardState extends State<_LineItemCard> {
                       child: form.showDiscountAmount
                           ? TextField(
                               controller: form.discountAmount,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: _decoration('Discount amt', 'discount_amount'),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration: _decoration(
+                                  'Discount amt', 'discount_amount'),
                             )
                           : TextField(
                               controller: form.discountPct,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: _decoration('Discount %', 'discount_pct'),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration:
+                                  _decoration('Discount %', 'discount_pct'),
                             ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         controller: form.gstPct,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                         decoration: _decoration('GST %', 'gst_pct'),
                       ),
                     ),
                   ],
                 ),
               ),
-              _pairRow(form.cgstAmount, 'CGST amt', 'cgst_amount', form.sgstAmount, 'SGST amt', 'sgst_amount', numeric: true),
-              _pairRow(form.igstAmount, 'IGST amt', 'igst_amount', form.grossAmount, 'Gross amount', 'gross_amount', numeric: true),
+              _pairRow(form.cgstAmount, 'CGST amt', 'cgst_amount',
+                  form.sgstAmount, 'SGST amt', 'sgst_amount',
+                  numeric: true),
+              _pairRow(form.igstAmount, 'IGST amt', 'igst_amount',
+                  form.grossAmount, 'Gross amount', 'gross_amount',
+                  numeric: true),
             ],
           ],
         ),
@@ -968,13 +1249,23 @@ class _LineItemCardState extends State<_LineItemCard> {
     String f2, {
     bool numeric = false,
   }) {
-    final type = numeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text;
+    final type = numeric
+        ? const TextInputType.numberWithOptions(decimal: true)
+        : TextInputType.text;
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(children: [
-        Expanded(child: TextField(controller: c1, keyboardType: type, decoration: _decoration(l1, f1))),
+        Expanded(
+            child: TextField(
+                controller: c1,
+                keyboardType: type,
+                decoration: _decoration(l1, f1))),
         const SizedBox(width: 8),
-        Expanded(child: TextField(controller: c2, keyboardType: type, decoration: _decoration(l2, f2))),
+        Expanded(
+            child: TextField(
+                controller: c2,
+                keyboardType: type,
+                decoration: _decoration(l2, f2))),
       ]),
     );
   }

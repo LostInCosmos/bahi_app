@@ -8,6 +8,7 @@
 // and a clean bill auto-saves (ADR-018), so no save button is tapped here.
 import 'package:gst_bill_app/features/capture/models/batch_item.dart';
 import 'package:gst_bill_app/features/capture/widgets/batch_item_card.dart';
+import 'package:gst_bill_app/features/capture/widgets/upload_history.dart';
 
 import 'e2e/e2e.dart';
 
@@ -35,8 +36,14 @@ void main() {
     await steps.shot('crop');
     await $('Confirm this page').tap();
 
-    // Uploaded, read and saved: the card's status says so (its badge is an icon).
-    final savedCard = $(BatchItemCard).which<BatchItemCard>((c) => c.item.status == BatchItemStatus.saved);
+    // Uploaded, read and saved. Either this phone's card says so (its badge is
+    // an icon), or the card has already been handed over to the shop's list
+    // (DAS-62), whose row says "Saved" — which comes first is a race.
+    final savedCard = $(find.byElementPredicate((e) {
+      final w = e.widget;
+      if (w is BatchItemCard) return w.item.status == BatchItemStatus.saved;
+      return w is Text && w.data == 'Saved' && e.findAncestorWidgetOfExactType<UploadHistory>() != null;
+    }, description: 'a saved bill card'));
     await steps.shot('uploading');
     await savedCard.waitUntilExists(timeout: E2E.billSaved);
     await steps.shot('saved');

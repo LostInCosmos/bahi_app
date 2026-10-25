@@ -9,16 +9,13 @@ enum ConfirmBillAction { save, edit }
 /// itself automatically now (DAS-79); this only shows for the bill whose own
 /// save attempt failed (a duplicate invoice number, a FEFO surprise), or
 /// one the shopkeeper deliberately moved back from Saved — not a routine
-/// step any more. Returns null for "Not now" or a dismissed dialog.
-///
-/// [allowEdit] is false for a bill the machine flagged (DAS-71): it is with our
-/// team, so the shopkeeper can save what was read but not correct it.
+/// step any more. Returns null for "Not now" or a dismissed dialog. A flagged
+/// bill has its own dialog, with no Save (`processing_bill_dialog.dart`).
 Future<ConfirmBillAction?> showConfirmBillDialog(
   BuildContext context,
   String label,
-  InvoiceData inv, {
-  bool allowEdit = true,
-}) {
+  InvoiceData inv,
+) {
   return showDialog<ConfirmBillAction>(
     context: context,
     builder: (context) => AlertDialog(
@@ -41,8 +38,7 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not now')),
-        if (allowEdit)
-          OutlinedButton(onPressed: () => Navigator.pop(context, ConfirmBillAction.edit), child: const Text('Edit')),
+        OutlinedButton(onPressed: () => Navigator.pop(context, ConfirmBillAction.edit), child: const Text('Edit')),
         FilledButton(
           onPressed: () => Navigator.pop(context, ConfirmBillAction.save),
           child: const Text('Save'),

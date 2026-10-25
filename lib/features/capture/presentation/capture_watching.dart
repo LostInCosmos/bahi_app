@@ -133,6 +133,7 @@ mixin _Watching on State<CaptureScreen> {
   /// Submits a bill for extraction, or adopts an id already in flight. Does
   /// not wait — [_statusLoop] watches every in-flight bill together.
   Future<void> _processOne(BatchItem item, {int? resumeJobId}) async {
+    final held = _items.contains(item);
     final before = categoryOfItem(item);
     setState(() {
       item.status = BatchItemStatus.processing;
@@ -167,6 +168,12 @@ mixin _Watching on State<CaptureScreen> {
         // It has a job now, so the server counts it; ask for the numbers that
         // include it rather than leave it uncounted until something else does.
         _scheduleListRefresh();
+      }
+      if (held && !_items.contains(item)) {
+        // Discarded while its read was being asked for (DAS-115): the server
+        // has a job nobody here holds, so it is discarded there too.
+        unawaited(ApiClient.instance.bulkDiscard([jobId]).then((_) {}, onError: (_) {}));
+        return;
       }
       await _persistBatch();
       _ensureStatusLoop();

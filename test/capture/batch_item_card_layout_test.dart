@@ -71,6 +71,23 @@ void main() {
     expect(opened, 0);
   });
 
+  testWidgets('a bill still being read opens on a tap, for its Discard (DAS-115)', (tester) async {
+    for (final status in [BatchItemStatus.preparing, BatchItemStatus.processing]) {
+      var opened = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 110,
+            height: 150,
+            child: BatchItemCard(item: _item(status), onTap: () => opened++, onDelete: null, onReprocess: null),
+          ),
+        ),
+      ));
+      await tester.tap(find.byType(BatchItemCard));
+      expect(opened, 1, reason: '$status');
+    }
+  });
+
   testWidgets('no Move button when the card has no move action', (tester) async {
     await tester.pumpWidget(_grid([_item(BatchItemStatus.processing)]));
     await tester.pump();
