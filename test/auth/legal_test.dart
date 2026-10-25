@@ -104,6 +104,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: AccountScreen()));
     await tester.pump(); // the account request fails without a server; the screen still builds
     await tester.pumpAndSettle();
+    // Below the shop details, which grew with the bill's fields (DAS-121).
+    await tester.scrollUntilVisible(find.text('Terms of Service'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Terms of Service'), findsOneWidget);
     await tester.tap(find.text('Terms of Service'));
     await tester.pumpAndSettle();

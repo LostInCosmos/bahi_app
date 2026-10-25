@@ -8,7 +8,10 @@
 #
 # Knobs (environment):
 #   E2E_PORT        the local server's port (8000); the app is pointed at http://10.0.2.2:$E2E_PORT
-#   E2E_HEADLESS=1  boot the emulator with no window
+#   E2E_WINDOW=1    show the emulator's window. Headless by default: with a window the
+#                   emulator crashed itself twice mid-run on this Mac (QEMU "hanging thread")
+#   E2E_KEEP_EMULATOR=1  leave the emulator running afterwards (it is stopped by default, with
+#                   Gradle's and Kotlin's daemons: a 16 GB Mac also runs agents, VS Code and a backend)
 #   E2E_BILL_IMAGE  the photo the virtual camera shows. Default: a real bill from the local
 #                   copies of the shops' uploads (../local-db/app-storage, else the backend's
 #                   tests/storage), falling back to the server's generated .e2e/sample_bill.jpg.
@@ -18,6 +21,9 @@
 #   E2E_AVD         the virtual device (dastavez_e2e)
 #   E2E_KEEP_SERVER=1  do not stop the server afterwards
 #   E2E_NO_SERVER=1    the server is already up and reset (for repeated runs while developing a flow)
+#
+# One heavy test at a time on this machine: a run takes $HEAVY_LOCK (a directory, shared with
+# any other worktree or agent that honours it) and refuses to start while another holds it.
 #
 # Needs: the Android SDK and JDK that `flutter doctor` reports, patrol_cli on
 # PATH (`flutter pub global activate patrol_cli`), the local Postgres and
@@ -40,6 +46,36 @@ FLOWS=("$@"); [ $# -eq 0 ] && FLOWS=("${ALL_FLOWS[@]}")
 
 say() { printf '\n== %s\n' "$*"; }
 die() { printf 'e2e: %s\n' "$*" >&2; exit 2; }
+
+# --- 0. one heavy test at a time, and nothing left running afterwards ----------
+HEAVY_LOCK="${E2E_HEAVY_LOCK:-/tmp/dastavez-heavy-test.lock}"
+WAIT_MAX="${E2E_WAIT_MINUTES:-90}"
+MIN_FREE="${E2E_MIN_FREE_PCT:-35}"   # memory_pressure's "free percentage" before the emulator boots
+free_pct() { memory_pressure 2>/dev/null | awk -F': ' '/free percentage/{gsub(/%/,"",$2); print $2+0}'; }
+waited=0
+# Another engineer's heavy test (an emulator, a simulator, Chromium, a load test) holds the
+# lock: wait for it rather than run two at once. Then wait for memory, which agents, VS Code
+# and builds also use.
+until mkdir "$HEAVY_LOCK" 2>/dev/null; do
+  [ "$waited" -ge "$WAIT_MAX" ] && die "still busy after $WAIT_MAX min: $(cat "$HEAVY_LOCK/owner" 2>/dev/null || echo unknown) (remove $HEAVY_LOCK if that run is gone)"
+  [ "$waited" -eq 0 ] && say "waiting for another heavy test: $(cat "$HEAVY_LOCK/owner" 2>/dev/null || echo unknown)"
+  sleep 60; waited=$((waited + 1))
+done
+echo "e2e run.sh in $(pwd) since $(date '+%H:%M') (pid $$)" >"$HEAVY_LOCK/owner"
+cleanup() {
+  if [ "${E2E_KEEP_EMULATOR:-}" != 1 ]; then
+    adb -s "$SERIAL" emu kill >/dev/null 2>&1
+    (cd "$APP_DIR/android" && ./gradlew --stop >/dev/null 2>&1)
+    pkill -f KotlinCompileDaemon >/dev/null 2>&1
+  fi
+  rm -rf "$HEAVY_LOCK"
+}
+trap cleanup EXIT
+while [ "$(free_pct)" -lt "$MIN_FREE" ] 2>/dev/null; do
+  [ "$waited" -ge "$WAIT_MAX" ] && die "memory still under $MIN_FREE% free after $WAIT_MAX min"
+  say "waiting for memory: $(free_pct)% free, want $MIN_FREE%"
+  sleep 60; waited=$((waited + 1))
+done
 
 for tool in adb emulator patrol flutter python3; do
   command -v "$tool" >/dev/null || die "$tool not on PATH (see the header of this script)"
@@ -91,7 +127,7 @@ if ! booted; then
     virtualscene) CAM=(-camera-back virtualscene -virtualscene-poster "wall=$BILL") ;;
     *) die "E2E_CAMERA must be imagefile or virtualscene" ;;
   esac
-  WIN=(); [ "${E2E_HEADLESS:-}" = 1 ] && WIN=(-no-window -no-audio)
+  WIN=(-no-window -no-audio); [ "${E2E_WINDOW:-}" = 1 ] && WIN=()
   mkdir -p "$RUN_DIR"
   # ${WIN[@]+"${WIN[@]}"}: an empty array is "unbound" to bash 3.2 under set -u.
   nohup emulator -avd "$AVD" -port 5554 -no-boot-anim -no-snapshot "${CAM[@]}" ${WIN[@]+"${WIN[@]}"} \

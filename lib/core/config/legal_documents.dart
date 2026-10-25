@@ -48,7 +48,7 @@ const kWebsite = 'https://dastavez.co.in';
 
 /// Bumped whenever either document changes in substance. Recorded with the
 /// shopkeeper's acceptance once the server stores it.
-const kLegalVersion = '1.1';
+const kLegalVersion = '1.2';
 
 /// Orders two dotted version strings numerically: `1.2` < `1.10` < `2.0`.
 /// Negative when [a] is older than [b], zero when equal, positive when newer.
@@ -63,7 +63,7 @@ int compareLegalVersions(String a, String b) {
   }
   return 0;
 }
-const kLegalEffectiveDate = '19 October 2026';
+const kLegalEffectiveDate = '25 October 2026';
 
 /// One heading and its body: paragraphs, then optional bullet points, then
 /// optional closing paragraphs.
@@ -139,7 +139,8 @@ const kTermsOfService = LegalDocument(
         'you are at least 18 years old and able to enter a binding contract under Indian law;',
         'you are the owner of the shop, or are authorised by the owner to act for it, and you accept these Terms on '
             'behalf of that business;',
-        'the details you give us (shop name, GSTIN, address, email) are accurate and you will keep them up to date.',
+        'the details you give us (shop name, GSTIN, address, drug licence number, phone, email) are accurate and you '
+            'will keep them up to date; they are printed on the bills you make with the Service.',
       ],
       after: [
         'The Service is not directed at children and we do not knowingly allow anyone under 18 to open an account.',
@@ -361,7 +362,8 @@ const kPrivacyPolicy = LegalDocument(
       bullets: [
         'Account: your email address and a password. The password is stored only as a one-way hash (bcrypt); we cannot '
             'read it back.',
-        'Shop: shop name, type of business (medical, kirana or other), GSTIN and address.',
+        'Shop: shop name, type of business (medical, kirana or other), GSTIN and address, and, if you give them, the '
+            'shop\'s drug licence number and phone number. These are printed on the sale bills you make.',
         'Bills: the photographs and PDF pages of supplier bills you upload, and the records read from them — supplier '
             'name, GSTIN, address and drug-licence number, invoice number and date, line items (product, pack, batch, '
             'expiry, HSN, quantity, rate, MRP, discount, GST) and totals. A bill may also show your shop\'s own name, '
@@ -376,7 +378,9 @@ const kPrivacyPolicy = LegalDocument(
             'analytics or tracking software in the app.',
         'On your device only: your sign-in token (in the operating system\'s secure storage), the server address, your '
             'business type, bills photographed but not yet uploaded, a cache of bill images already uploaded, and in-flight '
-            'voice jobs. These stay on the phone and are not sent anywhere except to our servers as part of the Service.',
+            'voice jobs. These stay on the phone and are not sent anywhere except to our servers as part of the Service. '
+            'A sale bill (PDF) you share or save is made on your phone from the sale we hold; we do not keep the file, and '
+            'it goes only where you send it.',
       ],
       after: [
         'Permissions. The app asks for the camera to photograph a bill, the photo library to choose one, the '

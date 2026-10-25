@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -50,4 +52,27 @@ Future<void> sweepSharedFiles({Directory? dir, Duration olderThan = const Durati
   } catch (_) {
     // housekeeping only
   }
+}
+
+const _savePdfChannel = MethodChannel('dastavez/save_pdf');
+
+/// Saves a PDF through the system's own Save dialog — Downloads unless the
+/// shopkeeper picks another folder; no storage permission. Returns where it
+/// went, or null when the dialog was cancelled.
+///
+/// Android goes through `MainActivity`'s own call, which names the type
+/// `application/pdf`: file_picker names none, so a second save of the same
+/// name came out as `Bill-….pdf (1)`, no longer a .pdf (DAS-121). Elsewhere
+/// file_picker's save sheet.
+Future<String?> savePdf(Uint8List bytes, {required String name}) async {
+  if (Platform.isAndroid) {
+    return _savePdfChannel.invokeMethod<String>('save', {'name': name, 'bytes': bytes});
+  }
+  return FilePicker.platform.saveFile(
+    dialogTitle: 'Save bill',
+    fileName: name,
+    type: FileType.custom,
+    allowedExtensions: const ['pdf'],
+    bytes: bytes,
+  );
 }

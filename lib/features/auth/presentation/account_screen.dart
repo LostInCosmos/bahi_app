@@ -28,6 +28,8 @@ class _AccountScreenState extends State<AccountScreen> {
   final _shopNameController = TextEditingController();
   final _gstinController = TextEditingController();
   final _addressController = TextEditingController();
+  final _dlNoController = TextEditingController();
+  final _phoneController = TextEditingController();
   String _businessType = kDefaultBusinessType;
 
   AccountInfo? _account;
@@ -47,6 +49,8 @@ class _AccountScreenState extends State<AccountScreen> {
     _shopNameController.dispose();
     _gstinController.dispose();
     _addressController.dispose();
+    _dlNoController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -78,6 +82,8 @@ class _AccountScreenState extends State<AccountScreen> {
         _shopNameController.text = account.tenantName;
         _gstinController.text = account.gstin ?? '';
         _addressController.text = account.address ?? '';
+        _dlNoController.text = account.dlNo ?? '';
+        _phoneController.text = account.phone ?? '';
         _businessType = account.businessType;
       });
     } catch (e) {
@@ -100,10 +106,15 @@ class _AccountScreenState extends State<AccountScreen> {
         gstin: _gstinController.text.trim().toUpperCase(),
         address: _addressController.text.trim(),
         businessType: _businessType,
+        // Sent as typed: an empty field clears it (DAS-121).
+        dlNo: _dlNoController.text,
+        phone: _phoneController.text,
       );
       if (!mounted) return;
       setState(() {
         _account = account;
+        // The server keeps the phone as its 10 digits: show what it kept.
+        _phoneController.text = account.phone ?? '';
         _savedMessage = 'Saved.';
       });
     } on ApiException catch (e) {
@@ -150,6 +161,25 @@ class _AccountScreenState extends State<AccountScreen> {
                   TextField(
                     controller: _addressController,
                     decoration: const InputDecoration(labelText: 'Shop address'),
+                  ),
+                  const SizedBox(height: Spacing.m),
+                  TextField(
+                    controller: _dlNoController,
+                    maxLength: 100,
+                    decoration: const InputDecoration(
+                      labelText: 'Drug licence no.',
+                      helperText: 'Prints on your bills. Clear it to leave it off.',
+                      counterText: '',
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.m),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Shop phone',
+                      helperText: 'Prints on your bills. 10 digits; +91 or 0 in front is fine.',
+                    ),
                   ),
                   const SizedBox(height: Spacing.m),
                   DropdownButtonFormField<String>(

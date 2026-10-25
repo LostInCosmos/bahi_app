@@ -11,6 +11,11 @@ class AccountInfo {
   final String email;
   final String businessType;
 
+  /// Printed on the shop's bills (DAS-121); null when not set, and from a
+  /// server older than the fields. [phone] comes back as its 10 digits.
+  final String? dlNo;
+  final String? phone;
+
   /// Whether the admin has voice switched on for this shop (DAS-112); null
   /// from a server older than the switch, which leaves voice as it is.
   final bool? voiceEnabled;
@@ -25,6 +30,8 @@ class AccountInfo {
     this.address,
     required this.email,
     required this.businessType,
+    this.dlNo,
+    this.phone,
     this.voiceEnabled,
     this.legal,
   });
@@ -35,6 +42,8 @@ class AccountInfo {
         address: json.str('address'),
         email: json.strReq('email'),
         businessType: json.strOr('business_type', kDefaultBusinessType),
+        dlNo: json.str('dl_no'),
+        phone: json.str('phone'),
         voiceEnabled: json.boolean('voice_enabled'),
         legal: json.objOf('legal', LegalStatus.fromJson),
       );

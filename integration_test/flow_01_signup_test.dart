@@ -13,11 +13,15 @@ void main() {
     await field($, 'Shop / tenant name').enterText(E2E.signupShop);
     await field($, 'Email').enterText(E2E.signupEmail);
     await field($, 'Password').enterText(E2E.password);
-    await $(const ValueKey('accept-terms')).tap();
+    // The shop's licence no. and phone, printed on its bills (DAS-121).
+    await field($, 'Drug licence no. (optional)').scrollTo().enterText('20B/UP-E2E-0001');
+    await field($, 'Shop phone (optional)').scrollTo().enterText('+91 98390 12345');
+    await $(const ValueKey('accept-terms')).scrollTo().tap();
     await steps.shot('form-filled');
 
-    // "Create account" is enabled only once the terms are ticked.
-    await createAccountButton($).tap();
+    // "Create account" is enabled only once the terms are ticked. Below the
+    // fold on a phone since the shop fields were added.
+    await createAccountButton($).scrollTo().tap();
     await $('New bills').waitUntilVisible(timeout: const Duration(seconds: 30));
     await steps.shot('home');
   });
