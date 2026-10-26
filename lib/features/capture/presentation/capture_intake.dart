@@ -29,13 +29,19 @@ mixin _Intake on State<CaptureScreen> {
   /// The camera stays one at a time. A camera cannot multi-select
   /// anyway, and someone photographing a single bill sees no change.
   Future<void> _pickManyFromGallery() async {
-    final tenantId = _store?.tenantId;
     // Fixed now, as in _addPhoto: the folder you were in when you picked
     // is the one these bills belong to.
     final folderId = _folders.currentId;
     final files = await ImagePicker().pickMultiImage(imageQuality: 95);
     if (files.isEmpty || !mounted) return;
+    await _addPickedFiles(files, folderId);
+  }
 
+  /// Photos from the gallery, or recovered after Android took the app away
+  /// (DAS-131). One file goes straight to the crop; several land on the grid
+  /// waiting for their corners.
+  Future<void> _addPickedFiles(List<XFile> files, int? folderId) async {
+    final tenantId = _store?.tenantId;
     // One file is the old single-bill flow, unchanged — straight to the
     // crop rather than onto the grid.
     if (files.length == 1) {
@@ -70,6 +76,35 @@ mixin _Intake on State<CaptureScreen> {
     setState(() => _items.addAll(made));
     // Recorded before anything else, so being killed keeps the stack.
     await _persistBatch();
+  }
+
+  /// A photo the shopkeeper took while Android killed this app (DAS-131).
+  ///
+  /// On a phone short of memory the OS may end the app while the camera app
+  /// is in front; the camera plugin keeps the photo, but it "is never
+  /// returned to the original call" (its README) — it has to be asked for
+  /// when the app starts again. Without this the shopkeeper took a photo
+  /// and saw nothing happen. iOS never loses one this way and answers empty.
+  /// Runs after the batch is restored, so the photo lands beside it, in the
+  /// folder the screen opened in.
+  Future<void> _recoverLostPhotos() async {
+    if (!mounted || _store == null) return;
+    final LostDataResponse lost;
+    try {
+      lost = await debugRetrieveLostData();
+    } catch (_) {
+      return; // no plugin (a test, a desktop build): nothing to recover
+    }
+    if (!mounted || lost.isEmpty) return;
+    final files = lost.files;
+    if (files != null && files.isNotEmpty) {
+      context.say(files.length == 1
+          ? 'Recovered the photo you took before the app closed.'
+          : 'Recovered ${files.length} photos picked before the app closed.');
+      await _addPickedFiles(files, _folders.currentId);
+    } else if (lost.exception != null) {
+      context.say('The photo taken before the app closed could not be recovered.');
+    }
   }
 
   /// One file from the gallery: the original single-bill flow, kept
@@ -278,8 +313,30 @@ mixin _Intake on State<CaptureScreen> {
     }
   }
 
+  /// Bills whose upload was cut because the app left the screen (DAS-131).
+  /// They stay "preparing" with their photos on disk, and go up again the
+  /// moment the app is back ([_resumePausedUploads]). In memory only: after a
+  /// kill, `StartupAction.uploadAgain` does the same for every unuploaded bill.
+  final List<BatchItem> _pausedUploads = [];
+
+  /// The app is back on screen: send what was cut while it was away, one at a
+  /// time, as a restart does.
+  Future<void> _resumePausedUploads() async {
+    if (_pausedUploads.isEmpty) return;
+    final again = List<BatchItem>.of(_pausedUploads);
+    _pausedUploads.clear();
+    for (final item in again) {
+      if (!mounted || !_items.contains(item)) continue;
+      await _uploadAndExtract(item);
+    }
+  }
+
   Future<void> _uploadItem(BatchItem item) async {
     setState(() => item.status = BatchItemStatus.preparing);
+    // Which time away this upload started in: a failure that arrives in a
+    // later one (iOS reports a socket it closed while suspended only on the
+    // first read after resume) was the platform's doing too.
+    final away = AppForeground.awayCount;
     final List<String> sourceImages;
     try {
       sourceImages = [];
@@ -298,6 +355,16 @@ mixin _Intake on State<CaptureScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      // Cut because the app left the screen (Android refuses a backgrounded
+      // app's connections after 5 s): not a failure the shopkeeper should
+      // see or have to retry. It stays "preparing" and goes up again on
+      // return; a page the server already accepted is simply sent again
+      // (preprocess answers with a path and keeps nothing else).
+      if (!AppForeground.visible.value || AppForeground.awayCount != away) {
+        if (!_pausedUploads.contains(item)) _pausedUploads.add(item);
+        if (AppForeground.visible.value) unawaited(_resumePausedUploads());
+        return;
+      }
       setState(() => item.markFailed('Upload failed: $e'));
       await _persistBatch();
       return;

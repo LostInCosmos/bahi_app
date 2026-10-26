@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../api/api_exception.dart';
+import 'app_foreground.dart';
 
 /// Thrown by [pollUntilTerminal] once its caller no longer wants the answer
 /// (the screen watching the job has closed). Callers that already return on
@@ -63,12 +64,21 @@ Future<T> pollUntilTerminal<T>({
   }
 
   while (true) {
+    // Not asked while the app is away (DAS-131): the platform refuses the
+    // connection anyway, and the first request after return re-reads state.
+    if (!AppForeground.visible.value) await AppForeground.untilVisible();
     checkWanted();
+    final away = AppForeground.awayCount;
     final T result;
     try {
       result = await fetch();
     } catch (e) {
       if (_refused(e)) rethrow;
+      if (!AppForeground.visible.value || AppForeground.awayCount != away) {
+        // Cut by the app leaving the screen, not by the network or server:
+        // not one of the allowed failures, and no backoff on return.
+        continue;
+      }
       consecutiveFailures++;
       final allowed = transientFailures;
       if (allowed != null && consecutiveFailures > allowed) rethrow;

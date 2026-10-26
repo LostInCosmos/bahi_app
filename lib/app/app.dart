@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api/api_client.dart';
+import '../core/utils/app_foreground.dart';
 import '../core/utils/share_file.dart';
 import '../features/auth/data/auth_api.dart';
 import '../features/auth/models/account.dart';
@@ -27,6 +28,9 @@ class _GstBillAppState extends State<GstBillApp> {
   @override
   void initState() {
     super.initState();
+    // Whether the app is on screen: capture and voice pause their waits and
+    // do not call an upload failed while it is away (DAS-131).
+    AppForeground.start();
     ApiClient.instance.onSessionEnded = _onSessionEnded;
     ApiClient.instance.onVersionGate = _onVersionGate;
   }

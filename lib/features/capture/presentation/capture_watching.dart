@@ -243,6 +243,15 @@ mixin _Watching on State<CaptureScreen> {
         continue;
       }
 
+      // Not asked while the app is away (DAS-131). Android cuts a
+      // backgrounded app's sockets after 5 s and refuses new ones, so asking
+      // only spins; the first request after return re-reads current state.
+      if (!AppForeground.visible.value) {
+        await AppForeground.untilVisible();
+        continue;
+      }
+
+      final away = AppForeground.awayCount;
       final JobStatusBatch batch;
       try {
         batch = await ApiClient.instance
@@ -254,6 +263,9 @@ mixin _Watching on State<CaptureScreen> {
         // request re-reads current state, so nothing that happened while we
         // were away is lost.
         if (!mounted) return;
+        // Cut because the app left the screen: ask again the moment it is
+        // back, with no pause.
+        if (!AppForeground.visible.value || AppForeground.awayCount != away) continue;
         await Future<void>.delayed(const Duration(seconds: 2));
         continue;
       }
