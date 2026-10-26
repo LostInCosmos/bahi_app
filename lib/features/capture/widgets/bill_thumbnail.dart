@@ -39,12 +39,18 @@ class BillThumbnail extends StatefulWidget {
   /// loader (tests) has no need of [imageRev].
   final Future<Uint8List> Function(String path)? loader;
 
+  /// The photo on this phone, for a bill that has no server path because it
+  /// is waiting for the shopkeeper (to be cropped, or a multi-page bill not
+  /// sent yet, DAS-131): shown instead of a spinner that would say "busy".
+  final Future<Uint8List?> Function()? localPhoto;
+
   const BillThumbnail({
     super.key,
     required this.sourceImage,
     this.imageRev = 0,
     this.failed = false,
     this.loader,
+    this.localPhoto,
   });
 
   @override
@@ -70,7 +76,16 @@ class _BillThumbnailState extends State<BillThumbnail> {
 
   void _start() {
     final path = widget.sourceImage;
-    _load = path == null ? null : _fetch(path);
+    final local = widget.localPhoto;
+    _load = path != null ? _fetch(path) : (local == null ? null : _readLocal(local));
+  }
+
+  Future<Uint8List?> _readLocal(Future<Uint8List?> Function() read) async {
+    try {
+      return await read();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Never throws: a missing picture is shown as one, and must not take the

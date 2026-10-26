@@ -9,6 +9,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/navigation/tab_screen.dart';
 import '../../../core/disk/pending_photo_store.dart';
+import '../../../core/utils/app_foreground.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/offset_2d.dart';
 import '../../../core/utils/snack.dart';
@@ -68,6 +69,11 @@ part 'capture_watching.dart';
 /// one-tap summary lets them save (or edit) it from there. A bill with a real
 /// issue goes to `needsReview`, shown with the ones being read as Processing:
 /// its dialog offers Discard and Edit, never Save (DAS-115).
+/// Asks the camera plugin for a photo it kept when Android ended the app
+/// mid-capture (DAS-131). A variable so a test can stand in for the plugin.
+@visibleForTesting
+Future<LostDataResponse> Function() debugRetrieveLostData = () => ImagePicker().retrieveLostData();
+
 class CaptureScreen extends StatefulWidget {
   final VoidCallback onBatchFinished;
   const CaptureScreen({super.key, required this.onBatchFinished});
@@ -121,8 +127,15 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   void initState() {
     super.initState();
     _folders.addListener(_onFoldersChanged);
-    _restoreBatch();
+    AppForeground.visible.addListener(_onForegroundChanged);
+    _restoreBatch().whenComplete(_recoverLostPhotos);
     refreshFolders();
+  }
+
+  /// Back on screen: uploads cut while away go up again (DAS-131). The
+  /// status loop waits for the same signal by itself.
+  void _onForegroundChanged() {
+    if (AppForeground.visible.value) unawaited(_resumePausedUploads());
   }
 
   @override
@@ -132,6 +145,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
 
     _retryLock?.cancel();
     _folders.removeListener(_onFoldersChanged);
+    AppForeground.visible.removeListener(_onForegroundChanged);
     _folders.dispose();
     _batchRevision.dispose();
     super.dispose();
@@ -310,6 +324,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   /// team with a "discarded" mark.
   /// True when the bill was discarded.
   Future<bool> _removeItem(BatchItem item) async {
+    // A multi-page bill not sent yet: its photos are only on this phone.
+    if (item.draft) return _discardDraft(item);
     if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) {
       final invoiceId = item.savedInvoiceId;
       invoiceId == null ? _say(_savedNoId) : await _unsave(invoiceId, item: item);
@@ -476,7 +492,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   Future<void> _openItem(BatchItem item) async {
     switch (item.status) {
       case BatchItemStatus.needsCrop:
-        await _cropPending(item);
+        item.draft ? await _openDraft(item) : await _cropPending(item);
         return;
       case BatchItemStatus.saved:
         Navigator.of(context).push(

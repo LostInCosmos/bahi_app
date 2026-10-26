@@ -5,6 +5,7 @@ import '../../../app/theme/app_theme.dart';
 import '../models/batch_item.dart';
 import '../models/bill_search.dart';
 import '../models/status_filter.dart' show kUnderProcessingLabel;
+import '../../../core/utils/format.dart';
 import 'bill_thumbnail.dart';
 import 'retry_label.dart';
 import 'selection_mark.dart';
@@ -76,6 +77,9 @@ class BatchItemCard extends StatelessWidget {
               sourceImage: item.isUploaded ? item.sourceImages.first : null,
               imageRev: item.result?.meta.imageRev ?? 0,
               failed: item.status == BatchItemStatus.failed,
+              localPhoto: item.status == BatchItemStatus.needsCrop && item.pages.isNotEmpty
+                  ? item.pages.first.loadBytes
+                  : null,
             ),
             // Bottom scrim so the label stays legible over any photo.
             Positioned(
@@ -184,10 +188,13 @@ class BatchItemCard extends StatelessWidget {
               right: Spacing.xs,
               bottom: Spacing.xs,
               child: Text(
-                // The shop once it has been read; the label until then.
-                pageCount > 1
-                    ? '${item.shopName ?? item.label} ($pageCount pages)'
-                    : (item.shopName ?? item.label),
+                // The shop once it has been read; the label until then. A
+                // multi-page bill not sent yet says so (DAS-131).
+                item.draft
+                    ? '${plural(pageCount, 'page')} · not sent'
+                    : pageCount > 1
+                        ? '${item.shopName ?? item.label} ($pageCount pages)'
+                        : (item.shopName ?? item.label),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     color: Colors.white,
@@ -223,10 +230,11 @@ class BatchItemCard extends StatelessWidget {
             icon: Icons.close_rounded);
       case BatchItemStatus.needsCrop:
         // An instruction, not a state: this card is waiting for the
-        // shopkeeper to choose its corners, and the crop icon is what
-        // says tapping it will help.
-        return const _Badge(
-            color: AppColors.statusNeedsReview, icon: Icons.crop_rounded);
+        // shopkeeper — to choose its corners, or (a draft) to send it — and
+        // the icon says which.
+        return _Badge(
+            color: AppColors.statusNeedsReview,
+            icon: item.draft ? Icons.outbox_rounded : Icons.crop_rounded);
       case BatchItemStatus.preparing:
       case BatchItemStatus.processing:
         return const SizedBox.shrink();
