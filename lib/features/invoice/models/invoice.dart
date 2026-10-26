@@ -39,6 +39,10 @@ class LineItem {
   // couldn't reliably tell it apart from a per-unit "Net Rate" column, so
   // gross_amount is the only per-line amount now.
   double grossAmount;
+  // The rate after the line's discount, per unit. Worked out by the server
+  // (and sometimes printed); never shown here, carried back so a save or
+  // revalidate sends what the server sent (DAS-136).
+  double? netRate;
 
   LineItem({
     this.productName = "",
@@ -62,6 +66,7 @@ class LineItem {
     this.sgstAmount,
     this.igstAmount,
     this.grossAmount = 0,
+    this.netRate,
   });
 
   factory LineItem.fromJson(Map<String, dynamic> json) => LineItem(
@@ -86,6 +91,7 @@ class LineItem {
         sgstAmount: json.dbl('sgst_amount'),
         igstAmount: json.dbl('igst_amount'),
         grossAmount: json.dblOr('gross_amount'),
+        netRate: json.dbl('net_rate'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -110,6 +116,7 @@ class LineItem {
         'sgst_amount': sgstAmount,
         'igst_amount': igstAmount,
         'gross_amount': grossAmount,
+        'net_rate': netRate,
       };
 }
 
@@ -121,6 +128,12 @@ class Totals {
   double? totalIgst;
   double? roundOff;
   double grandTotal;
+  // A second printed discount line, and the printed total GST. Not shown on
+  // the review form; carried back so a save or revalidate keeps them
+  // (DAS-136). The server's totals check adds total_discount_2 to
+  // total_discount: dropping it flagged a correct bill.
+  double? totalDiscount2;
+  double? totalGst;
 
   Totals({
     this.subtotal = 0,
@@ -130,6 +143,8 @@ class Totals {
     this.totalIgst,
     this.roundOff,
     this.grandTotal = 0,
+    this.totalDiscount2,
+    this.totalGst,
   });
 
   factory Totals.fromJson(Map<String, dynamic> json) => Totals(
@@ -140,6 +155,8 @@ class Totals {
         totalIgst: json.dbl('total_igst'),
         roundOff: json.dbl('round_off'),
         grandTotal: json.dblOr('grand_total'),
+        totalDiscount2: json.dbl('total_discount_2'),
+        totalGst: json.dbl('total_gst'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -150,6 +167,8 @@ class Totals {
         'total_igst': totalIgst,
         'round_off': roundOff,
         'grand_total': grandTotal,
+        'total_discount_2': totalDiscount2,
+        'total_gst': totalGst,
       };
 }
 

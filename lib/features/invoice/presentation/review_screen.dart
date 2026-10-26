@@ -62,6 +62,9 @@ class _LineItemForm {
   double? cgstPct;
   double? sgstPct;
   double? igstPct;
+  // The server's per-unit rate after discount (DAS-136): not on the form,
+  // carried back out so the save sends what the server sent.
+  double? netRate;
 
   // Decided once, from whatever the extraction actually printed — a bill
   // states its discount as either a percentage or a flat amount, never
@@ -99,6 +102,7 @@ class _LineItemForm {
         cgstPct = item.cgstPct,
         sgstPct = item.sgstPct,
         igstPct = item.igstPct,
+        netRate = item.netRate,
         showDiscountAmount =
             (item.discountPct == null || item.discountPct == 0) &&
                 item.discountAmount != null,
@@ -152,6 +156,7 @@ class _LineItemForm {
         sgstAmount: double.tryParse(sgstAmount.text),
         igstAmount: double.tryParse(igstAmount.text),
         grossAmount: double.tryParse(grossAmount.text) ?? 0,
+        netRate: netRate,
       );
 
   void dispose() {
@@ -213,6 +218,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
   // Not shown on this form, but read off the bill — carried through so a
   // save or revalidate does not erase it.
   String? sellerPhone;
+  // Totals the form does not show, carried through the same way (DAS-136):
+  // a second printed discount and the printed total GST.
+  double? totalDiscount2;
+  double? totalGst;
 
   late List<_LineItemForm> items;
 
@@ -305,6 +314,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     placeOfSupply = TextEditingController(text: inv.placeOfSupply ?? '');
     invoiceType = inv.invoiceType;
     sellerPhone = inv.sellerPhone;
+    totalDiscount2 = inv.totals.totalDiscount2;
+    totalGst = inv.totals.totalGst;
     items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
 
     subtotal = TextEditingController(text: _fmt(inv.totals.subtotal));
@@ -437,6 +448,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
         totalIgst: double.tryParse(totalIgst.text),
         roundOff: double.tryParse(roundOff.text),
         grandTotal: double.tryParse(grandTotal.text) ?? 0,
+        totalDiscount2: totalDiscount2,
+        totalGst: totalGst,
       ),
     );
   }
@@ -455,6 +468,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     invoiceDate.text = inv.invoiceDate;
     invoiceType = inv.invoiceType;
     sellerPhone = inv.sellerPhone;
+    totalDiscount2 = inv.totals.totalDiscount2;
+    totalGst = inv.totals.totalGst;
     placeOfSupply.text = inv.placeOfSupply ?? '';
 
     subtotal.text = _fmt(inv.totals.subtotal);
@@ -490,6 +505,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       form.cgstPct = item.cgstPct;
       form.sgstPct = item.sgstPct;
       form.igstPct = item.igstPct;
+      form.netRate = item.netRate;
     }
   }
 
