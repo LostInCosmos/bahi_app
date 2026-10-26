@@ -165,7 +165,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
       if (saleId != null) _cart.clear();
     });
     if (saleId == null || !mounted) return;
-    refresh();
+    unawaited(refresh());
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => SaleReceiptScreen(saleId: saleId)),
     );
@@ -185,7 +185,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
     if (jobId == null || !mounted) return;
     final item = _VoiceJobItem(jobId: jobId);
     setState(() => _voiceJobs.add(item));
-    _persistVoiceJobs();
+    unawaited(_persistVoiceJobs());
     unawaited(_pollVoiceJob(item));
   }
 
@@ -209,14 +209,14 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
           item.status = _VoiceJobStatus.ready;
           item.order = job.order;
         });
-        _persistVoiceJobs();
+        unawaited(_persistVoiceJobs());
         _notifyVoiceJobReady(item);
       } else {
         setState(() {
           item.status = _VoiceJobStatus.failed;
           item.errorMessage = job.errorMessage ?? 'Could not process that recording.';
         });
-        _persistVoiceJobs();
+        unawaited(_persistVoiceJobs());
       }
     } catch (e) {
       // Only a refusal gets here (the note is gone, say) — or the screen has
@@ -226,7 +226,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
         item.status = _VoiceJobStatus.failed;
         item.errorMessage = e is ApiException ? 'Could not get that voice note: ${e.message}' : 'Could not get that voice note.';
       });
-      _persistVoiceJobs();
+      unawaited(_persistVoiceJobs());
     }
   }
 
@@ -254,18 +254,18 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
       await showMessageDialog(context, title: 'Voice note', message: item.errorMessage ?? 'Something went wrong.');
       if (mounted) {
         setState(() => _voiceJobs.remove(item));
-        _persistVoiceJobs();
+        unawaited(_persistVoiceJobs());
       }
       return;
     }
     if (item.status != _VoiceJobStatus.ready || item.order == null) return;
     setState(() => _voiceJobs.remove(item));
-    _persistVoiceJobs();
+    unawaited(_persistVoiceJobs());
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => VoiceOrderReviewScreen(order: item.order!)),
     );
     if (!mounted) return;
-    refresh();
+    unawaited(refresh());
     if (result == 'undone') context.say('Sale reversed');
   }
 

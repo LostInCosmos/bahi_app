@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -521,9 +523,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
             issues: result.issues),
         hasErrors,
       );
-      HapticFeedback.mediumImpact();
+      unawaited(HapticFeedback.mediumImpact());
     } catch (e) {
-      HapticFeedback.heavyImpact();
+      unawaited(HapticFeedback.heavyImpact());
       if (mounted) setState(() => _error = 'Could not revalidate: $e');
     } finally {
       if (mounted) setState(() => _revalidating = false);
@@ -546,14 +548,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
         folderId: widget.folderId,
       );
       if (!mounted) return;
-      HapticFeedback.mediumImpact();
+      unawaited(HapticFeedback.mediumImpact());
       // Nothing is asked first, so nothing else marks the save as done. Show
       // that it landed before leaving, or a one-tap save looks like a dropped tap.
       await showSavedTick(context);
       if (!mounted) return;
       Navigator.of(context).pop(id);
     } on ApiException catch (e) {
-      HapticFeedback.heavyImpact();
+      unawaited(HapticFeedback.heavyImpact());
       if (!mounted) return;
       if (e.detail is Map && e.detail['error'] == 'validation_failed') {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
@@ -569,7 +571,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         setState(() => _error = 'Save failed: $e');
       }
     } catch (e) {
-      HapticFeedback.heavyImpact();
+      unawaited(HapticFeedback.heavyImpact());
       if (mounted) setState(() => _error = 'Save failed: $e');
     } finally {
       if (mounted) setState(() => _saving = false);

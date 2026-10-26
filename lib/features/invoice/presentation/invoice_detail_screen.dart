@@ -75,7 +75,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _deleting = false);
-      showMessageDialog(context, title: 'Could not delete', message: e.message);
+      await showMessageDialog(context, title: 'Could not delete', message: e.message);
     } catch (e) {
       if (!mounted) return;
       setState(() => _deleting = false);

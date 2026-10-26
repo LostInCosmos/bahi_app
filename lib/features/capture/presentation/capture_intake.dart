@@ -315,8 +315,8 @@ mixin _Intake on State<CaptureScreen> {
       item.errorMessage = null;
     });
     // Save the server paths BEFORE deleting the local photos: a kill in
-    // between leaves an orphan file (swept on next start), never a bill with
-    // neither its photo nor its upload.
+    // between leaves an unnamed photo (shown to crop on next start, to be
+    // discarded), never a bill with neither its photo nor its upload.
     await _persistBatch();
     for (final page in uploadedPages) {
       final id = page.photoId;

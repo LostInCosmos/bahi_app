@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'backup_exclusion.dart';
+
 /// Raw bill photos that have been captured and cropped but not yet uploaded.
 ///
 /// A photo is written here the moment its crop is confirmed, and the upload
@@ -31,6 +33,8 @@ class PendingPhotoStore {
     final base = await getApplicationSupportDirectory();
     final dir = Directory('${base.path}/$_folder');
     if (!await dir.exists()) await dir.create(recursive: true);
+    // The only copy of a bill until it uploads: kept, but not in iCloud.
+    await excludeFromBackup(dir);
     return _dir = dir;
   }
 
@@ -69,13 +73,33 @@ class PendingPhotoStore {
       final file = await _file(id);
       if (await file.exists()) await file.delete();
     } catch (_) {
-      // a leftover file is swept by deleteOrphans on the next start
+      // a leftover file is found on the next start (BatchStore.load) and shown to crop
     }
   }
 
-  /// Deletes this tenant's photos that no persisted batch item refers to —
-  /// left behind if the app died between an upload succeeding and its file
-  /// being deleted. Other tenants' files are never touched.
+  /// Every photo of this tenant still on the device, oldest first (the id
+  /// starts with the time it was taken).
+  static Future<List<String>> listIds(int tenantId) async {
+    final ids = <String>[];
+    try {
+      final prefix = '${tenantId}_';
+      await for (final entity in (await _directory()).list()) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (!name.startsWith(prefix) || !name.endsWith('.jpg')) continue;
+        ids.add(name.substring(0, name.length - 4));
+      }
+    } catch (_) {
+      // nothing listed is nothing adopted; the photos stay where they are
+    }
+    ids.sort();
+    return ids;
+  }
+
+  /// Deletes this tenant's photos except those in [keep]. Used only to forget
+  /// a deleted account's shop (sign_out.dart); loading the batch no longer
+  /// deletes unnamed photos, it shows them to crop (BatchStore.load).
+  /// Other tenants' files are never touched.
   static Future<void> deleteOrphans(int tenantId, Set<String> keep) async {
     try {
       final prefix = '${tenantId}_';

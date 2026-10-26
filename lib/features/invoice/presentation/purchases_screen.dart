@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -116,7 +118,7 @@ class PurchasesScreenState extends State<PurchasesScreen> with TabScreen {
         setState(() => _loading = false);
         if (_refreshAgain) {
           _refreshAgain = false;
-          refresh();
+          unawaited(refresh());
         }
       }
     }
@@ -136,7 +138,7 @@ class PurchasesScreenState extends State<PurchasesScreen> with TabScreen {
       if (mounted) context.say("Couldn't move it: $e");
       return;
     }
-    refresh();
+    unawaited(refresh());
   }
 
   /// The main Export button: offers the files that can be made from the bills
@@ -225,7 +227,7 @@ class PurchasesScreenState extends State<PurchasesScreen> with TabScreen {
       if (e.statusCode == 404) {
         // Deleted on another device since this tree loaded.
         context.say('That folder no longer exists.');
-        refresh();
+        unawaited(refresh());
       } else {
         context.say(e.message);
       }
@@ -317,11 +319,11 @@ class PurchasesScreenState extends State<PurchasesScreen> with TabScreen {
           return _InvoiceRow(
             inv,
             onOpen: () async {
-              HapticFeedback.selectionClick();
+              unawaited(HapticFeedback.selectionClick());
               final deleted = await Navigator.of(context).push<bool>(
                 MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoiceId: inv.id)),
               );
-              if (deleted == true) refresh();
+              if (deleted == true) unawaited(refresh());
             },
             onMove: () => _moveInvoice(inv),
           );

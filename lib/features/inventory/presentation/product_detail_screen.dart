@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme.dart';
@@ -74,7 +76,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
     if (saved == null || !mounted) return;
     setState(() => _detail = _detail!.withBatch(batch.withMrp(saved)));
-    ProductCatalog.instance.refresh();
+    unawaited(ProductCatalog.instance.refresh());
     context.say('MRP saved: ${rupees(saved)}');
   }
 
