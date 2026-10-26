@@ -32,6 +32,25 @@ mixin _Watching on State<CaptureScreen> {
 
   bool _statusLoopRunning = false;
 
+  /// The last state the server reported for each watched job, as its
+  /// `cardState` (DAS-132). It fills two gaps in what a card can say for
+  /// itself: the issue count of a finished bill, and the rows watched by job
+  /// after a hand-over, which have no card at all. Without an entry a job is
+  /// left out of `seen`, which the server counts as changed: one quick answer,
+  /// after which the entry exists.
+  final Map<int, String> _lastAnswers = {};
+
+  /// What the phone draws for each of [ids], for the request's `seen`.
+  Map<int, String> _seenFor(Iterable<int> ids, Map<int, BatchItem> watching) {
+    final seen = <int, String>{};
+    for (final id in ids) {
+      final item = watching[id];
+      final state = item == null ? _lastAnswers[id] : cardSeenState(item, lastAnswer: _lastAnswers[id]);
+      if (state != null) seen[id] = state;
+    }
+    return seen;
+  }
+
   /// Public so HomeScreen can ask again when this tab is reopened (DAS-76):
   /// a card held in needsReview or pendingConfirm otherwise only rechecks
   /// itself once it is actually (re)built — reopening the tab alone does not
@@ -252,10 +271,11 @@ mixin _Watching on State<CaptureScreen> {
       }
 
       final away = AppForeground.awayCount;
+      final seen = _seenFor(due, watching);
+      final askedAt = DateTime.now();
       final JobStatusBatch batch;
       try {
-        batch = await ApiClient.instance
-            .jobStatuses(due);
+        batch = await ApiClient.instance.jobStatuses(due, seen: seen);
       } catch (_) {
         // A dropped connection is expected on mobile and is NOT a failed
         // bill: the server holds the request open for ~25s, so a tunnel or a
@@ -273,6 +293,7 @@ mixin _Watching on State<CaptureScreen> {
 
       var finished = false;
       for (final brief in batch.jobs) {
+        _lastAnswers[brief.jobId] = brief.cardState;
         final item = watching[brief.jobId];
         if (item == null && brief.saved && _watchedRows.remove(brief.jobId)) {
           // Saved by our team after this phone handed the bill over: the
@@ -303,6 +324,19 @@ mixin _Watching on State<CaptureScreen> {
       // answered that nobody moved. Rewriting the whole batch then cost a
       // 1.6 MB encode and write every round for a 300-bill batch (DAS-92).
       await _persistBatchIfChanged();
+      if (!mounted) return;
+
+      final stillWatched = {..._watching.keys, ..._watchedRows};
+      _lastAnswers.removeWhere((id, _) => !stillWatched.contains(id));
+      // The server answered at once because the cards differ from it, and
+      // they still do: this phone could not act on the answer (a result fetch
+      // that failed) or reads a state differently from the server. Asking
+      // again at once would loop as fast as the network allows, so pause as
+      // after a dropped request.
+      if (DateTime.now().difference(askedAt) < const Duration(seconds: 1) &&
+          mapEquals(_seenFor(due, _watching), seen)) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
     }
   }
 

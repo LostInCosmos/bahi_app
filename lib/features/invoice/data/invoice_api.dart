@@ -121,10 +121,18 @@ extension InvoiceApi on ApiClient {
   /// answers at ~25s, so anything past that is a dead connection, not a slow
   /// one. A throw here means "ask again", never "the bill failed": every
   /// request re-reads current state, so nothing is missed by reconnecting.
-  Future<JobStatusBatch> jobStatuses(List<int> jobIds, {bool wait = true}) async {
+  ///
+  /// [seen] (DAS-132) is what the phone's cards draw for each job; the server
+  /// answers at once when any job differs from it, instead of waiting out the
+  /// hold. A server older than the field ignores it.
+  Future<JobStatusBatch> jobStatuses(List<int> jobIds, {bool wait = true, Map<int, String>? seen}) async {
     final res = await postJson(
       '/invoices/extract/status',
-      {'job_ids': jobIds, 'wait': wait},
+      {
+        'job_ids': jobIds,
+        'wait': wait,
+        if (seen != null) 'seen': {for (final e in seen.entries) '${e.key}': e.value},
+      },
       timeout: ApiClient.heldTimeout,
     );
     return JobStatusBatch.fromJson(ApiClient.jsonObject(res));
