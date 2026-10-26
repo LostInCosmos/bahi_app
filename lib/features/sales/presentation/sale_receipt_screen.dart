@@ -83,7 +83,10 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
     return buildSaleBillPdf(sale, shop, await BillFonts.load());
   }
 
-  Future<void> _shareBill() => _withBill((bytes) => shareBytes(context, bytes, name: billFileName(_sale!)));
+  /// [anchor] is the tapped button's context: on iPad the share sheet is a
+  /// popover pointing at it (DAS-135); elsewhere it is ignored.
+  Future<void> _shareBill(BuildContext anchor) =>
+      _withBill((bytes) => shareBytes(anchor, bytes, name: billFileName(_sale!)));
 
   /// The phone's own Save dialog (Downloads unless the shopkeeper picks
   /// another folder): no storage permission (see [savePdf]).
@@ -110,7 +113,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
     if (mounted) await _loadShop();
   }
 
-  Future<void> _share() async {
+  Future<void> _share(BuildContext anchor) async {
     final s = _sale;
     if (s == null) return;
     final lines = [
@@ -123,7 +126,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
       'Total: ${rupees(s.grandTotal)}',
       'Includes GST ${rupees(s.tax)} (CGST ${rupees(s.totalCgst)} + SGST ${rupees(s.totalSgst)})',
     ];
-    await SharePlus.instance.share(ShareParams(text: lines.join('\n'), sharePositionOrigin: shareOrigin(context)));
+    await SharePlus.instance.share(ShareParams(text: lines.join('\n'), sharePositionOrigin: shareOrigin(anchor)));
   }
 
   bool get _missingShopDetails {
@@ -189,11 +192,13 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
                   ),
                   const SizedBox(height: Spacing.m),
                 ],
-                BusyFilledButton(
-                  busy: _making,
-                  onPressed: _shareBill,
-                  icon: Icons.picture_as_pdf_outlined,
-                  label: 'Share bill (PDF)',
+                Builder(
+                  builder: (anchor) => BusyFilledButton(
+                    busy: _making,
+                    onPressed: () => _shareBill(anchor),
+                    icon: Icons.picture_as_pdf_outlined,
+                    label: 'Share bill (PDF)',
+                  ),
                 ),
                 const SizedBox(height: Spacing.s),
                 Row(children: [
@@ -206,10 +211,12 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
                   ),
                   const SizedBox(width: Spacing.s),
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _share,
-                      icon: const Icon(Icons.share),
-                      label: const Text('Share as text'),
+                    child: Builder(
+                      builder: (anchor) => OutlinedButton.icon(
+                        onPressed: () => _share(anchor),
+                        icon: const Icon(Icons.share),
+                        label: const Text('Share as text'),
+                      ),
                     ),
                   ),
                 ]),

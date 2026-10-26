@@ -11,9 +11,24 @@ keytool -genkey -v -keystore ~/dastavez-upload.jks -keyalg RSA -keysize 2048 \
   -validity 10000 -alias upload
 ```
 
-Keep `~/dastavez-upload.jks` and its passwords in the password manager. Losing
-them means a new app listing: Play App Signing lets Google hold the *app*
-signing key, but the *upload* key is yours.
+Keep `~/dastavez-upload.jks` and its passwords in the password manager.
+
+Enrol the app in **Play App Signing** at the first upload (the default for new
+apps). Google then holds the *app signing key*, the one that "never changes
+during the lifetime of your app" and signs what phones install; this keystore
+is only the *upload key*. Losing or leaking it is recoverable: create a new
+upload key, export its certificate (`keytool -export -rfc -keystore NEW.jks
+-alias upload -file upload_certificate.pem`) and use **Request upload key
+reset** in Play Console › Protected with Play › Play app signing; updates
+continue as the same app once Google approves it.
+
+What is *not* recoverable is a build signed outside Play: a phone that
+installed a release over USB, signed with this upload key, cannot be updated
+by the Play build (signed with Google's key). Uninstall it first, which wipes
+its capture batch, so upload pending bills before switching.
+
+Source: developer.android.com/studio/publish/app-signing and Play Console
+help answer 9842756, read 2026-10-26 (DAS-135).
 
 Then create `android/key.properties`:
 

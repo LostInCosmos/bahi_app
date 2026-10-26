@@ -8,3 +8,9 @@ analyzer:
     - macos/**
     - linux/**
 include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # A future dropped without `unawaited(...)` is a place an error vanishes
+    # silently (DAS-135). Mark fire-and-forget calls explicitly.
+    unawaited_futures: true

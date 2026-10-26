@@ -59,9 +59,39 @@ class ApiClient {
   String baseUrl = kReleaseMode ? _productionBaseUrl : "http://10.0.2.2:8000";
   String? token;
 
+  /// Where the login token lives. On iOS the Keychain item is kept to THIS
+  /// device (DAS-135): the token never expires, and the default class lets an
+  /// iCloud or iTunes backup restore it onto a new iPhone, signed in with no
+  /// password. A reinstall on the same device still keeps it.
   static const _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.unlocked_this_device),
   );
+
+  /// How builds before DAS-135 stored it on iOS (the plugin's default class).
+  /// The plugin matches on the class when reading, so a token written that way
+  /// is only found with these options; it is read once and written again
+  /// under [_secureStorage], which moves it to the this-device class.
+  static const _legacySecureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  /// The stored token, or null. Never throws: a Keychain or Keystore that
+  /// cannot be read (some devices refuse right after boot; a restored backup
+  /// cannot unwrap its key) means "signed out", and the login screen is the
+  /// way back — not a crash at launch (DAS-135).
+  Future<String?> _readStoredToken() async {
+    try {
+      final current = await _secureStorage.read(key: 'token');
+      if (current != null) return current;
+      if (!Platform.isIOS) return null;
+      final legacy = await _legacySecureStorage.read(key: 'token');
+      if (legacy != null) await _secureStorage.write(key: 'token', value: legacy);
+      return legacy;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Drives the app's color scheme (teal for medical, red for kirana — see
   /// theme.dart) — a [ValueNotifier] so the theme updates live the moment
@@ -115,13 +145,17 @@ class ApiClient {
     if (kAllowServerOverride) {
       baseUrl = prefs.getString('base_url') ?? baseUrl;
     }
-    token = await _secureStorage.read(key: 'token');
+    token = await _readStoredToken();
     if (token == null) {
       final legacyToken = prefs.getString('token');
       if (legacyToken != null) {
         token = legacyToken;
-        await _secureStorage.write(key: 'token', value: legacyToken);
-        await prefs.remove('token');
+        try {
+          await _secureStorage.write(key: 'token', value: legacyToken);
+          await prefs.remove('token');
+        } catch (_) {
+          // Kept in shared_preferences until a write succeeds; signed in now.
+        }
       }
     }
     businessTypeNotifier.value = prefs.getString('business_type') ?? kDefaultBusinessType;

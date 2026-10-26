@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -85,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
       if (!mounted) return;
-      HapticFeedback.mediumImpact();
+      unawaited(HapticFeedback.mediumImpact());
       if (account?.needsLegalAcceptance == true) {
         // The documents changed since this shop accepted them (DAS-104):
         // accept first, then home. Back cannot skip it.
@@ -102,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       Navigator.of(context).pushReplacementNamed(AppRoutes.home);
     } catch (e) {
-      HapticFeedback.heavyImpact();
+      unawaited(HapticFeedback.heavyImpact());
       if (!mounted) return;
       // A refused shop field is a plain-string 422 naming it (DAS-121): show
       // it under that field, in the server's words. Nothing was created.
