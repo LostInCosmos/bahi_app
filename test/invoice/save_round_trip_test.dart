@@ -22,7 +22,7 @@ import 'package:gst_bill_app/features/invoice/presentation/review_screen.dart';
 http.Response _json(Object body) =>
     http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
 
-Map<String, dynamic> _invoice({double cgstPct = 6, double sgstPct = 6}) => {
+Map<String, dynamic> _invoice({double cgstPct = 6, double sgstPct = 6, double netRate = 47.5, double totalGst = 12}) => {
       'seller_name': 'ACME',
       'seller_gstin': '09AAGCP8428E1Z7',
       'seller_phone': '9876543210',
@@ -37,18 +37,30 @@ Map<String, dynamic> _invoice({double cgstPct = 6, double sgstPct = 6}) => {
           'cgst_pct': cgstPct,
           'sgst_pct': sgstPct,
           'gross_amount': 100,
+          'net_rate': netRate,
         },
       ],
-      'totals': {'subtotal': 100, 'total_cgst': 6, 'total_sgst': 6, 'grand_total': 112},
+      // A bill that prints two discount lines, and its total GST (DAS-136).
+      'totals': {
+        'subtotal': 100,
+        'total_discount': 3,
+        'total_discount_2': 2,
+        'total_cgst': 6,
+        'total_sgst': 6,
+        'total_gst': totalGst,
+        'grand_total': 112,
+      },
     };
 
 class _Server {
   Map<String, dynamic>? saved;
+  Map<String, dynamic>? revalidated;
 
   MockClient get client => MockClient((req) async {
         final path = req.url.path;
         if (req.method == 'POST' && path == '/invoices/revalidate') {
-          return _json({'invoice': _invoice(cgstPct: 9, sgstPct: 9), 'issues': []});
+          revalidated = jsonDecode(req.body) as Map<String, dynamic>;
+          return _json({'invoice': _invoice(cgstPct: 9, sgstPct: 9, netRate: 48, totalGst: 18), 'issues': []});
         }
         if (req.method == 'POST' && path == '/invoices') {
           saved = jsonDecode(req.body) as Map<String, dynamic>;
@@ -147,6 +159,30 @@ void main() {
       final line = ((server.saved!['invoice'] as Map)['line_items'] as List).single as Map;
       expect(line['cgst_pct'], 9);
       expect(line['sgst_pct'], 9);
+    }, () => server.client);
+  });
+
+  // DAS-136: the drift test found the form dropped three fields the server
+  // sends: a second printed discount, the printed total GST and each line's
+  // net rate. The server's totals check adds total_discount_2 to
+  // total_discount, so dropping it flagged a correct bill on revalidate.
+  testWidgets('a revalidate and a save send back the second discount, total GST and net rate', (tester) async {
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _openReview(tester);
+      await tester.tap(find.text('Revalidate'));
+      await _settle(tester);
+
+      final asked = server.revalidated!;
+      expect((asked['totals'] as Map)['total_discount_2'], 2);
+      expect((asked['totals'] as Map)['total_gst'], 12);
+      expect(((asked['line_items'] as List).single as Map)['net_rate'], 47.5);
+
+      await _save(tester);
+      final invoice = server.saved!['invoice'] as Map<String, dynamic>;
+      expect((invoice['totals'] as Map)['total_discount_2'], 2);
+      expect((invoice['totals'] as Map)['total_gst'], 18, reason: "the server's answer after the revalidate");
+      expect(((invoice['line_items'] as List).single as Map)['net_rate'], 48);
     }, () => server.client);
   });
 }

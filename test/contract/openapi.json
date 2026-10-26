@@ -1,0 +1,8534 @@
+{
+ "components": {
+  "schemas": {
+   "AcceptLegalRequest": {
+    "properties": {
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "version"
+    ],
+    "title": "AcceptLegalRequest",
+    "type": "object"
+   },
+   "AccountOut": {
+    "properties": {
+     "address": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Address"
+     },
+     "business_type": {
+      "title": "Business Type",
+      "type": "string"
+     },
+     "dl_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dl No"
+     },
+     "email": {
+      "title": "Email",
+      "type": "string"
+     },
+     "gstin": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gstin"
+     },
+     "legal": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/LegalOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "public_stock_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Public Stock Url"
+     },
+     "tenant_name": {
+      "title": "Tenant Name",
+      "type": "string"
+     },
+     "voice_enabled": {
+      "default": false,
+      "title": "Voice Enabled",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "tenant_name",
+     "email",
+     "business_type"
+    ],
+    "title": "AccountOut",
+    "type": "object"
+   },
+   "AddVoiceOrderLineRequest": {
+    "description": "POST /voice-orders/{id}/lines \u2014 a shopkeeper manually adding an item\nthe voice parse missed, rather than re-recording a whole new note for\njust one item. Priced/allocated the same way an LLM-parsed line is\n(see voice.py's add_line), just resolved_by=\"user\" from the start.",
+    "properties": {
+     "discount_type": {
+      "anyOf": [
+       {
+        "enum": [
+         "percentage",
+         "amount"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount Type"
+     },
+     "discount_value": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount Value"
+     },
+     "mrp": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mrp"
+     },
+     "product_id": {
+      "title": "Product Id",
+      "type": "integer"
+     },
+     "quantity": {
+      "exclusiveMinimum": 0.0,
+      "title": "Quantity",
+      "type": "number"
+     },
+     "unit": {
+      "enum": [
+       "strip",
+       "tablet",
+       "capsule",
+       "bottle",
+       "tube",
+       "vial",
+       "ampoule",
+       "sachet"
+      ],
+      "title": "Unit",
+      "type": "string"
+     }
+    },
+    "required": [
+     "product_id",
+     "quantity",
+     "unit"
+    ],
+    "title": "AddVoiceOrderLineRequest",
+    "type": "object"
+   },
+   "AdminLoginRequest": {
+    "properties": {
+     "password": {
+      "title": "Password",
+      "type": "string"
+     },
+     "username": {
+      "title": "Username",
+      "type": "string"
+     }
+    },
+    "required": [
+     "username",
+     "password"
+    ],
+    "title": "AdminLoginRequest",
+    "type": "object"
+   },
+   "Body_extract_invoices_extract_post": {
+    "properties": {
+     "extra_source_images": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Extra Source Images",
+      "type": "array"
+     },
+     "source_image": {
+      "title": "Source Image",
+      "type": "string"
+     }
+    },
+    "required": [
+     "source_image"
+    ],
+    "title": "Body_extract_invoices_extract_post",
+    "type": "object"
+   },
+   "Body_handle_voice_command_voice_commands_audio_post": {
+    "properties": {
+     "audio": {
+      "contentMediaType": "application/octet-stream",
+      "title": "Audio",
+      "type": "string"
+     }
+    },
+    "required": [
+     "audio"
+    ],
+    "title": "Body_handle_voice_command_voice_commands_audio_post",
+    "type": "object"
+   },
+   "Body_parse_voice_order_audio_voice_orders_parse_audio_post": {
+    "properties": {
+     "audio": {
+      "contentMediaType": "application/octet-stream",
+      "title": "Audio",
+      "type": "string"
+     }
+    },
+    "required": [
+     "audio"
+    ],
+    "title": "Body_parse_voice_order_audio_voice_orders_parse_audio_post",
+    "type": "object"
+   },
+   "Body_preprocess_invoices_preprocess_post": {
+    "properties": {
+     "corners": {
+      "description": "JSON list of 4 {\"x\",\"y\"} points, in image pixel space",
+      "title": "Corners",
+      "type": "string"
+     },
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "rotation_degrees": {
+      "default": 0,
+      "title": "Rotation Degrees",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "file",
+     "corners"
+    ],
+    "title": "Body_preprocess_invoices_preprocess_post",
+    "type": "object"
+   },
+   "BulkDiscardRequest": {
+    "description": "Many uploads taken out of the shop's list in one request. Capped, so\none request cannot hold the database for long.",
+    "properties": {
+     "job_ids": {
+      "items": {
+       "type": "integer"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Job Ids",
+      "type": "array"
+     }
+    },
+    "required": [
+     "job_ids"
+    ],
+    "title": "BulkDiscardRequest",
+    "type": "object"
+   },
+   "BulkMoveRequest": {
+    "description": "Many bills into one folder in a single request.\n\nTwo id lists because a bill is two different rows depending on whether it\nhas been saved: an upload (`job_ids`) or the invoice it became\n(`invoice_ids`). Capped, so one request cannot hold the database for long.",
+    "properties": {
+     "folder_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Folder Id"
+     },
+     "invoice_ids": {
+      "items": {
+       "type": "integer"
+      },
+      "maxItems": 1000,
+      "title": "Invoice Ids",
+      "type": "array"
+     },
+     "job_ids": {
+      "items": {
+       "type": "integer"
+      },
+      "maxItems": 1000,
+      "title": "Job Ids",
+      "type": "array"
+     }
+    },
+    "title": "BulkMoveRequest",
+    "type": "object"
+   },
+   "ChangeEmailRequest": {
+    "properties": {
+     "current_password": {
+      "title": "Current Password",
+      "type": "string"
+     },
+     "new_email": {
+      "title": "New Email",
+      "type": "string"
+     }
+    },
+    "required": [
+     "current_password",
+     "new_email"
+    ],
+    "title": "ChangeEmailRequest",
+    "type": "object"
+   },
+   "ChangePasswordRequest": {
+    "properties": {
+     "current_password": {
+      "title": "Current Password",
+      "type": "string"
+     },
+     "new_password": {
+      "minLength": 8,
+      "title": "New Password",
+      "type": "string"
+     }
+    },
+    "required": [
+     "current_password",
+     "new_password"
+    ],
+    "title": "ChangePasswordRequest",
+    "type": "object"
+   },
+   "CreateFolderRequest": {
+    "properties": {
+     "name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "CreateFolderRequest",
+    "type": "object"
+   },
+   "CreateProductRequest": {
+    "description": "A product that doesn't exist yet, added on the spot from a screen\nthat expected to just pick one \u2014 a voice-order \"Add item\" search with no\nmatch, most commonly. Creates the product AND its first batch (no\ninvoice behind it, same \"manual stock\" idea as adjust_stock_up) in one\ncall, since a product with zero stock isn't sellable anyway.",
+    "properties": {
+     "gst_pct": {
+      "default": 0,
+      "minimum": 0.0,
+      "title": "Gst Pct",
+      "type": "number"
+     },
+     "mrp": {
+      "exclusiveMinimum": 0.0,
+      "title": "Mrp",
+      "type": "number"
+     },
+     "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "quantity": {
+      "exclusiveMinimum": 0.0,
+      "title": "Quantity",
+      "type": "number"
+     },
+     "unit": {
+      "minLength": 1,
+      "title": "Unit",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "mrp",
+     "quantity",
+     "unit"
+    ],
+    "title": "CreateProductRequest",
+    "type": "object"
+   },
+   "DeleteAccountRequest": {
+    "description": "DAS-101: the owner confirms with the password. A wrong one is 403 wrong_password, never 401:\nthe phone signs the device out on any 401 that carried a token.",
+    "properties": {
+     "password": {
+      "title": "Password",
+      "type": "string"
+     }
+    },
+    "required": [
+     "password"
+    ],
+    "title": "DeleteAccountRequest",
+    "type": "object"
+   },
+   "Discount": {
+    "description": "What the shopkeeper typed: rupees off, or a percentage. Only the rupees are stored.",
+    "properties": {
+     "type": {
+      "enum": [
+       "percentage",
+       "amount"
+      ],
+      "title": "Type",
+      "type": "string"
+     },
+     "value": {
+      "minimum": 0.0,
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "type",
+     "value"
+    ],
+    "title": "Discount",
+    "type": "object"
+   },
+   "ExtractionJobBrief": {
+    "description": "One row of GET /invoices/extract \u2014 a bill as a capture card shows it.\n\nDeliberately without `result`, `raw_response` or `validation_issues`,\nfor the reason JobStatusBrief is: those three were measured at ~1,827\nof a row's ~2,005 bytes, and a list of fifty would be ~100 KB of JSON\nto draw fifty thumbnails. The app fetches a result from\nGET /invoices/extract/{id} when someone opens one.\n\n`invoice_id` is what stops a saved bill looking identical to an\nunsaved one. There is no foreign key between the two \u2014 the only link\nis Invoice.source_image_path matching ExtractionLog.source_image \u2014 so\nit is a left join on that path, not a relationship.\n\n`folder_id` comes from that same matched invoice, and is therefore\nnull for everything not yet saved. That is not a gap to fill: an\nupload HAS no folder until a human files it by saving, so\n\"unfiled\" and \"unsaved\" are the same state. It exists so the capture\nscreen can show a folder's own bills instead of every bill the shop\nowns \u2014 without it the client cannot tell which folder an upload\nbelongs to at all.",
+    "properties": {
+     "attempt": {
+      "default": 0,
+      "title": "Attempt",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "error_kind": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error Kind"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     },
+     "folder_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Folder Id"
+     },
+     "image_rev": {
+      "default": 0,
+      "title": "Image Rev",
+      "type": "integer"
+     },
+     "invoice_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Invoice Id"
+     },
+     "invoice_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Invoice No"
+     },
+     "issue_count": {
+      "default": 0,
+      "title": "Issue Count",
+      "type": "integer"
+     },
+     "job_id": {
+      "title": "Job Id",
+      "type": "integer"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     },
+     "retry_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Retry At"
+     },
+     "review_state": {
+      "default": "none",
+      "title": "Review State",
+      "type": "string"
+     },
+     "seller_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seller Name"
+     },
+     "source_image": {
+      "title": "Source Image",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "job_id",
+     "status",
+     "source_image",
+     "created_at"
+    ],
+    "title": "ExtractionJobBrief",
+    "type": "object"
+   },
+   "ExtractionJobCreated": {
+    "description": "Returned immediately by POST /invoices/extract \u2014 the actual Gemini\nwork happens later, in the worker (see services/extraction/jobs.py).\njob_id is just ExtractionLog.id; there's no separate jobs table.",
+    "properties": {
+     "job_id": {
+      "title": "Job Id",
+      "type": "integer"
+     },
+     "status": {
+      "default": "pending",
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "job_id"
+    ],
+    "title": "ExtractionJobCreated",
+    "type": "object"
+   },
+   "ExtractionJobError": {
+    "properties": {
+     "extra_source_images": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Extra Source Images"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "source_image": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Image"
+     }
+    },
+    "required": [
+     "kind",
+     "message"
+    ],
+    "title": "ExtractionJobError",
+    "type": "object"
+   },
+   "ExtractionJobPage": {
+    "properties": {
+     "counts": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "additionalProperties": {
+          "type": "integer"
+         },
+         "type": "object"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Counts"
+     },
+     "jobs": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/ExtractionJobBrief"
+      },
+      "title": "Jobs",
+      "type": "array"
+     },
+     "next_before_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Before Id"
+     }
+    },
+    "title": "ExtractionJobPage",
+    "type": "object"
+   },
+   "ExtractionJobStatus": {
+    "description": "GET /invoices/extract/{job_id} \u2014 always 200, even for a failed job;\nthe poll itself succeeded, the job just didn't.",
+    "properties": {
+     "attempt": {
+      "default": 0,
+      "title": "Attempt",
+      "type": "integer"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ExtractionJobError"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "image_rev": {
+      "default": 0,
+      "title": "Image Rev",
+      "type": "integer"
+     },
+     "invoice_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Invoice Id"
+     },
+     "job_id": {
+      "title": "Job Id",
+      "type": "integer"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     },
+     "result": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ExtractionResult"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "retry_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Retry At"
+     },
+     "review_state": {
+      "default": "none",
+      "title": "Review State",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "job_id",
+     "status"
+    ],
+    "title": "ExtractionJobStatus",
+    "type": "object"
+   },
+   "ExtractionMeta": {
+    "properties": {
+     "confidence": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Confidence"
+     },
+     "extra_source_images": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Extra Source Images",
+      "type": "array"
+     },
+     "method": {
+      "enum": [
+       "llm",
+       "template"
+      ],
+      "title": "Method",
+      "type": "string"
+     },
+     "reviewed_by_user": {
+      "default": false,
+      "title": "Reviewed By User",
+      "type": "boolean"
+     },
+     "source_image": {
+      "title": "Source Image",
+      "type": "string"
+     },
+     "template_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Template Id"
+     },
+     "vendor_known": {
+      "default": false,
+      "title": "Vendor Known",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "source_image",
+     "method"
+    ],
+    "title": "ExtractionMeta",
+    "type": "object"
+   },
+   "ExtractionResult": {
+    "properties": {
+     "extraction_meta": {
+      "$ref": "#/components/schemas/ExtractionMeta"
+     },
+     "invoice": {
+      "$ref": "#/components/schemas/InvoiceIn"
+     },
+     "issues": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+     }
+    },
+    "required": [
+     "invoice",
+     "extraction_meta"
+    ],
+    "title": "ExtractionResult",
+    "type": "object"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "title": "Detail",
+      "type": "array"
+     }
+    },
+    "title": "HTTPValidationError",
+    "type": "object"
+   },
+   "InvoiceIn": {
+    "properties": {
+     "buyer_dl_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Dl No"
+     },
+     "buyer_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Name"
+     },
+     "invoice_date": {
+      "format": "date",
+      "title": "Invoice Date",
+      "type": "string"
+     },
+     "invoice_no": {
+      "title": "Invoice No",
+      "type": "string"
+     },
+     "invoice_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Invoice Type"
+     },
+     "line_items": {
+      "items": {
+       "$ref": "#/components/schemas/LineItemIn"
+      },
+      "minItems": 1,
+      "title": "Line Items",
+      "type": "array"
+     },
+     "place_of_supply": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Place Of Supply"
+     },
+     "seller_address": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seller Address"
+     },
+     "seller_dl_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seller Dl No"
+     },
+     "seller_gstin": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seller Gstin"
+     },
+     "seller_name": {
+      "title": "Seller Name",
+      "type": "string"
+     },
+     "seller_phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seller Phone"
+     },
+     "totals": {
+      "$ref": "#/components/schemas/Totals"
+     }
+    },
+    "required": [
+     "seller_name",
+     "invoice_no",
+     "invoice_date",
+     "line_items",
+     "totals"
+    ],
+    "title": "InvoiceIn",
+    "type": "object"
+   },
+   "JobStatusBatch": {
+    "properties": {
+     "changed": {
+      "default": false,
+      "title": "Changed",
+      "type": "boolean"
+     },
+     "jobs": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/JobStatusBrief"
+      },
+      "title": "Jobs",
+      "type": "array"
+     }
+    },
+    "title": "JobStatusBatch",
+    "type": "object"
+   },
+   "JobStatusBrief": {
+    "description": "Deliberately without `result`. A client learns a bill is done here,\nthen fetches that one bill's result from GET /invoices/extract/{id} \u2014\nonce, instead of carrying it on every poll of every bill.",
+    "properties": {
+     "attempt": {
+      "default": 0,
+      "title": "Attempt",
+      "type": "integer"
+     },
+     "flag_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Flag Count"
+     },
+     "job_id": {
+      "title": "Job Id",
+      "type": "integer"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     },
+     "retry_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Retry At"
+     },
+     "review_state": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Review State"
+     },
+     "saved": {
+      "default": false,
+      "title": "Saved",
+      "type": "boolean"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "job_id",
+     "status"
+    ],
+    "title": "JobStatusBrief",
+    "type": "object"
+   },
+   "JobStatusRequest": {
+    "description": "POST /invoices/extract/status \u2014 the ids a client is still waiting on.\n\nOne request covers a whole batch. Previously each in-flight bill polled\non its own 2s timer, so 1000 bills meant ~500 requests a second, each a\n`SELECT *` carrying ~2 KB of JSON blobs to deliver ~13 bytes of status.",
+    "properties": {
+     "job_ids": {
+      "items": {
+       "type": "integer"
+      },
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Job Ids",
+      "type": "array"
+     },
+     "wait": {
+      "default": true,
+      "title": "Wait",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "job_ids"
+    ],
+    "title": "JobStatusRequest",
+    "type": "object"
+   },
+   "LegalOut": {
+    "description": "DAS-104: the shop's standing on the legal documents. The phone shows the acceptance sheet only\nwhen `requires_acceptance` and it has the current text to show.",
+    "properties": {
+     "accepted_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Accepted At"
+     },
+     "accepted_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Accepted Version"
+     },
+     "current_version": {
+      "title": "Current Version",
+      "type": "string"
+     },
+     "requires_acceptance": {
+      "title": "Requires Acceptance",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "current_version",
+     "requires_acceptance"
+    ],
+    "title": "LegalOut",
+    "type": "object"
+   },
+   "LineItemIn": {
+    "properties": {
+     "batch_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Batch No"
+     },
+     "cgst_amount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cgst Amount"
+     },
+     "cgst_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cgst Pct"
+     },
+     "discount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount"
+     },
+     "discount_amount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount Amount"
+     },
+     "discount_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount Pct"
+     },
+     "expiry": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expiry"
+     },
+     "free_qty": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Free Qty"
+     },
+     "free_scheme": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Free Scheme"
+     },
+     "gross_amount": {
+      "title": "Gross Amount",
+      "type": "number"
+     },
+     "gst_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gst Pct"
+     },
+     "hsn_code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hsn Code"
+     },
+     "igst_amount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Igst Amount"
+     },
+     "igst_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Igst Pct"
+     },
+     "mrp": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mrp"
+     },
+     "net_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Net Rate"
+     },
+     "pack": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pack"
+     },
+     "product_name": {
+      "title": "Product Name",
+      "type": "string"
+     },
+     "qty": {
+      "title": "Qty",
+      "type": "number"
+     },
+     "rate": {
+      "title": "Rate",
+      "type": "number"
+     },
+     "sgst_amount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sgst Amount"
+     },
+     "sgst_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sgst Pct"
+     }
+    },
+    "required": [
+     "product_name",
+     "qty",
+     "rate",
+     "gross_amount"
+    ],
+    "title": "LineItemIn",
+    "type": "object"
+   },
+   "LoginRequest": {
+    "properties": {
+     "email": {
+      "title": "Email",
+      "type": "string"
+     },
+     "password": {
+      "title": "Password",
+      "type": "string"
+     }
+    },
+    "required": [
+     "email",
+     "password"
+    ],
+    "title": "LoginRequest",
+    "type": "object"
+   },
+   "MoveInvoiceRequest": {
+    "properties": {
+     "folder_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Folder Id"
+     }
+    },
+    "title": "MoveInvoiceRequest",
+    "type": "object"
+   },
+   "ResolveMatchRequest": {
+    "properties": {
+     "action": {
+      "pattern": "^(merge|new)$",
+      "title": "Action",
+      "type": "string"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "title": "ResolveMatchRequest",
+    "type": "object"
+   },
+   "RevalidateResult": {
+    "properties": {
+     "invoice": {
+      "$ref": "#/components/schemas/InvoiceIn"
+     },
+     "issues": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+     }
+    },
+    "required": [
+     "invoice"
+    ],
+    "title": "RevalidateResult",
+    "type": "object"
+   },
+   "SaleLineItemIn": {
+    "properties": {
+     "discount": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Discount"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "product_batch_id": {
+      "title": "Product Batch Id",
+      "type": "integer"
+     },
+     "qty": {
+      "exclusiveMinimum": 0.0,
+      "title": "Qty",
+      "type": "number"
+     },
+     "rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rate"
+     }
+    },
+    "required": [
+     "product_batch_id",
+     "qty"
+    ],
+    "title": "SaleLineItemIn",
+    "type": "object"
+   },
+   "SaleRequest": {
+    "properties": {
+     "allow_oversell": {
+      "default": false,
+      "title": "Allow Oversell",
+      "type": "boolean"
+     },
+     "buyer_gstin": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Gstin"
+     },
+     "buyer_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Name"
+     },
+     "discount": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Discount"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "line_items": {
+      "items": {
+       "$ref": "#/components/schemas/SaleLineItemIn"
+      },
+      "minItems": 1,
+      "title": "Line Items",
+      "type": "array"
+     }
+    },
+    "required": [
+     "line_items"
+    ],
+    "title": "SaleRequest",
+    "type": "object"
+   },
+   "SaveInvoiceRequest": {
+    "properties": {
+     "confirmed_vendor_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Confirmed Vendor Id"
+     },
+     "extraction_meta": {
+      "$ref": "#/components/schemas/ExtractionMeta"
+     },
+     "folder_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Folder Id"
+     },
+     "gstin_confirmed": {
+      "default": false,
+      "title": "Gstin Confirmed",
+      "type": "boolean"
+     },
+     "invoice": {
+      "$ref": "#/components/schemas/InvoiceIn"
+     },
+     "override_errors": {
+      "default": false,
+      "title": "Override Errors",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "invoice",
+     "extraction_meta"
+    ],
+    "title": "SaveInvoiceRequest",
+    "type": "object"
+   },
+   "SignupRequest": {
+    "properties": {
+     "business_type": {
+      "anyOf": [
+       {
+        "pattern": "^(medical|kirana|other)$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Type"
+     },
+     "dl_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dl No"
+     },
+     "email": {
+      "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+      "title": "Email",
+      "type": "string"
+     },
+     "gstin": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gstin"
+     },
+     "legal_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Legal Version"
+     },
+     "password": {
+      "minLength": 8,
+      "title": "Password",
+      "type": "string"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "tenant_name": {
+      "minLength": 1,
+      "title": "Tenant Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tenant_name",
+     "email",
+     "password"
+    ],
+    "title": "SignupRequest",
+    "type": "object"
+   },
+   "TokenResponse": {
+    "properties": {
+     "access_token": {
+      "title": "Access Token",
+      "type": "string"
+     },
+     "account": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/AccountOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "token_type": {
+      "default": "bearer",
+      "title": "Token Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "access_token"
+    ],
+    "title": "TokenResponse",
+    "type": "object"
+   },
+   "Totals": {
+    "properties": {
+     "grand_total": {
+      "title": "Grand Total",
+      "type": "number"
+     },
+     "round_off": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Off"
+     },
+     "subtotal": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subtotal"
+     },
+     "total_cgst": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total Cgst"
+     },
+     "total_discount": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total Discount"
+     },
+     "total_discount_2": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total Discount 2"
+     },
+     "total_gst": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total Gst"
+     },
+     "total_igst": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total Igst"
+     },
+     "total_sgst": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total Sgst"
+     }
+    },
+    "required": [
+     "grand_total"
+    ],
+    "title": "Totals",
+    "type": "object"
+   },
+   "UnsaveInvoiceRequest": {
+    "description": "Send a saved bill back to where it was before saving.\n\n`remove_stock` has no default on purpose: whether the stock the bill added\nstays in inventory is the shopkeeper's decision, asked every time, never\none the API assumes for them.",
+    "properties": {
+     "remove_stock": {
+      "title": "Remove Stock",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "remove_stock"
+    ],
+    "title": "UnsaveInvoiceRequest",
+    "type": "object"
+   },
+   "UpdateAccountRequest": {
+    "properties": {
+     "address": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Address"
+     },
+     "business_type": {
+      "anyOf": [
+       {
+        "pattern": "^(medical|kirana|other)$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Type"
+     },
+     "dl_no": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dl No"
+     },
+     "gstin": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gstin"
+     },
+     "phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Phone"
+     },
+     "tenant_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tenant Name"
+     }
+    },
+    "title": "UpdateAccountRequest",
+    "type": "object"
+   },
+   "UpdateBatchMrpRequest": {
+    "properties": {
+     "mrp": {
+      "title": "Mrp",
+      "type": "number"
+     }
+    },
+    "required": [
+     "mrp"
+    ],
+    "title": "UpdateBatchMrpRequest",
+    "type": "object"
+   },
+   "UpdateFolderRequest": {
+    "description": "Rename and/or move. A field left out is unchanged; `parent_id: null`\nexplicitly moves the folder to home.",
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     }
+    },
+    "title": "UpdateFolderRequest",
+    "type": "object"
+   },
+   "UpdateProductRequest": {
+    "properties": {
+     "salt_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Salt Name"
+     },
+     "schedule": {
+      "anyOf": [
+       {
+        "pattern": "^(H|H1)?$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Schedule"
+     },
+     "units_per_strip": {
+      "anyOf": [
+       {
+        "exclusiveMinimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Units Per Strip"
+     }
+    },
+    "title": "UpdateProductRequest",
+    "type": "object"
+   },
+   "ValidationError": {
+    "properties": {
+     "ctx": {
+      "title": "Context",
+      "type": "object"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "title": "Location",
+      "type": "array"
+     },
+     "msg": {
+      "title": "Message",
+      "type": "string"
+     },
+     "type": {
+      "title": "Error Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError",
+    "type": "object"
+   },
+   "ValidationIssue": {
+    "properties": {
+     "candidates": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Candidates"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "severity": {
+      "title": "Severity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "field",
+     "severity",
+     "message"
+    ],
+    "title": "ValidationIssue",
+    "type": "object"
+   },
+   "VoiceCommandConfirmRequest": {
+    "properties": {
+     "confirmation_token": {
+      "title": "Confirmation Token",
+      "type": "string"
+     }
+    },
+    "required": [
+     "confirmation_token"
+    ],
+    "title": "VoiceCommandConfirmRequest",
+    "type": "object"
+   },
+   "VoiceCommandResponse": {
+    "properties": {
+     "confirmation_token": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Confirmation Token"
+     },
+     "data": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Data"
+     },
+     "intent": {
+      "title": "Intent",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "requires_confirmation": {
+      "default": false,
+      "title": "Requires Confirmation",
+      "type": "boolean"
+     },
+     "success": {
+      "title": "Success",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "success",
+     "intent",
+     "message"
+    ],
+    "title": "VoiceCommandResponse",
+    "type": "object"
+   },
+   "VoiceOrderConfirmRequest": {
+    "properties": {
+     "allow_oversell": {
+      "default": false,
+      "title": "Allow Oversell",
+      "type": "boolean"
+     },
+     "buyer_gstin": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Gstin"
+     },
+     "buyer_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Name"
+     }
+    },
+    "title": "VoiceOrderConfirmRequest",
+    "type": "object"
+   },
+   "VoiceOrderLineUpdateRequest": {
+    "properties": {
+     "discount_type": {
+      "anyOf": [
+       {
+        "enum": [
+         "percentage",
+         "amount"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount Type"
+     },
+     "discount_value": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Discount Value"
+     },
+     "mrp": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mrp"
+     },
+     "prescription_ref": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prescription Ref"
+     },
+     "product_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Product Id"
+     },
+     "quantity": {
+      "anyOf": [
+       {
+        "exclusiveMinimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Quantity"
+     },
+     "skip": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Skip"
+     },
+     "unit": {
+      "anyOf": [
+       {
+        "enum": [
+         "strip",
+         "tablet",
+         "capsule",
+         "bottle",
+         "tube",
+         "vial",
+         "ampoule",
+         "sachet"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Unit"
+     }
+    },
+    "title": "VoiceOrderLineUpdateRequest",
+    "type": "object"
+   },
+   "VoiceParseJobCreated": {
+    "description": "Returned immediately by POST /voice-orders/parse-audio \u2014 the actual\ntranscribe+parse work happens later, in the worker (see\nservices/voice/jobs.py). job_id is a VoiceParseJob.id, a separate id\nspace from voice order ids (see VoiceParseJob's own docstring for why\nthis is a distinct table rather than extending VoiceOrder).",
+    "properties": {
+     "job_id": {
+      "title": "Job Id",
+      "type": "integer"
+     },
+     "status": {
+      "default": "pending",
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "job_id"
+    ],
+    "title": "VoiceParseJobCreated",
+    "type": "object"
+   },
+   "VoiceParseJobError": {
+    "properties": {
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "message"
+    ],
+    "title": "VoiceParseJobError",
+    "type": "object"
+   },
+   "VoiceParseJobStatus": {
+    "description": "GET /voice-orders/jobs/{job_id} \u2014 always 200, even for a failed job.\n\n`order` deliberately isn't a strict schema \u2014 none of this router's other\nendpoints model VoiceOrder/VoiceOrderLine as Pydantic either, they all\nreturn _order_out(vo)'s plain dict as-is; this reuses exactly that dict\nonce status==\"done\" rather than introducing a second, parallel shape.",
+    "properties": {
+     "attempt": {
+      "default": 0,
+      "title": "Attempt",
+      "type": "integer"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VoiceParseJobError"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "job_id": {
+      "title": "Job Id",
+      "type": "integer"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     },
+     "order": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Order"
+     },
+     "retry_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Retry At"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "job_id",
+     "status"
+    ],
+    "title": "VoiceParseJobStatus",
+    "type": "object"
+   }
+  },
+  "securitySchemes": {
+   "HTTPBearer": {
+    "scheme": "bearer",
+    "type": "http"
+   }
+  }
+ },
+ "info": {
+  "title": "Dastavez",
+  "version": "0.1.0"
+ },
+ "openapi": "3.1.0",
+ "paths": {
+  "/account": {
+   "get": {
+    "operationId": "get_account_account_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccountOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Account",
+    "tags": [
+     "account"
+    ]
+   },
+   "patch": {
+    "operationId": "update_account_account_patch",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateAccountRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccountOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Account",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/account/accept-legal": {
+   "post": {
+    "description": "DAS-104: record that the shop accepted this legal version. 422 stale_version below the current one.",
+    "operationId": "accept_legal_account_accept_legal_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AcceptLegalRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Accept Legal",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/account/change-email": {
+   "post": {
+    "operationId": "change_email_account_change_email_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChangeEmailRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccountOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Change Email",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/account/change-password": {
+   "post": {
+    "operationId": "change_password_account_change_password_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChangePasswordRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Change Password",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/account/delete": {
+   "post": {
+    "description": "DAS-101: the shop deletes its account. 204; 403 wrong_password; every session signed out.",
+    "operationId": "delete_account_account_delete_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DeleteAccountRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Delete Account",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/admin/app-version-policy/{platform}": {
+   "patch": {
+    "description": "DAS-74: `{min_build, hard_block_below_build?, message?}` \u2014 the only way this changes, ever;\nnever tied to a deploy. Takes effect for every process within `version_gate._TTL_SECONDS`, and\nat once for whichever process handles this request.",
+    "operationId": "set_app_version_policy_admin_app_version_policy__platform__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "platform",
+      "required": true,
+      "schema": {
+       "title": "Platform",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Set App Version Policy",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs": {
+   "get": {
+    "description": "One page of logs: `{items, total, limit, offset, search, usage}`. `usage` and\n`total` cover the whole filter, not the page. DAS-108: `vendor_verified` / `products_verified`.",
+    "operationId": "list_extraction_logs_admin_extraction_logs_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "tenant_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Tenant Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "has_error",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Has Error"
+      }
+     },
+     {
+      "in": "query",
+      "name": "outcome",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Outcome"
+      }
+     },
+     {
+      "in": "query",
+      "name": "start_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "end_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "seller",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Seller"
+      }
+     },
+     {
+      "in": "query",
+      "name": "invoice_no",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Invoice No"
+      }
+     },
+     {
+      "in": "query",
+      "name": "vendor_verified",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Vendor Verified"
+      }
+     },
+     {
+      "in": "query",
+      "name": "products_verified",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Products Verified"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Extraction Logs",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}": {
+   "get": {
+    "operationId": "get_extraction_log_admin_extraction_logs__log_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Extraction Log",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/discard": {
+   "post": {
+    "description": "DAS-114: hide a bill from the shop -> `{id, deleted_at}`. 409 `saved` | `in flight` |\n`already merged` | `already discarded`.",
+    "operationId": "discard_extraction_log_admin_extraction_logs__log_id__discard_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Discard Extraction Log",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/held-read/dismiss": {
+   "post": {
+    "description": "DAS-115 \"Keep the saved bill\": a re-read held for a person is set aside, and not offered again\nuntil the next retry. 409 when nothing is held.",
+    "operationId": "dismiss_held_read_admin_extraction_logs__log_id__held_read_dismiss_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Dismiss Held Read",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/image": {
+   "get": {
+    "operationId": "get_extraction_log_image_admin_extraction_logs__log_id__image_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Page",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Extraction Log Image",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/line-items": {
+   "patch": {
+    "description": "Correct lines and/or printed totals of a read bill and check it again:\n`{id, validation_issues, clean}`. Works on a saved bill too (reconciles stock and GST);\n`edits={}` revalidates/reapplies the read exactly as it stands, with nothing manually\ntouched (DAS-78 \u2014 \"review this read\" after a retry). 409 while not `done`; 422, with\nnothing changed, for a bad index, a field that is not editable, or a wrong type.",
+    "operationId": "edit_extraction_line_items_admin_extraction_logs__log_id__line_items_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dry_run",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Dry Run",
+       "type": "boolean"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "description": "{\"<line index>\": {field: value}, \"totals\": {field: value}} \u2014 see editable_fields and editable_totals on the detail",
+        "title": "Edits",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Edit Extraction Line Items",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/merge/{other_id}": {
+   "post": {
+    "description": "DAS-114: one bill sent as two uploads. `other_id`'s pages go after this log's and this log is\nread again; returns this log in the detail shape. 409 as discard, for either log; 422 `same log`,\n`different shop` or too many pages.",
+    "operationId": "merge_extraction_logs_admin_extraction_logs__log_id__merge__other_id__post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "other_id",
+      "required": true,
+      "schema": {
+       "title": "Other Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Merge Extraction Logs",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/retry": {
+   "post": {
+    "operationId": "retry_extraction_log_admin_extraction_logs__log_id__retry_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Retry Extraction Log",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/extraction-logs/{log_id}/rotate": {
+   "post": {
+    "description": "Rotate pages of the bill's photo in place: `{pages: [{page, degrees: 90|180|270}, \u2026], version?}`, all\nor none (DAS-115), or one page as `{page, degrees, version?}` (DAS-72, older panels) -> `{source_image,\nextra_source_images, image_rev, version}`. Any finished bill, saved or not; no claim is taken. The\nobject is overwritten under its same name; `image_rev` is a cache-buster for a client that caches\nthe photo by path.",
+    "operationId": "rotate_extraction_log_photo_admin_extraction_logs__log_id__rotate_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Rotate Extraction Log Photo",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/invoices": {
+   "get": {
+    "description": "One page of invoices: `{items, total, limit, offset}`, `total` over the\nwhole filter. It was a bare array of the newest `limit` (500 at most).",
+    "operationId": "list_invoices_admin_admin_invoices_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "tenant_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Tenant Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "vendor_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Vendor Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "start_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "end_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 100,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Invoices Admin",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/invoices/{invoice_id}": {
+   "get": {
+    "operationId": "get_invoice_detail_admin_admin_invoices__invoice_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "invoice_id",
+      "required": true,
+      "schema": {
+       "title": "Invoice Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Invoice Detail Admin",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/invoices/{invoice_id}/image": {
+   "get": {
+    "operationId": "get_invoice_image_admin_admin_invoices__invoice_id__image_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "invoice_id",
+      "required": true,
+      "schema": {
+       "title": "Invoice Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Page",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Invoice Image Admin",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/login": {
+   "post": {
+    "operationId": "admin_login_admin_login_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AdminLoginRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Admin Login",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/logout": {
+   "post": {
+    "operationId": "admin_logout_admin_logout_post",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Admin Logout",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/master-aliases/{alias_id}/move": {
+   "post": {
+    "operationId": "master_alias_move_admin_master_aliases__alias_id__move_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "alias_id",
+      "required": true,
+      "schema": {
+       "title": "Alias Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master Alias Move",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/master-products": {
+   "get": {
+    "operationId": "master_product_list_admin_master_products_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "in": "query",
+      "name": "verified_how",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Verified How"
+      }
+     },
+     {
+      "in": "query",
+      "name": "near_duplicate",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Near Duplicate"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master Product List",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/master-products/{keep_id}/merge/{other_id}": {
+   "post": {
+    "operationId": "master_product_merge_admin_master_products__keep_id__merge__other_id__post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "keep_id",
+      "required": true,
+      "schema": {
+       "title": "Keep Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "other_id",
+      "required": true,
+      "schema": {
+       "title": "Other Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dry_run",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Dry Run",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master Product Merge",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/master-products/{master_id}": {
+   "get": {
+    "operationId": "master_product_detail_admin_master_products__master_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "master_id",
+      "required": true,
+      "schema": {
+       "title": "Master Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master Product Detail",
+    "tags": [
+     "admin"
+    ]
+   },
+   "patch": {
+    "operationId": "master_product_patch_admin_master_products__master_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "master_id",
+      "required": true,
+      "schema": {
+       "title": "Master Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dry_run",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Dry Run",
+       "type": "boolean"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master Product Patch",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/master-products/{master_id}/bills": {
+   "get": {
+    "description": "DAS-102: every bill line carrying this master, newest saved bill first, paged; one indexed query.",
+    "operationId": "master_product_bills_admin_master_products__master_id__bills_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "master_id",
+      "required": true,
+      "schema": {
+       "title": "Master Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master Product Bills",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/product-verifications": {
+   "get": {
+    "description": "Unverified shop products (an item's id is the product's), oldest first, or ranked by `q`\n(fuzzy on the name) with `hsn`/`mrp`. `risk` and `origin` (bill|shop) repeat.",
+    "operationId": "product_verification_list_admin_product_verifications_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "shop",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Shop"
+      }
+     },
+     {
+      "in": "query",
+      "name": "vendor",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Vendor"
+      }
+     },
+     {
+      "in": "query",
+      "name": "risk",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Risk"
+      }
+     },
+     {
+      "in": "query",
+      "name": "group",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Group"
+      }
+     },
+     {
+      "in": "query",
+      "name": "origin",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Origin"
+      }
+     },
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "in": "query",
+      "name": "hsn",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Hsn"
+      }
+     },
+     {
+      "in": "query",
+      "name": "mrp",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mrp"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Product Verification List",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/product-verifications/bulk-new": {
+   "post": {
+    "description": "`{items: [{id, name}]}`: plain items verified as new products, marked \"bulk\".",
+    "operationId": "product_verification_bulk_new_admin_product_verifications_bulk_new_post",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "dry_run",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Dry Run",
+       "type": "boolean"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Product Verification Bulk New",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/product-verifications/count": {
+   "get": {
+    "operationId": "product_verification_count_admin_product_verifications_count_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Product Verification Count",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/product-verifications/resolve": {
+   "post": {
+    "description": "`{ids, action: same_as|new|shop_product, master_id?, product_id?, name?, pack?, hsn?, alias_kind}`.",
+    "operationId": "product_verification_resolve_admin_product_verifications_resolve_post",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "dry_run",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Dry Run",
+       "type": "boolean"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Product Verification Resolve",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/product-verifications/{item_id}": {
+   "get": {
+    "operationId": "product_verification_detail_admin_product_verifications__item_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "item_id",
+      "required": true,
+      "schema": {
+       "title": "Item Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Product Verification Detail",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/product-verifications/{item_id}/candidates": {
+   "get": {
+    "description": "The one-flow verify box (DAS-100): masters, this shop's products and same-named masters for a typed name.",
+    "operationId": "product_verification_candidates_admin_product_verifications__item_id__candidates_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "item_id",
+      "required": true,
+      "schema": {
+       "title": "Item Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 8,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "shop_products",
+      "required": false,
+      "schema": {
+       "default": true,
+       "title": "Shop Products",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Product Verification Candidates",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews": {
+   "get": {
+    "description": "Flagged bills waiting for an admin, oldest first: `{items, total, limit, offset, review_target_minutes}`.\n`discrepancy=open` keeps only bills with a stock discrepancy nobody has handled.",
+    "operationId": "review_queue_admin_reviews_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "state",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "State"
+      }
+     },
+     {
+      "in": "query",
+      "name": "mine",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mine"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tenant_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Tenant Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "saved",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Saved"
+      }
+     },
+     {
+      "in": "query",
+      "name": "older_than_minutes",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Older Than Minutes"
+      }
+     },
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "in": "query",
+      "name": "discrepancy",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Discrepancy"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Queue",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews/count": {
+   "get": {
+    "operationId": "review_count_admin_reviews_count_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Count",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews/{log_id}/claim": {
+   "post": {
+    "operationId": "review_claim_admin_reviews__log_id__claim_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Claim",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews/{log_id}/close-matches/{match_id}/resolve": {
+   "post": {
+    "description": "DAS-71 phase 4. `{action: merge|new, version}`; the same locked path as the shop's own answer.",
+    "operationId": "review_resolve_close_match_admin_reviews__log_id__close_matches__match_id__resolve_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "match_id",
+      "required": true,
+      "schema": {
+       "title": "Match Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Resolve Close Match",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews/{log_id}/complete": {
+   "post": {
+    "description": "The admin says this bill is checked. `{version, note?, accept_issues?}`.",
+    "operationId": "review_complete_admin_reviews__log_id__complete_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Complete",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews/{log_id}/discrepancies/{discrepancy_id}/handle": {
+   "post": {
+    "description": "DAS-71 phase 4. `{resolution: corrected_elsewhere|accepted, note?, version}` \u2192 the discrepancy.",
+    "operationId": "review_handle_discrepancy_admin_reviews__log_id__discrepancies__discrepancy_id__handle_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "discrepancy_id",
+      "required": true,
+      "schema": {
+       "title": "Discrepancy Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Handle Discrepancy",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/reviews/{log_id}/release": {
+   "post": {
+    "operationId": "review_release_admin_reviews__log_id__release_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "log_id",
+      "required": true,
+      "schema": {
+       "title": "Log Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Review Release",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/shop-product-links/{product_id}/unlink": {
+   "post": {
+    "description": "Unverify: back to the queue; undoes the traceable spellings, the name when it can, an orphan master.",
+    "operationId": "shop_product_unlink_admin_shop_product_links__product_id__unlink_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "product_id",
+      "required": true,
+      "schema": {
+       "title": "Product Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dry_run",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Dry Run",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Shop Product Unlink",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/storefront-slugs/check": {
+   "get": {
+    "operationId": "storefront_slug_check_admin_storefront_slugs_check_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "slug",
+      "required": false,
+      "schema": {
+       "default": "",
+       "title": "Slug",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tenant_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Tenant Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Storefront Slug Check",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/storefront-status": {
+   "get": {
+    "description": "`public_ready`: false while PUBLIC_EDGE_KEY is unset, i.e. no page opens for anyone yet.",
+    "operationId": "storefront_status_admin_storefront_status_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Storefront Status",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/tenants": {
+   "get": {
+    "operationId": "list_tenants_admin_tenants_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Tenants",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/tenants/{tenant_id}": {
+   "get": {
+    "operationId": "get_tenant_detail_admin_tenants__tenant_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "tenant_id",
+      "required": true,
+      "schema": {
+       "title": "Tenant Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Tenant Detail",
+    "tags": [
+     "admin"
+    ]
+   },
+   "patch": {
+    "operationId": "update_tenant_admin_tenants__tenant_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "tenant_id",
+      "required": true,
+      "schema": {
+       "title": "Tenant Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Tenant",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/tenants/{tenant_id}/storefront": {
+   "get": {
+    "operationId": "storefront_detail_admin_tenants__tenant_id__storefront_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "tenant_id",
+      "required": true,
+      "schema": {
+       "title": "Tenant Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "locality",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Locality"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Storefront Detail",
+    "tags": [
+     "admin"
+    ]
+   },
+   "patch": {
+    "description": "Any of `{enabled}`, `{display_name}`, `{slug}` (a rename; the old slug redirects for good).",
+    "operationId": "storefront_change_admin_tenants__tenant_id__storefront_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "tenant_id",
+      "required": true,
+      "schema": {
+       "title": "Tenant Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Storefront Change",
+    "tags": [
+     "admin"
+    ]
+   },
+   "post": {
+    "description": "`{slug, display_name}`: the shop's page goes live (enabled).",
+    "operationId": "storefront_publish_admin_tenants__tenant_id__storefront_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "tenant_id",
+      "required": true,
+      "schema": {
+       "title": "Tenant Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Storefront Publish",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendor-conflicts": {
+   "get": {
+    "operationId": "list_vendor_conflicts_admin_vendor_conflicts_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Vendor Conflicts",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendor-conflicts/{vendor_id}/keep/{keep_vendor_id}": {
+   "post": {
+    "operationId": "keep_vendor_in_conflict_admin_vendor_conflicts__vendor_id__keep__keep_vendor_id__post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "vendor_id",
+      "required": true,
+      "schema": {
+       "title": "Vendor Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "keep_vendor_id",
+      "required": true,
+      "schema": {
+       "title": "Keep Vendor Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Keep Vendor In Conflict",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendor-conflicts/{vendor_id}/separate": {
+   "post": {
+    "operationId": "separate_vendor_conflict_admin_vendor_conflicts__vendor_id__separate_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "vendor_id",
+      "required": true,
+      "schema": {
+       "title": "Vendor Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Separate Vendor Conflict",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendors": {
+   "get": {
+    "operationId": "list_vendors_admin_vendors_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Vendors",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendors/search": {
+   "get": {
+    "description": "DAS-120: verified suppliers that look like the typed name (or contain the typed GSTIN), closest\nfirst, spelling slips included: `[{vendor_id, name, gstin, address, dl_no, verified, score, matched}]`.\nNever a placeholder supplier. Fewer than 2 letters typed: empty.",
+    "operationId": "search_vendors_admin_vendors_search_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 8,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Search Vendors",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendors/{vendor_id}": {
+   "patch": {
+    "operationId": "update_vendor_admin_vendors__vendor_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "vendor_id",
+      "required": true,
+      "schema": {
+       "title": "Vendor Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Vendor",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/vendors/{vendor_id}/merge/{merge_vendor_id}": {
+   "post": {
+    "description": "Fold vendor `merge_vendor_id` into `vendor_id`, which is kept.",
+    "operationId": "merge_vendors_admin_vendors__vendor_id__merge__merge_vendor_id__post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "vendor_id",
+      "required": true,
+      "schema": {
+       "title": "Vendor Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "merge_vendor_id",
+      "required": true,
+      "schema": {
+       "title": "Merge Vendor Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Merge Vendors",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/voice-orders": {
+   "get": {
+    "description": "One page of voice orders: `{items, total, limit, offset, usage}`, with\n`total` and `usage` over the whole filter, not the page.",
+    "operationId": "list_voice_orders_admin_admin_voice_orders_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "tenant_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Tenant Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "order_status",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Order Status"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 100,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Voice Orders Admin",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/voice-orders/{voice_order_id}": {
+   "get": {
+    "operationId": "get_voice_order_admin_admin_voice_orders__voice_order_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Voice Order Admin",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/app/version-info": {
+   "get": {
+    "operationId": "version_info_app_version_info_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "platform",
+      "required": false,
+      "schema": {
+       "default": "",
+       "title": "Platform",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Version Info",
+    "tags": [
+     "app"
+    ]
+   }
+  },
+  "/auth/login": {
+   "post": {
+    "operationId": "login_auth_login_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoginRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Login",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/auth/logout": {
+   "post": {
+    "operationId": "logout_auth_logout_post",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Logout",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/auth/signup": {
+   "post": {
+    "operationId": "signup_auth_signup_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SignupRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Signup",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/export/excel": {
+   "get": {
+    "description": "The purchase register. `folder_id` limits it to the bills filed directly\nin that folder. The headers let a client check it reached a server that\nknows `folder_id`: an older one ignores it and returns every bill. `date_basis=uploaded`\ntakes start_date/end_date as the days the bills were uploaded (India time); the\nX-Export-Date-Basis header says which basis was applied.",
+    "operationId": "export_excel_export_excel_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "start_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "end_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "vendor_gstin",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Vendor Gstin"
+      }
+     },
+     {
+      "in": "query",
+      "name": "folder_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Folder Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "date_basis",
+      "required": false,
+      "schema": {
+       "default": "bill",
+       "enum": [
+        "bill",
+        "uploaded"
+       ],
+       "title": "Date Basis",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Export Excel",
+    "tags": [
+     "export"
+    ]
+   }
+  },
+  "/export/sales-excel": {
+   "get": {
+    "operationId": "export_sales_excel_export_sales_excel_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "start_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "end_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End Date"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Export Sales Excel",
+    "tags": [
+     "export"
+    ]
+   }
+  },
+  "/folders": {
+   "get": {
+    "operationId": "list_folders_folders_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Folders",
+    "tags": [
+     "folders"
+    ]
+   },
+   "post": {
+    "operationId": "create_folder_folders_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateFolderRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Create Folder",
+    "tags": [
+     "folders"
+    ]
+   }
+  },
+  "/folders/{folder_id}": {
+   "delete": {
+    "operationId": "delete_folder_folders__folder_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "folder_id",
+      "required": true,
+      "schema": {
+       "title": "Folder Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Delete Folder",
+    "tags": [
+     "folders"
+    ]
+   },
+   "patch": {
+    "operationId": "update_folder_folders__folder_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "folder_id",
+      "required": true,
+      "schema": {
+       "title": "Folder Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateFolderRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Folder",
+    "tags": [
+     "folders"
+    ]
+   }
+  },
+  "/inventory/batches/{batch_id}/mrp": {
+   "patch": {
+    "operationId": "update_batch_mrp_inventory_batches__batch_id__mrp_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "title": "Batch Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateBatchMrpRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Batch Mrp",
+    "tags": [
+     "inventory"
+    ]
+   }
+  },
+  "/inventory/pending-matches": {
+   "get": {
+    "operationId": "list_pending_matches_inventory_pending_matches_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Pending Matches",
+    "tags": [
+     "inventory"
+    ]
+   }
+  },
+  "/inventory/pending-matches/{match_id}/resolve": {
+   "post": {
+    "operationId": "resolve_match_inventory_pending_matches__match_id__resolve_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "match_id",
+      "required": true,
+      "schema": {
+       "title": "Match Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResolveMatchRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Resolve Match",
+    "tags": [
+     "inventory"
+    ]
+   }
+  },
+  "/inventory/products": {
+   "get": {
+    "description": "The whole list, with an ETag: the phone searches locally (DAS-94) and re-fetches on every tab\nopen, so an unchanged list answers 304 with no body.",
+    "operationId": "search_products_inventory_products_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Search Products",
+    "tags": [
+     "inventory"
+    ]
+   },
+   "post": {
+    "operationId": "create_product_inventory_products_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateProductRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Create Product",
+    "tags": [
+     "inventory"
+    ]
+   }
+  },
+  "/inventory/products/{product_id}": {
+   "get": {
+    "operationId": "get_product_detail_inventory_products__product_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "product_id",
+      "required": true,
+      "schema": {
+       "title": "Product Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Product Detail",
+    "tags": [
+     "inventory"
+    ]
+   },
+   "patch": {
+    "operationId": "update_product_inventory_products__product_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "product_id",
+      "required": true,
+      "schema": {
+       "title": "Product Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateProductRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Product",
+    "tags": [
+     "inventory"
+    ]
+   }
+  },
+  "/invoices": {
+   "get": {
+    "description": "`date_basis=uploaded` filters start_date/end_date by the day the bill was uploaded (India time).",
+    "operationId": "list_invoices_invoices_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "start_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "end_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "vendor_gstin",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Vendor Gstin"
+      }
+     },
+     {
+      "in": "query",
+      "name": "folder_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Folder Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "unfiled",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Unfiled",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "date_basis",
+      "required": false,
+      "schema": {
+       "default": "bill",
+       "enum": [
+        "bill",
+        "uploaded"
+       ],
+       "title": "Date Basis",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Invoices",
+    "tags": [
+     "invoices"
+    ]
+   },
+   "post": {
+    "operationId": "save_invoice_invoices_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SaveInvoiceRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Save Invoice",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/bulk-discard": {
+   "post": {
+    "description": "Take many uploads out of this shop's list in one request. Kept in the\ndatabase and still visible to our team. Saved bills and ones still being\nread are listed in `skipped`, never an error.",
+    "operationId": "bulk_discard_invoices_bulk_discard_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BulkDiscardRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Bulk Discard",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/bulk-move": {
+   "post": {
+    "description": "File many bills in one request: unsaved uploads by `job_ids`, saved\nbills by `invoice_ids`. Bills that cannot be moved are listed in\n`skipped`, never an error.",
+    "operationId": "bulk_move_invoices_bulk_move_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BulkMoveRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Bulk Move",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/extract": {
+   "get": {
+    "description": "This shop's uploads, newest first.\n\n`category` narrows it to status boxes (comma separated: working, check,\nreview, saved, failed) and `folder` to one folder (`root` for home, or an\nid) \u2014 both done here so a narrowed list pages like any other.\n\nDeclared before `/extract/{job_id}` so the literal path is matched\nfirst and never read as a job id.",
+    "operationId": "list_extraction_jobs_invoices_extract_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "before_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Before Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "category",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Category"
+      }
+     },
+     {
+      "in": "query",
+      "name": "folder",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Folder"
+      }
+     },
+     {
+      "in": "query",
+      "name": "counts",
+      "required": false,
+      "schema": {
+       "default": true,
+       "title": "Counts",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExtractionJobPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Extraction Jobs",
+    "tags": [
+     "invoices"
+    ]
+   },
+   "post": {
+    "operationId": "extract_invoices_extract_post",
+    "requestBody": {
+     "content": {
+      "application/x-www-form-urlencoded": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_extract_invoices_extract_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExtractionJobCreated"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Extract",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/extract/status": {
+   "post": {
+    "description": "One request for a whole batch, held open until something changes.\n\n`async def`, not `def`: a held synchronous request pins one of FastAPI's\n~40 threadpool threads for the full wait and would starve every other\nroute. A parked coroutine costs a socket, which is what makes this\naffordable on a t3.small.\n\nOrder matters. Subscribing *before* reading Postgres is what closes the\nrace where a bill finishes between the read and the subscribe; such an\nevent is then still delivered rather than costing the client a full\ntimeout. The Postgres read is also the catch-up path \u2014 anything that\nfinished while the app was disconnected is in that first answer, which\nis why no event backlog has to be kept anywhere.",
+    "operationId": "job_statuses_invoices_extract_status_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/JobStatusRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobStatusBatch"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Job Statuses",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/extract/{job_id}": {
+   "get": {
+    "operationId": "get_extraction_job_invoices_extract__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExtractionJobStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Extraction Job",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/extract/{job_id}/retry": {
+   "post": {
+    "operationId": "retry_extraction_invoices_extract__job_id__retry_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExtractionJobCreated"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Retry Extraction",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/extract/{job_id}/save": {
+   "post": {
+    "description": "Save the server's own current read of this bill (DAS-71). The phone sends no values, so it can never\nput stale ones over an admin's correction; a flagged bill is saved as the machine read it and waits for\nthe admin team. `{folder_id?}` -> `{invoice_id, review_state}`. 404 another shop's job; 409 already saved;\n422 not read yet.",
+    "operationId": "save_extraction_invoices_extract__job_id__save_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "default": {},
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Save Extraction",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/image/{path}": {
+   "get": {
+    "description": "A bill photo.\n\n`get_current_tenant_id`, not `get_current_tenant`: the handler only\nneeds the id, and the light dependency is cached (core/cache.py) so a\nhit costs no query at all.\n\nThis is the one endpoint a screen fires N times at once \u2014 the capture\nhistory requests a thumbnail per visible card. With a full Tenant read\nand a connection held across the storage fetch, a dozen cards\nexhausted the pool (size 5 + overflow 5) and the NEXT login queued 30s\nand timed out. Hence also the release below: on a cache miss the\ndependency has opened a transaction, and holding it through an R2\nround trip is the DAS-20 mistake in a different place.",
+    "operationId": "get_image_invoices_image__path__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "path",
+      "required": true,
+      "schema": {
+       "title": "Path",
+       "type": "string"
+      }
+     },
+     {
+      "description": "wanted width; snapped to 320/640/1280, answered in X-Image-Width",
+      "in": "query",
+      "name": "w",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "wanted width; snapped to 320/640/1280, answered in X-Image-Width",
+       "title": "W"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Image",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/preprocess": {
+   "post": {
+    "operationId": "preprocess_invoices_preprocess_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_preprocess_invoices_preprocess_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Preprocess",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/revalidate": {
+   "post": {
+    "operationId": "revalidate_invoice_invoices_revalidate_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InvoiceIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RevalidateResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Revalidate Invoice",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/vendor-lookup": {
+   "post": {
+    "description": "Prefetched by the review screen so Save can open the GSTIN\nconfirmation with no wait. Advisory only \u2014 POST \"\" re-decides.",
+    "operationId": "lookup_vendor_invoices_vendor_lookup_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InvoiceIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Lookup Vendor",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/{invoice_id}": {
+   "delete": {
+    "operationId": "delete_invoice_invoices__invoice_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "invoice_id",
+      "required": true,
+      "schema": {
+       "title": "Invoice Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Delete Invoice",
+    "tags": [
+     "invoices"
+    ]
+   },
+   "get": {
+    "operationId": "get_invoice_detail_invoices__invoice_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "invoice_id",
+      "required": true,
+      "schema": {
+       "title": "Invoice Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Invoice Detail",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/{invoice_id}/folder": {
+   "patch": {
+    "operationId": "move_invoice_invoices__invoice_id__folder_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "invoice_id",
+      "required": true,
+      "schema": {
+       "title": "Invoice Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MoveInvoiceRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Move Invoice",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/{invoice_id}/unsave": {
+   "post": {
+    "description": "Send a saved bill back to Check & save, optionally taking its stock out\nof inventory too. `remove_stock` is required: it is the shopkeeper's\ndecision, asked each time.",
+    "operationId": "unsave_invoice_invoices__invoice_id__unsave_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "invoice_id",
+      "required": true,
+      "schema": {
+       "title": "Invoice Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UnsaveInvoiceRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Unsave Invoice",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/public/gstin-check": {
+   "get": {
+    "operationId": "gstin_check_public_gstin_check_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "gstin",
+      "required": false,
+      "schema": {
+       "default": "",
+       "title": "Gstin",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Gstin Check",
+    "tags": [
+     "public"
+    ]
+   }
+  },
+  "/public/shops/{slug}/stock": {
+   "get": {
+    "operationId": "shop_stock_public_shops__slug__stock_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "slug",
+      "required": true,
+      "schema": {
+       "title": "Slug",
+       "type": "string"
+      }
+     },
+     {
+      "in": "header",
+      "name": "x-edge-key",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Edge-Key"
+      }
+     },
+     {
+      "in": "header",
+      "name": "x-client-ip",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Client-Ip"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Shop Stock",
+    "tags": [
+     "public"
+    ]
+   }
+  },
+  "/sales": {
+   "get": {
+    "operationId": "list_sales_sales_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "start_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start Date"
+      }
+     },
+     {
+      "in": "query",
+      "name": "end_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End Date"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "List Sales",
+    "tags": [
+     "sales"
+    ]
+   },
+   "post": {
+    "operationId": "create_sale_sales_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SaleRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Create Sale",
+    "tags": [
+     "sales"
+    ]
+   }
+  },
+  "/sales/{sale_id}": {
+   "delete": {
+    "operationId": "delete_sale_sales__sale_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "sale_id",
+      "required": true,
+      "schema": {
+       "title": "Sale Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Delete Sale",
+    "tags": [
+     "sales"
+    ]
+   },
+   "get": {
+    "operationId": "get_sale_detail_sales__sale_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "sale_id",
+      "required": true,
+      "schema": {
+       "title": "Sale Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Sale Detail",
+    "tags": [
+     "sales"
+    ]
+   }
+  },
+  "/voice-commands/audio": {
+   "post": {
+    "operationId": "handle_voice_command_voice_commands_audio_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_handle_voice_command_voice_commands_audio_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VoiceCommandResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Handle Voice Command",
+    "tags": [
+     "voice-commands"
+    ]
+   }
+  },
+  "/voice-commands/confirm": {
+   "post": {
+    "operationId": "confirm_voice_command_voice_commands_confirm_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VoiceCommandConfirmRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VoiceCommandResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Confirm Voice Command",
+    "tags": [
+     "voice-commands"
+    ]
+   }
+  },
+  "/voice-orders/jobs/{job_id}": {
+   "get": {
+    "description": "With `?wait=true`, held open until this job changes state (DAS-21).\n\nDeliberately a flag on this route rather than extraction's separate\nPOST /extract/status. That endpoint exists because a batch of a hundred\nbills needs *one* request for all of them, and so had to shed the result\npayload to stay cheap. A voice order is a single job the shopkeeper is\nstaring at: there is nothing to batch, the app already calls this route\nwith this id, and the finished order riding along in the same answer is a\nsaving here rather than the amplification it would be there.\n\n`async def` for the same reason as extraction's: a held synchronous\nrequest pins one of FastAPI's ~40 threadpool threads for the full wait.\nOrder matters the same way too \u2014 subscribe first, then read, so a job\nthat finishes in between is still delivered instead of costing a full\ntimeout, and the read is the catch-up path for a reconnecting app.",
+    "operationId": "get_voice_order_job_voice_orders_jobs__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "wait",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Wait",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VoiceParseJobStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Voice Order Job",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/parse-audio": {
+   "post": {
+    "operationId": "parse_voice_order_audio_voice_orders_parse_audio_post",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "voice_order_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Voice Order Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_parse_voice_order_audio_voice_orders_parse_audio_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VoiceParseJobCreated"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Parse Voice Order Audio",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/{voice_order_id}": {
+   "get": {
+    "operationId": "get_voice_order_voice_orders__voice_order_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Get Voice Order",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/{voice_order_id}/cancel": {
+   "post": {
+    "operationId": "cancel_voice_order_voice_orders__voice_order_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Cancel Voice Order",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/{voice_order_id}/confirm": {
+   "post": {
+    "operationId": "confirm_voice_order_voice_orders__voice_order_id__confirm_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VoiceOrderConfirmRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Confirm Voice Order",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/{voice_order_id}/lines": {
+   "post": {
+    "operationId": "add_line_voice_orders__voice_order_id__lines_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AddVoiceOrderLineRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Add Line",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/{voice_order_id}/lines/{line_id}": {
+   "patch": {
+    "operationId": "update_line_voice_orders__voice_order_id__lines__line_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "line_id",
+      "required": true,
+      "schema": {
+       "title": "Line Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VoiceOrderLineUpdateRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Update Line",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  },
+  "/voice-orders/{voice_order_id}/undo": {
+   "post": {
+    "operationId": "undo_voice_order_voice_orders__voice_order_id__undo_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "voice_order_id",
+      "required": true,
+      "schema": {
+       "title": "Voice Order Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Undo Voice Order",
+    "tags": [
+     "voice-orders"
+    ]
+   }
+  }
+ }
+}
