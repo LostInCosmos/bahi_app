@@ -35,6 +35,7 @@ import '../widgets/status_filter_bar.dart';
 import '../models/bill_search.dart';
 import '../models/status_filter.dart';
 import '../models/pdf_pages.dart';
+import '../models/seen_state.dart';
 import '../widgets/capture_empty_state.dart';
 import '../widgets/selection_bar.dart';
 import '../widgets/upload_history.dart';

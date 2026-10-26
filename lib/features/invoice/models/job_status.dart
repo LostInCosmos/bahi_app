@@ -49,6 +49,15 @@ class JobStatusBrief {
   /// once, exactly as it does for one still in flight (DAS-79).
   bool get isSettled => status != 'done' ? isTerminal : saved;
 
+  /// This answer as the string the server compares with the phone's `seen`
+  /// (DAS-132). Mirrors the backend's `status_seen.card_state`, the
+  /// contract agreed on the ticket.
+  String get cardState => switch (status) {
+        'retrying' => 'retrying:$attempt',
+        'done' => saved ? 'done:saved' : 'done:unsaved:${flagCount ?? 0}',
+        _ => status,
+      };
+
   factory JobStatusBrief.fromJson(Map<String, dynamic> json) => JobStatusBrief(
         jobId: json.intReq('job_id'),
         status: json.strReq('status'),
