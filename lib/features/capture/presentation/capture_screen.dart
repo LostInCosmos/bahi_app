@@ -324,6 +324,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   /// team with a "discarded" mark.
   /// True when the bill was discarded.
   Future<bool> _removeItem(BatchItem item) async {
+    // A multi-page bill not sent yet: its photos are only on this phone.
+    if (item.draft) return _discardDraft(item);
     if (item.status == BatchItemStatus.saved || item.savedInvoiceId != null) {
       final invoiceId = item.savedInvoiceId;
       invoiceId == null ? _say(_savedNoId) : await _unsave(invoiceId, item: item);
@@ -490,7 +492,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   Future<void> _openItem(BatchItem item) async {
     switch (item.status) {
       case BatchItemStatus.needsCrop:
-        await _cropPending(item);
+        item.draft ? await _openDraft(item) : await _cropPending(item);
         return;
       case BatchItemStatus.saved:
         Navigator.of(context).push(

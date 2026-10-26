@@ -147,6 +147,13 @@ class BatchItem {
   /// checks once.
   bool recheckedThisReview = false;
 
+  /// A multi-page bill the shopkeeper is still photographing, or left before
+  /// sending (DAS-131). Its pages are on disk and the bill is in the batch
+  /// from its first page, so a kill mid-bill loses nothing; it goes to the
+  /// server only when they send it. Kept with status `needsCrop`, the other
+  /// "waiting for the shopkeeper" state, so it is never uploaded on its own.
+  bool draft = false;
+
   /// The bill failed: nothing is in flight for it any more. Clears the retry
   /// state too — a bill still carrying [retryAt] is counted under Working
   /// whatever its status says, so a read that failed straight after a server
@@ -182,6 +189,10 @@ class BatchItem {
   /// What to do with this bill when the screen starts and finds it saved from
   /// last session.
   StartupAction get startupAction {
+    // Waiting for the shopkeeper: corners not chosen (picked from the
+    // gallery), or a multi-page bill not sent yet. Uploading it on its own
+    // would send a photo nobody cropped, or a bill missing its last page.
+    if (status == BatchItemStatus.needsCrop) return StartupAction.none;
     if (!isUploaded) return StartupAction.uploadAgain;
     // "ready" means a job was never submitted last session — start it.
     if (status == BatchItemStatus.ready) return StartupAction.process;
@@ -261,6 +272,7 @@ class BatchItem {
         'errorMessage': errorMessage,
         'savedInvoiceId': savedInvoiceId,
         'folderId': folderId,
+        if (draft) 'draft': true,
       };
 
   /// Everything [toJson] writes, as one value that compares equal exactly
@@ -279,6 +291,7 @@ class BatchItem {
         errorMessage,
         savedInvoiceId,
         folderId,
+        draft,
       );
 
   static BatchItem? fromJson(Map<String, dynamic> json) {
@@ -314,6 +327,7 @@ class BatchItem {
     item.errorMessage = json.str('errorMessage');
     item.savedInvoiceId = json.integer('savedInvoiceId');
     item.folderId = json.integer('folderId');
+    item.draft = json.boolOr('draft');
     final resultJson = json.obj('result');
     if (resultJson != null) item.result = ExtractionResult.fromJson(resultJson);
     return item;

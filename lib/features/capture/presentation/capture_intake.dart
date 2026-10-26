@@ -4,7 +4,7 @@ part of 'capture_screen.dart';
 /// (DAS-27), cropping, and the upload that hands each bill to the server.
 /// Reading it from there is [_Watching]'s job.
 ///
-/// It needs five things from the screen, declared here so the dependency is
+/// It needs six things from the screen, declared here so the dependency is
 /// written down rather than reached for.
 mixin _Intake on State<CaptureScreen> {
   List<BatchItem> get _items;
@@ -12,6 +12,7 @@ mixin _Intake on State<CaptureScreen> {
   BatchStore? get _store;
   Future<void> _persistBatch();
   Future<void> _processOne(BatchItem item);
+  void _dropLocal(BatchItem item);
 
   /// Non-null while a PDF is being rendered (DAS-27).
   String? _pdfProgress;
@@ -97,7 +98,13 @@ mixin _Intake on State<CaptureScreen> {
     }
     if (!mounted || lost.isEmpty) return;
     final files = lost.files;
-    if (files != null && files.isNotEmpty) {
+    // Ended while photographing the next page of a bill (DAS-131): the photo
+    // is that page, so it joins the unsent bill instead of starting another.
+    final drafts = _items.where((i) => i.draft).toList();
+    if (files != null && files.length == 1 && drafts.isNotEmpty) {
+      context.say('Recovered the page you took before the app closed.');
+      await _addRecoveredPage(drafts.last, files.single);
+    } else if (files != null && files.isNotEmpty) {
       context.say(files.length == 1
           ? 'Recovered the photo you took before the app closed.'
           : 'Recovered ${files.length} photos picked before the app closed.');
@@ -105,6 +112,36 @@ mixin _Intake on State<CaptureScreen> {
     } else if (lost.exception != null) {
       context.say('The photo taken before the app closed could not be recovered.');
     }
+  }
+
+  /// A recovered photo as the next page of [draft]: crop it, add it, then
+  /// ask what to do with the bill (Add another page, Send, Discard).
+  Future<void> _addRecoveredPage(BatchItem draft, XFile file) async {
+    final tenantId = _store?.tenantId;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    final crop = await Navigator.of(context).push<CropResult>(
+      MaterialPageRoute(
+          builder: (_) => CropScreen(imageBytes: bytes, pageNumber: draft.pages.length + 1)),
+    );
+    if (crop != null && crop.corners.length == 4 && mounted) {
+      final photoId = tenantId == null ? null : await PendingPhotoStore.save(tenantId, bytes);
+      if (!mounted) return;
+      setState(() => draft.pages.add(BatchItemPage(
+            photoId: photoId,
+            memoryBytes: photoId == null ? bytes : null,
+            filename: file.name,
+            corners: crop.corners.map((o) => Offset2D(o.dx, o.dy)).toList(),
+            rotationDegrees: crop.rotationDegrees,
+          )));
+      await _persistBatch();
+      if (!crop.addAnotherPage) {
+        await _sendDraft(draft);
+        return;
+      }
+      await _addPhoto(ImageSource.camera, into: draft);
+    }
+    if (mounted && draft.draft && _items.contains(draft)) await _openDraft(draft);
   }
 
   /// One file from the gallery: the original single-bill flow, kept
@@ -248,39 +285,40 @@ mixin _Intake on State<CaptureScreen> {
     await _uploadAndExtract(item);
   }
 
-  /// Captures one or more photos for a single bill: after each crop, the user
-  /// can finish or tap "+ Add another page" to add pages to the SAME bill.
-  /// Each photo is written to the device as soon as its crop is confirmed.
-  Future<void> _addPhoto(ImageSource source) async {
+  /// Captures one or more photos for a single bill: after each crop, the
+  /// shopkeeper can finish or tap "+ Add another page" to add pages to the
+  /// SAME bill.
+  ///
+  /// The bill is in the batch from its first page (DAS-131), as a draft:
+  /// every page is written to the device and the batch saved as its crop is
+  /// confirmed, so Android ending the app while the camera is in front loses
+  /// nothing taken so far. It goes to the server only on "Confirm bill";
+  /// leaving the camera or the crop mid-bill keeps it as a card that says
+  /// "N pages · not sent" ([_openDraft]). [into] continues such a bill.
+  Future<void> _addPhoto(ImageSource source, {BatchItem? into}) async {
     final tenantId = _store?.tenantId;
     // Fixed now, not when the photo is done: the folder you were in when you
     // tapped capture is the one the bill belongs to.
-    final folderId = _folders.currentId;
-    final pages = <BatchItemPage>[];
+    final folderId = into?.folderId ?? _folders.currentId;
+    var item = into;
     while (true) {
       final file =
           await ImagePicker().pickImage(source: source, imageQuality: 95);
-      if (file == null) {
-        if (pages.isEmpty) return;
-        break; // cancelled a continuation page — keep what's already queued
-      }
+      if (file == null) break; // left the camera: whatever was taken is kept
       final bytes = await file.readAsBytes();
       if (!mounted) return;
 
       final cropResult = await Navigator.of(context).push<CropResult>(
         MaterialPageRoute(
-            builder: (_) =>
-                CropScreen(imageBytes: bytes, pageNumber: pages.length + 1)),
+            builder: (_) => CropScreen(
+                imageBytes: bytes, pageNumber: (item?.pages.length ?? 0) + 1)),
       );
-      if (cropResult == null || cropResult.corners.length != 4) {
-        if (pages.isEmpty) return;
-        break;
-      }
+      if (cropResult == null || cropResult.corners.length != 4) break;
 
       final photoId = tenantId == null
           ? null
           : await PendingPhotoStore.save(tenantId, bytes);
-      pages.add(BatchItemPage(
+      final page = BatchItemPage(
         photoId: photoId,
         // Kept in memory only if the disk write failed — this page then
         // can't survive a restart, exactly as before photos were saved.
@@ -288,19 +326,95 @@ mixin _Intake on State<CaptureScreen> {
         filename: file.name,
         corners: cropResult.corners.map((o) => Offset2D(o.dx, o.dy)).toList(),
         rotationDegrees: cropResult.rotationDegrees,
-      ));
+      );
+      if (!mounted) return;
+      final current = item;
+      if (current == null) {
+        final created = BatchItem(label: 'Photo ${_items.length + 1}', pages: [page])
+          ..folderId = folderId
+          ..status = BatchItemStatus.needsCrop
+          ..draft = true;
+        item = created;
+        setState(() => _items.add(created));
+      } else {
+        setState(() => current.pages.add(page));
+      }
+      // Recorded before the next page is taken, so a kill keeps this one.
+      await _persistBatch();
 
-      if (!cropResult.addAnotherPage) break;
+      if (!cropResult.addAnotherPage) {
+        await _sendDraft(item!);
+        return;
+      }
     }
-    if (!mounted) return;
+  }
 
-    final item = BatchItem(label: 'Photo ${_items.length + 1}', pages: pages)
-      ..folderId = folderId;
-    setState(() => _items.add(item));
-    // Recorded before the upload starts, so a logout mid-upload still finds
-    // this bill next time.
+  /// "Confirm bill": the draft goes to the server like any new bill.
+  Future<void> _sendDraft(BatchItem item) async {
+    if (!mounted) return;
+    setState(() {
+      item.draft = false;
+      item.status = BatchItemStatus.preparing;
+    });
     await _persistBatch();
     await _uploadAndExtract(item);
+  }
+
+  /// A multi-page bill not sent yet (DAS-131): the shopkeeper left the
+  /// camera mid-bill, or Android ended the app. Add a page, send what is
+  /// there, or discard it.
+  Future<void> _openDraft(BatchItem item) async {
+    final n = item.pages.length;
+    final action = await showDialog<_DraftAction>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('This bill has ${plural(n, 'page')}'),
+        content: const Text('It has not been sent yet.'),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsOverflowDirection: VerticalDirection.down,
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(ctx).pop(_DraftAction.addPage),
+            icon: const Icon(Icons.note_add_outlined),
+            label: const Text('+ Add another page'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(_DraftAction.send),
+            child: Text('Send ${plural(n, 'page')}'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(_DraftAction.discard),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _DraftAction.addPage:
+        await _addPhoto(ImageSource.camera, into: item);
+        // Back to the same question with the new page count, unless the
+        // last crop sent it.
+        if (mounted && item.draft && _items.contains(item)) await _openDraft(item);
+      case _DraftAction.send:
+        await _sendDraft(item);
+      case _DraftAction.discard:
+        await _discardDraft(item);
+    }
+  }
+
+  /// Asked first: a draft's photos exist nowhere but this phone.
+  Future<bool> _discardDraft(BatchItem item) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Discard this bill?',
+      message: 'Its ${plural(item.pages.length, 'photo')} ${item.pages.length == 1 ? 'is' : 'are'} deleted from this phone.',
+      confirmLabel: 'Discard',
+      destructive: true,
+    );
+    if (!ok || !mounted) return false;
+    _dropLocal(item);
+    return true;
   }
 
   /// Uploads the bill's photos, then starts extraction without waiting for
@@ -391,3 +505,5 @@ mixin _Intake on State<CaptureScreen> {
     }
   }
 }
+
+enum _DraftAction { addPage, send, discard }
