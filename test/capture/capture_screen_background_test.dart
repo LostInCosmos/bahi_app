@@ -59,6 +59,14 @@ void main() {
   tearDownAll(() => dir.deleteSync(recursive: true));
 
   setUp(() {
+    // Each case starts with no photos on the "device": a photo left by an
+    // earlier case would be shown as a recovered bill to crop (DAS-135).
+    final photos = Directory('${dir.path}/pending_photos');
+    if (photos.existsSync()) {
+      for (final f in photos.listSync()) {
+        f.deleteSync();
+      }
+    }
     AppForeground.reset();
     ApiClient.instance.token = _token;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
