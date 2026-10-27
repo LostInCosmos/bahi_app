@@ -45,6 +45,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final detail = await ApiClient.instance.getProductDetail(widget.productId);
       if (!mounted) return;
       setState(() => _detail = detail);
+      // The sale sheet shows what this screen just read.
+      ProductCatalog.instance.rememberDetail(detail);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 404) return _gone();
@@ -76,6 +78,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
     if (saved == null || !mounted) return;
     setState(() => _detail = _detail!.withBatch(batch.withMrp(saved)));
+    ProductCatalog.instance.rememberDetail(_detail!);
     unawaited(ProductCatalog.instance.refresh());
     context.say('MRP saved: ${rupees(saved)}');
   }
