@@ -481,8 +481,10 @@ class ApiClient {
     if (res.statusCode >= 200 && res.statusCode < 300) return;
     String message = res.body;
     dynamic detail;
+    String? field;
     try {
       final decoded = jsonDecode(res.body);
+      if (decoded is Map && decoded['field'] is String) field = decoded['field'] as String;
       if (decoded is Map && decoded['detail'] != null) {
         detail = decoded['detail'];
         message = detail is String ? detail : jsonEncode(detail);
@@ -496,6 +498,6 @@ class ApiClient {
     } catch (_) {
       // response wasn't JSON — fall back to raw body
     }
-    throw ApiException(res.statusCode, message, detail);
+    throw ApiException(res.statusCode, message, detail, field);
   }
 }

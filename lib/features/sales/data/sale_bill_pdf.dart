@@ -101,6 +101,9 @@ String _qty(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStr
 /// "98390 12345" from the 10 digits the server stores.
 String _phone(String p) => p.length == 10 ? '${p.substring(0, 5)} ${p.substring(5)}' : p;
 
+/// The prescriber as the bill prints it: "Dr" in front unless typed already.
+String doctorLine(String name) => RegExp(r'^dr\b', caseSensitive: false).hasMatch(name) ? name : 'Dr $name';
+
 final _border = pw.Border.all(width: 1, color: PdfColors.grey800);
 
 pw.Widget _fullHeader(SaleDetail sale, AccountInfo shop, bool taxInvoice) {
@@ -142,8 +145,14 @@ pw.Widget _fullHeader(SaleDetail sale, AccountInfo shop, bool taxInvoice) {
               style: const pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           if ((sale.buyerGstin ?? '').isNotEmpty)
             pw.Text('GSTIN: ${sale.buyerGstin}${buyerState == null ? '' : ' · State: $buyerState'}'),
+          // DAS-150: given at the sale, printed only when given.
+          if ((sale.buyerPhone ?? '').isNotEmpty) pw.Text('Phone: ${_phone(sale.buyerPhone!)}'),
+          if ((sale.doctorName ?? '').isNotEmpty) pw.Text('Prescribed by: ${doctorLine(sale.doctorName!)}'),
         ]),
-        if (state != null) pw.Text('Place of supply: $state'),
+        pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+          if (state != null) pw.Text('Place of supply: $state'),
+          if (sale.paymentMode != null) pw.Text('Paid by: ${sale.paymentMode!.label}'),
+        ]),
       ]),
     ),
     pw.SizedBox(height: 6),
