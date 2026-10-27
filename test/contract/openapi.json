@@ -78,6 +78,17 @@
       ],
       "title": "Phone"
      },
+     "public_poster_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Public Poster Url"
+     },
      "public_stock_url": {
       "anyOf": [
        {
@@ -872,6 +883,48 @@
     "title": "ExtractionResult",
     "type": "object"
    },
+   "Finish": {
+    "properties": {
+     "error": {
+      "anyOf": [
+       {
+        "maxLength": 500,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "input_tokens": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Input Tokens"
+     },
+     "output_tokens": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Output Tokens"
+     }
+    },
+    "title": "Finish",
+    "type": "object"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -1108,6 +1161,21 @@
       "minItems": 1,
       "title": "Job Ids",
       "type": "array"
+     },
+     "seen": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "maxProperties": 500,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seen"
      },
      "wait": {
       "default": true,
@@ -1424,6 +1492,24 @@
     "title": "MoveInvoiceRequest",
     "type": "object"
    },
+   "Reserve": {
+    "properties": {
+     "log_id": {
+      "title": "Log Id",
+      "type": "integer"
+     },
+     "provider": {
+      "title": "Provider",
+      "type": "string"
+     }
+    },
+    "required": [
+     "log_id",
+     "provider"
+    ],
+    "title": "Reserve",
+    "type": "object"
+   },
    "ResolveMatchRequest": {
     "properties": {
      "action": {
@@ -1527,6 +1613,17 @@
       ],
       "title": "Buyer Name"
      },
+     "buyer_phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Phone"
+     },
      "discount": {
       "anyOf": [
        {
@@ -1537,6 +1634,17 @@
        }
       ]
      },
+     "doctor_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Doctor Name"
+     },
      "line_items": {
       "items": {
        "$ref": "#/components/schemas/SaleLineItemIn"
@@ -1544,6 +1652,21 @@
       "minItems": 1,
       "title": "Line Items",
       "type": "array"
+     },
+     "payment_mode": {
+      "anyOf": [
+       {
+        "enum": [
+         "cash",
+         "online"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Payment Mode"
      }
     },
     "required": [
@@ -2675,6 +2798,26 @@
      }
     ],
     "summary": "Set App Version Policy",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/client-errors": {
+   "post": {
+    "description": "The admin panel reports one browser error (DAS-139). Admin token only; at most 16 kB;\n30 a minute per admin; one `panel_error` log line, nothing stored. No database work, so this\nstays on the event loop.",
+    "operationId": "report_client_error_admin_client_errors_post",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Report Client Error",
     "tags": [
      "admin"
     ]
@@ -4939,6 +5082,26 @@
     ]
    }
   },
+  "/admin/sessions/revoke-all": {
+   "post": {
+    "description": "Incident switch: every admin token issued so far stops working, the caller's too.\nShop sessions are untouched. Sign in again a second later.",
+    "operationId": "revoke_all_admin_sessions_admin_sessions_revoke_all_post",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Revoke All Admin Sessions",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
   "/admin/shop-product-links/{product_id}/unlink": {
    "post": {
     "description": "Unverify: back to the queue; undoes the traceable spellings, the name when it can, an orphan master.",
@@ -5863,6 +6026,321 @@
     "summary": "Get Voice Order Admin",
     "tags": [
      "admin"
+    ]
+   }
+  },
+  "/agent/calls": {
+   "post": {
+    "operationId": "agent_reserve_agent_calls_post",
+    "parameters": [
+     {
+      "in": "header",
+      "name": "x-agent-key",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Agent-Key"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Reserve"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Agent Reserve",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/agent/calls/{call_id}/bill": {
+   "get": {
+    "operationId": "agent_bill_agent_calls__call_id__bill_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "call_id",
+      "required": true,
+      "schema": {
+       "title": "Call Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "header",
+      "name": "x-agent-key",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Agent-Key"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Agent Bill",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/agent/calls/{call_id}/finish": {
+   "post": {
+    "operationId": "agent_finish_agent_calls__call_id__finish_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "call_id",
+      "required": true,
+      "schema": {
+       "title": "Call Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "header",
+      "name": "x-agent-key",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Agent-Key"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Finish"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Agent Finish",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/agent/calls/{call_id}/proposal": {
+   "post": {
+    "operationId": "agent_proposal_agent_calls__call_id__proposal_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "call_id",
+      "required": true,
+      "schema": {
+       "title": "Call Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "header",
+      "name": "x-agent-key",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Agent-Key"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Agent Proposal",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/agent/queue": {
+   "get": {
+    "operationId": "agent_queue_agent_queue_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "provider",
+      "required": true,
+      "schema": {
+       "title": "Provider",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 20,
+       "maximum": 100,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "header",
+      "name": "x-agent-key",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Agent-Key"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Agent Queue",
+    "tags": [
+     "agent"
     ]
    }
   },
