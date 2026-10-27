@@ -167,8 +167,10 @@ pw.Widget _cell(String text, {pw.TextAlign align = pw.TextAlign.left, bool bold 
       child: pw.Text(text, textAlign: align, style: bold ? const pw.TextStyle(fontWeight: pw.FontWeight.bold) : null),
     );
 
+// HSN and Batch hold an 8-digit code and a batch of up to 10 characters on
+// one line at 8 pt (they wrapped at 0.85 and 1.1); the item name gives way.
 const _widths = {
-  '#': 0.45, 'Item': 5.2, 'HSN': 0.85, 'Pack': 0.85, 'Batch': 1.1, 'Exp': 0.8,
+  '#': 0.45, 'Item': 4.3, 'HSN': 1.2, 'Pack': 0.85, 'Batch': 1.65, 'Exp': 0.8,
   'MRP': 1.0, 'Qty': 0.6, 'Rate': 1.0, 'Disc': 0.85, 'GST%': 0.75, 'Amount': 1.25,
 };
 
