@@ -170,7 +170,11 @@ Set<String> _writes(String body) => {for (final m in RegExp(r"'([a-z_0-9]+)'\s*:
 String _fromJsonBody(String source, String cls) {
   final start = RegExp('(factory $cls\\.fromJson\\(|static $cls\\?? fromJson\\()').firstMatch(source);
   expect(start, isNotNull, reason: 'no fromJson for $cls');
-  return _declaration(source, start!.end);
+  // Past the parameter list `(Map<String, dynamic> json)`: reading from its
+  // opening bracket stopped at its own closing one, so no read was ever
+  // checked (found 2026-10-27).
+  final params = _declaration(source, start!.end);
+  return _declaration(source, start.end + params.length + 1);
 }
 
 String _toJsonBody(String source, String cls) {

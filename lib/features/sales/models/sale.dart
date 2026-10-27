@@ -158,6 +158,23 @@ class SaleSummary {
       );
 }
 
+/// How the customer paid (DAS-150). The wire names are the server's; a sale
+/// from an older build, or before the field, has none ("not recorded").
+enum PaymentMode {
+  cash('cash', 'Cash'),
+  online('online', 'Online');
+
+  final String wire;
+  final String label;
+  const PaymentMode(this.wire, this.label);
+
+  static PaymentMode? fromWire(String? value) => switch (value) {
+        'cash' => cash,
+        'online' => online,
+        _ => null,
+      };
+}
+
 /// GET /sales/{id} — used for the post-sale receipt.
 class SaleDetail {
   final int id;
@@ -176,6 +193,13 @@ class SaleDetail {
   final double totalDiscount;
   final List<SaleLineItemDetail> lineItems;
 
+  /// Recorded at the sale when the shopkeeper gave them (DAS-150): the
+  /// customer's phone as its 10 digits, the prescribing doctor, and how the
+  /// customer paid. Null from a server older than the fields.
+  final String? buyerPhone;
+  final String? doctorName;
+  final PaymentMode? paymentMode;
+
   SaleDetail({
     required this.id,
     required this.saleNo,
@@ -189,6 +213,9 @@ class SaleDetail {
     this.discountAmount = 0,
     this.totalDiscount = 0,
     required this.lineItems,
+    this.buyerPhone,
+    this.doctorName,
+    this.paymentMode,
   });
 
   /// The GST inside [grandTotal].
@@ -210,5 +237,8 @@ class SaleDetail {
         discountAmount: json.dblOr('discount_amount'),
         totalDiscount: json.dblOr('total_discount'),
         lineItems: json.listOf('line_items', SaleLineItemDetail.fromJson),
+        buyerPhone: json.str('buyer_phone'),
+        doctorName: json.str('doctor_name'),
+        paymentMode: PaymentMode.fromWire(json.str('payment_mode')),
       );
 }

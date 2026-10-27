@@ -31,6 +31,13 @@ class SaleReviewScreen extends StatefulWidget {
 class _SaleReviewScreenState extends State<SaleReviewScreen> {
   final _buyerNameController = TextEditingController();
   final _buyerGstinController = TextEditingController();
+  final _buyerPhoneController = TextEditingController();
+  final _doctorController = TextEditingController();
+  /// Cash unless the shopkeeper taps Online (the user, DAS-150).
+  PaymentMode _paymentMode = PaymentMode.cash;
+  /// The server's refusal of the phone or the doctor, under its field.
+  String? _phoneError;
+  String? _doctorError;
   final _saleDiscountController = TextEditingController();
   DiscountKind _saleDiscountKind = DiscountKind.amount;
   String? _message;
@@ -40,6 +47,8 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
   void dispose() {
     _buyerNameController.dispose();
     _buyerGstinController.dispose();
+    _buyerPhoneController.dispose();
+    _doctorController.dispose();
     _saleDiscountController.dispose();
     super.dispose();
   }
@@ -87,11 +96,16 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
     setState(() {
       _saving = true;
       _message = null;
+      _phoneError = null;
+      _doctorError = null;
     });
     try {
       final result = await ApiClient.instance.createSale(
         buyerName: _buyerNameController.text.trim(),
         buyerGstin: _buyerGstinController.text.trim(),
+        buyerPhone: _buyerPhoneController.text.trim(),
+        doctorName: _doctorController.text.trim(),
+        paymentMode: _paymentMode,
         lineItems: widget.cart,
         discount: _saleDiscount,
       );
@@ -106,6 +120,12 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
             'requested ${detail['requested']}, available ${detail['available']}.');
       } else if (gone != null) {
         _dropGoneBatch(int.parse(gone.group(1)!));
+      } else if (e.statusCode == 422 && detail is String && e.field == 'doctor_name') {
+        setState(() => _doctorError = detail);
+      } else if (e.statusCode == 422 &&
+          detail is String &&
+          (e.field == 'buyer_phone' || (e.field == null && detail.toLowerCase().contains('phone')))) {
+        setState(() => _phoneError = detail);
       } else if (detail is Map && detail['error'] == 'bad_discount') {
         setState(() => _message = 'The discount is more than the amount it is taken from. Check it and try again.');
       } else {
@@ -136,10 +156,41 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
             onChanged: () => setState(() {}),
             errorText: totals.saleError,
           ),
+          const SizedBox(height: Spacing.m),
+          Text('Paid by', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: Spacing.xs),
+          SegmentedButton<PaymentMode>(
+            key: const ValueKey('payment-mode'),
+            segments: [
+              for (final m in PaymentMode.values) ButtonSegment(value: m, label: Text(m.label)),
+            ],
+            selected: {_paymentMode},
+            onSelectionChanged: (s) => setState(() => _paymentMode = s.first),
+          ),
           const SizedBox(height: Spacing.s),
           TextField(
             controller: _buyerNameController,
             decoration: const InputDecoration(labelText: 'Buyer name (optional)'),
+          ),
+          const SizedBox(height: Spacing.s),
+          TextField(
+            controller: _buyerPhoneController,
+            keyboardType: TextInputType.phone,
+            onChanged: (_) {
+              if (_phoneError != null) setState(() => _phoneError = null);
+            },
+            decoration: InputDecoration(labelText: 'Customer phone (optional)', errorText: _phoneError),
+          ),
+          const SizedBox(height: Spacing.s),
+          TextField(
+            controller: _doctorController,
+            textCapitalization: TextCapitalization.words,
+            maxLength: 200,
+            onChanged: (_) {
+              if (_doctorError != null) setState(() => _doctorError = null);
+            },
+            decoration: InputDecoration(
+                labelText: 'Prescribed by (optional)', hintText: "Doctor's name", counterText: '', errorText: _doctorError),
           ),
           const SizedBox(height: Spacing.s),
           TextField(

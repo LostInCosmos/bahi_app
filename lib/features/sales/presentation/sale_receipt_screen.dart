@@ -125,6 +125,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
       if (s.discountAmount > 0) 'Discount (whole sale): −${rupees(s.discountAmount)}',
       'Total: ${rupees(s.grandTotal)}',
       'Includes GST ${rupees(s.tax)} (CGST ${rupees(s.totalCgst)} + SGST ${rupees(s.totalSgst)})',
+      if (s.paymentMode != null) 'Paid by: ${s.paymentMode!.label}',
     ];
     await SharePlus.instance.share(ShareParams(text: lines.join('\n'), sharePositionOrigin: shareOrigin(anchor)));
   }

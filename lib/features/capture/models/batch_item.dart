@@ -269,6 +269,9 @@ class BatchItem {
         'jobId': jobId,
         'lastJobId': lastJobId,
         'result': result?.toJson(),
+        // The photo's revision after a rotation (DAS-72), which the result's
+        // own JSON does not carry (DAS-150).
+        if ((result?.meta.imageRev ?? 0) > 0) 'imageRev': result!.meta.imageRev,
         'errorMessage': errorMessage,
         'savedInvoiceId': savedInvoiceId,
         'folderId': folderId,
@@ -329,7 +332,9 @@ class BatchItem {
     item.folderId = json.integer('folderId');
     item.draft = json.boolOr('draft');
     final resultJson = json.obj('result');
-    if (resultJson != null) item.result = ExtractionResult.fromJson(resultJson);
+    if (resultJson != null) {
+      item.result = ExtractionResult.fromJson(resultJson)..meta.imageRev = json.intOr('imageRev');
+    }
     return item;
   }
 }
