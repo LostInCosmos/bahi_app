@@ -8,7 +8,12 @@ class ApiException implements Exception {
   /// extraction failure) should inspect this instead of parsing [message].
   final dynamic detail;
 
-  ApiException(this.statusCode, this.message, [this.detail]);
+  /// The request field a refusal is about, when the server names it beside
+  /// the detail: `{"detail": "Enter a 10-digit phone number.", "field":
+  /// "buyer_phone"}` (DAS-150). Null otherwise.
+  final String? field;
+
+  ApiException(this.statusCode, this.message, [this.detail, this.field]);
 
   /// The server's machine-readable kind, when the body carried one —
   /// `{"detail": {"error": "account_deleted", …}}` or a top-level

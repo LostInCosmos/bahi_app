@@ -8,12 +8,22 @@ extension SaleApi on ApiClient {
   Future<Map<String, dynamic>> createSale({
     String? buyerName,
     String? buyerGstin,
+    String? buyerPhone,
+    String? doctorName,
+    PaymentMode? paymentMode,
     required List<CartEntry> lineItems,
     Discount? discount,
   }) async {
+    String? orNull(String? v) => (v == null || v.isEmpty) ? null : v;
     final res = await postJson('/sales', {
-      'buyer_name': (buyerName == null || buyerName.isEmpty) ? null : buyerName,
-      'buyer_gstin': (buyerGstin == null || buyerGstin.isEmpty) ? null : buyerGstin,
+      'buyer_name': orNull(buyerName),
+      'buyer_gstin': orNull(buyerGstin),
+      // DAS-150. The server cleans the phone to 10 digits and refuses anything
+      // else (422 "Enter a 10-digit phone number."). An older server ignores
+      // all three, so the server ships first.
+      if (orNull(buyerPhone) != null) 'buyer_phone': buyerPhone,
+      if (orNull(doctorName) != null) 'doctor_name': doctorName,
+      if (paymentMode != null) 'payment_mode': paymentMode.wire,
       // `rate` is GST-inclusive and a discount is sent as typed; the server
       // converts it to rupees and decides every total (DAS-111).
       if (Discount.wireOf(discount) != null) 'discount': Discount.wireOf(discount),
