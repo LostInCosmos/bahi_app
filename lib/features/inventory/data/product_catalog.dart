@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/api/api_client.dart';
+import '../models/product.dart';
 import '../models/product_search.dart';
 import 'inventory_api.dart';
 
@@ -45,10 +46,87 @@ class ProductCatalog extends ChangeNotifier {
   /// Why the last fetch failed, until one succeeds.
   Object? lastError;
 
+  /// Each product's batches, fetched once and kept while the list above is
+  /// unchanged, so the sale screen's batch sheet opens at once (fast billing).
+  /// A sale, a saved bill or a merge changes the list (a new `ETag`), and
+  /// that clears them; a tab opened on an unchanged list (a `304`) keeps them.
+  /// Per sign-in like the list. A few hundred at most, about 1 KB each.
+  final Map<int, ProductDetail> _details = {};
+  final Map<int, Future<ProductDetail>> _detailsLoading = {};
+  String? _detailsSession;
+  /// Bumped each time what is held is thrown away, so a load begun before
+  /// is not kept after.
+  int _detailsGeneration = 0;
+  static const _maxDetails = 300;
+
+  /// How many products [prefetchDetails] loads at once while a search is
+  /// typed: the top of the list, which is what gets tapped.
+  static const prefetchCount = 3;
+
   /// The signed-in shop's products, or null before they first arrive.
   ProductIndex? get index => _session != null && _session == ApiClient.instance.token ? _index : null;
 
   bool get isLoading => _fetching != null;
+
+  /// The product's batches if already fetched for this sign-in, else null.
+  ProductDetail? detailFor(int productId) {
+    _checkDetailsSession();
+    return _details[productId];
+  }
+
+  /// The product's batches, from what is held or else from the server.
+  /// Callers at the same moment share one request. Throws as
+  /// `getProductDetail` does (404: merged away).
+  Future<ProductDetail> loadDetail(int productId) {
+    _checkDetailsSession();
+    final held = _details[productId];
+    if (held != null) return Future.value(held);
+    final running = _detailsLoading[productId];
+    if (running != null) return running;
+    final generation = _detailsGeneration;
+    late final Future<ProductDetail> load;
+    load = ApiClient.instance.getProductDetail(productId).then((detail) {
+      _checkDetailsSession();
+      if (generation == _detailsGeneration) rememberDetail(detail);
+      return detail;
+    }).whenComplete(() {
+      if (identical(_detailsLoading[productId], load)) _detailsLoading.remove(productId);
+    });
+    _detailsLoading[productId] = load;
+    return load;
+  }
+
+  /// Starts loading the batches of [productIds] that are not held yet, in the
+  /// background. A failure is ignored: the sheet asks again when opened.
+  void prefetchDetails(Iterable<int> productIds) {
+    for (final id in productIds) {
+      unawaited(loadDetail(id).then((_) {}, onError: (_) {}));
+    }
+  }
+
+  /// Keeps a product's batches a screen has just fetched or changed (the
+  /// inventory screen's MRP edit), so the sale sheet shows the same.
+  void rememberDetail(ProductDetail detail) {
+    _checkDetailsSession();
+    _details.remove(detail.id);
+    _details[detail.id] = detail; // last-used at the end
+    while (_details.length > _maxDetails) {
+      _details.remove(_details.keys.first);
+    }
+  }
+
+  void _checkDetailsSession() {
+    final session = ApiClient.instance.token;
+    if (_detailsSession == session) return;
+    _forgetDetails();
+    _detailsSession = session;
+  }
+
+  void _forgetDetails() {
+    _details.clear();
+    _detailsLoading.clear();
+    _detailsGeneration++;
+  }
 
   /// A product or batch the server says no longer exists: the held list is
   /// stale, so fetch it again in the background. The caller shows
@@ -79,6 +157,8 @@ class ProductCatalog extends ChangeNotifier {
       if (page != null) {
         _index = ProductIndex(page.products);
         _etag = page.etag;
+        // Stock or batches changed somewhere: what was held may be wrong.
+        _forgetDetails();
       }
       // null: a 304 — the list held is the server's current one.
       _session = session;

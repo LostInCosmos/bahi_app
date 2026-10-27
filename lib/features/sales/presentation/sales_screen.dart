@@ -13,7 +13,6 @@ import '../../../core/utils/snack.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/inline_message.dart';
-import '../../inventory/data/inventory_api.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../../inventory/models/product.dart';
 import '../../inventory/widgets/product_name.dart';
@@ -53,7 +52,9 @@ class SalesScreen extends StatefulWidget {
 
 class SalesScreenState extends State<SalesScreen> with TabScreen {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   final _catalog = ProductCatalog.instance;
+  Timer? _prefetchTimer;
 
   /// What is typed, searched on the phone as each letter is typed (DAS-94) —
   /// the same list and the same match as the Inventory tab.
@@ -77,7 +78,9 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
   @override
   void dispose() {
     _catalog.removeListener(_onCatalog);
+    _prefetchTimer?.cancel();
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -140,15 +143,38 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
   @override
   Future<void> refresh() => _catalog.refresh();
 
+  /// As the search is typed, the batches of the top few matches are loaded
+  /// in the background, so the one tapped opens at once. Waits for a pause
+  /// in typing, and for two letters, so a whole word costs a few requests.
+  void _onQuery(String typed) {
+    setState(() => _query = typed);
+    _prefetchTimer?.cancel();
+    if (typed.trim().length < 2) return;
+    _prefetchTimer = Timer(const Duration(milliseconds: 300), () {
+      final matches = _catalog.index?.match(_query) ?? const <ProductSummary>[];
+      _catalog.prefetchDetails(matches.take(ProductCatalog.prefetchCount).map((p) => p.id));
+    });
+  }
+
+  void _clearSearch() {
+    _prefetchTimer?.cancel();
+    _searchController.clear();
+    setState(() => _query = '');
+  }
+
   void _openPicker(ProductSummary p) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _BatchPickerSheet(
-        productId: p.id,
+        product: p,
         onAdd: (entry) {
           setState(() => _cart.add(entry));
           Navigator.of(ctx).pop();
+          // Ready for the next medicine: an empty search with the keyboard up.
+          _clearSearch();
+          _searchFocus.requestFocus();
+          context.say('Added ${entry.productName}');
         },
       ),
     );
@@ -278,7 +304,8 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
       TextField(
         key: const ValueKey('sale-search'),
         controller: _searchController,
-        onChanged: (typed) => setState(() => _query = typed),
+        focusNode: _searchFocus,
+        onChanged: _onQuery,
         decoration: InputDecoration(
           labelText: 'Search a medicine to add',
           suffixIcon: _query.isEmpty
@@ -286,10 +313,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
               : IconButton(
                   icon: const Icon(Icons.close),
                   tooltip: 'Clear search',
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _query = '');
-                  },
+                  onPressed: _clearSearch,
                 ),
         ),
         textInputAction: TextInputAction.search,
@@ -326,11 +350,16 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
               child: ListTile(
                 title: ProductName(p.name, qualifier: index?.qualifier(p.id)),
                 subtitle: Text('${qty(p.quantityOnHand)} in stock'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  // Opens with none in stock too: a sale may go beyond the stock,
-                  // with a note (DAS-111). Its batch picker still blocks expiry.
-                  onPressed: () => _openPicker(p),
+                // The finger is down: start loading its batches now, not when
+                // it lifts (already held: nothing is asked).
+                trailing: Listener(
+                  onPointerDown: (_) => _catalog.prefetchDetails([p.id]),
+                  child: IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    // Opens with none in stock too: a sale may go beyond the stock,
+                    // with a note (DAS-111). Its batch picker still blocks expiry.
+                    onPressed: () => _openPicker(p),
+                  ),
                 ),
               ),
             );
@@ -403,9 +432,10 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
 /// common enough that overriding it needs to be one tap), a quantity and a
 /// price, then add that line to the cart.
 class _BatchPickerSheet extends StatefulWidget {
-  final int productId;
+  /// The product tapped: its name shows at once, before its batches arrive.
+  final ProductSummary product;
   final void Function(CartEntry entry) onAdd;
-  const _BatchPickerSheet({required this.productId, required this.onAdd});
+  const _BatchPickerSheet({required this.product, required this.onAdd});
 
   @override
   State<_BatchPickerSheet> createState() => _BatchPickerSheetState();
@@ -426,20 +456,34 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
   @override
   void initState() {
     super.initState();
+    // Held already (prefetched while the search was typed): shown at once,
+    // with no request.
+    final held = ProductCatalog.instance.detailFor(widget.product.id);
+    if (held != null && _adopt(held)) return;
     _load();
+  }
+
+  /// Takes [detail] as this sheet's batches, only if it is the product this
+  /// sheet was opened for: one product's batches are never shown, or sold,
+  /// under another's name.
+  bool _adopt(ProductDetail detail) {
+    if (detail.id != widget.product.id) return false;
+    for (final b in detail.batches) {
+      _qtyControllers[b.id] = TextEditingController(text: '1');
+      _rateControllers[b.id] = TextEditingController(text: b.mrp?.toStringAsFixed(2) ?? '');
+      _discountControllers[b.id] = TextEditingController();
+      _discountKinds[b.id] = DiscountKind.percentage;
+    }
+    _detail = detail;
+    return true;
   }
 
   Future<void> _load() async {
     try {
-      final detail = await ApiClient.instance.getProductDetail(widget.productId);
+      final detail = await ProductCatalog.instance.loadDetail(widget.product.id);
       if (!mounted) return;
-      for (final b in detail.batches) {
-        _qtyControllers[b.id] = TextEditingController(text: '1');
-        _rateControllers[b.id] = TextEditingController(text: b.mrp?.toStringAsFixed(2) ?? '');
-        _discountControllers[b.id] = TextEditingController();
-        _discountKinds[b.id] = DiscountKind.percentage;
-      }
-      setState(() => _detail = detail);
+      if (!_adopt(detail)) return setState(() => _error = 'Could not load this medicine. Close and try again.');
+      setState(() {});
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode != 404) return setState(() => _error = 'Could not load product: $e');
@@ -478,13 +522,22 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         ),
         child: _detail == null
-            ? SizedBox(
-                height: 160,
-                child: Center(
-                  child: _error != null
-                      ? Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
-                      : const CircularProgressIndicator(),
-                ),
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ProductName(widget.product.name,
+                      qualifier: ProductCatalog.instance.index?.qualifier(widget.product.id),
+                      style: Theme.of(context).textTheme.titleMedium),
+                  SizedBox(
+                    height: 120,
+                    child: Center(
+                      child: _error != null
+                          ? Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
+                          : const CircularProgressIndicator(),
+                    ),
+                  ),
+                ],
               )
             : Column(
                 mainAxisSize: MainAxisSize.min,
