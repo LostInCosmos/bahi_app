@@ -205,9 +205,14 @@ class _AccountScreenState extends State<AccountScreen> {
                       child: Text(_savedMessage!, style: const TextStyle(color: AppColors.statusSaved)),
                     ),
                   BusyFilledButton(busy: _saving, onPressed: _save, label: 'Save details'),
-                  if (_account != null) ...[
+                  // Only while the shop's page is live; otherwise nothing at all.
+                  if (_account?.publicStockUrl != null) ...[
                     const SizedBox(height: Spacing.xl),
-                    StockPageCard(url: _account!.publicStockUrl, shopName: _account!.tenantName),
+                    StockPageCard(
+                      url: _account!.publicStockUrl!,
+                      posterUrl: _account!.publicPosterUrl,
+                      shopName: _account!.tenantName,
+                    ),
                   ],
                   const SizedBox(height: Spacing.xl),
                   Text('Legal', style: Theme.of(context).textTheme.titleMedium),
