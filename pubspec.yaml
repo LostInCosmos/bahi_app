@@ -25,6 +25,7 @@ dependencies:
   pdfx: ^2.6.0
   package_info_plus: ^9.0.1
   pdf: ^3.13.1
+  qr: ^3.0.2   # already here through pdf; draws the stock page QR on the phone
 
 dev_dependencies:
   flutter_test:

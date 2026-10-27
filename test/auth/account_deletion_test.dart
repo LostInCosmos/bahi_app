@@ -88,6 +88,9 @@ void main() {
 
       // The body is a lazy list: scroll until the button is built.
       await tester.scrollUntilVisible(find.byKey(const ValueKey('delete-account')), 200, scrollable: find.byType(Scrollable).first);
+      // Built is not wholly on screen: bring all of it in before tapping.
+      await tester.ensureVisible(find.byKey(const ValueKey('delete-account')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-account')));
       await tester.pumpAndSettle();
       expect(find.text('Delete this account?'), findsOneWidget);

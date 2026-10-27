@@ -24,6 +24,10 @@ class AccountInfo {
   /// server older than the field, which then never asks for acceptance.
   final LegalStatus? legal;
 
+  /// The shop's public stock page (DAS-80), e.g. `https://dastavez.co.in/<slug>`;
+  /// null until our team publishes one, and from a server older than the field.
+  final String? publicStockUrl;
+
   AccountInfo({
     required this.tenantName,
     this.gstin,
@@ -34,6 +38,7 @@ class AccountInfo {
     this.phone,
     this.voiceEnabled,
     this.legal,
+    this.publicStockUrl,
   });
 
   factory AccountInfo.fromJson(Map<String, dynamic> json) => AccountInfo(
@@ -46,6 +51,7 @@ class AccountInfo {
         phone: json.str('phone'),
         voiceEnabled: json.boolean('voice_enabled'),
         legal: json.objOf('legal', LegalStatus.fromJson),
+        publicStockUrl: json.str('public_stock_url'),
       );
 
   /// Whether this build must show the acceptance screen before going on:

@@ -6,6 +6,7 @@ import '../../../core/config/business_types.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/inline_message.dart';
 import '../../../core/config/legal_documents.dart';
+import '../widgets/stock_page_card.dart';
 import '../data/auth_api.dart';
 import '../models/account.dart';
 import 'legal_screen.dart';
@@ -204,6 +205,10 @@ class _AccountScreenState extends State<AccountScreen> {
                       child: Text(_savedMessage!, style: const TextStyle(color: AppColors.statusSaved)),
                     ),
                   BusyFilledButton(busy: _saving, onPressed: _save, label: 'Save details'),
+                  if (_account != null) ...[
+                    const SizedBox(height: Spacing.xl),
+                    StockPageCard(url: _account!.publicStockUrl, shopName: _account!.tenantName),
+                  ],
                   const SizedBox(height: Spacing.xl),
                   Text('Legal', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: Spacing.xs),
