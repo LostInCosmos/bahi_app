@@ -24,6 +24,15 @@ class AccountInfo {
   /// server older than the field, which then never asks for acceptance.
   final LegalStatus? legal;
 
+  /// The shop's public stock page (DAS-80), e.g. `https://dastavez.co.in/<slug>`;
+  /// null until our team publishes one, and from a server older than the field.
+  final String? publicStockUrl;
+
+  /// The page's printable QR poster, `<stock page>/poster` (DAS-80, DAS-149).
+  /// A server older than the field does not send it; then it is derived from
+  /// [publicStockUrl], the same shape the admin panel shows.
+  final String? publicPosterUrl;
+
   AccountInfo({
     required this.tenantName,
     this.gstin,
@@ -34,6 +43,8 @@ class AccountInfo {
     this.phone,
     this.voiceEnabled,
     this.legal,
+    this.publicStockUrl,
+    this.publicPosterUrl,
   });
 
   factory AccountInfo.fromJson(Map<String, dynamic> json) => AccountInfo(
@@ -46,7 +57,14 @@ class AccountInfo {
         phone: json.str('phone'),
         voiceEnabled: json.boolean('voice_enabled'),
         legal: json.objOf('legal', LegalStatus.fromJson),
+        publicStockUrl: json.str('public_stock_url'),
+        publicPosterUrl: json.containsKey('public_poster_url')
+            ? json.str('public_poster_url')
+            : _posterOf(json.str('public_stock_url')),
       );
+
+  static String? _posterOf(String? stockUrl) =>
+      stockUrl == null ? null : '${stockUrl.endsWith('/') ? stockUrl.substring(0, stockUrl.length - 1) : stockUrl}/poster';
 
   /// Whether this build must show the acceptance screen before going on:
   /// the server says acceptance is required AND this build carries the
