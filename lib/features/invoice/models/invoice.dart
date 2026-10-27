@@ -253,7 +253,9 @@ class ExtractionMeta {
   // Bumped by the server each time the admin rotates this bill's photo in
   // place (DAS-72) — the object at [sourceImage] is overwritten under the
   // same name, so this is what tells a client caching by path to refetch.
-  // See ApiClient.fetchImage / BillImageCache.
+  // See ApiClient.fetchImage / BillImageCache. The server sends it on the job,
+  // not inside extraction_meta: ExtractionJob.fromJson sets it here (DAS-150;
+  // read from the meta it was always 0, so a rotated photo stayed stale).
   int imageRev;
 
   ExtractionMeta({
@@ -275,7 +277,6 @@ class ExtractionMeta {
         confidence: json.dbl('confidence'),
         reviewedByUser: json.boolOr('reviewed_by_user'),
         vendorKnown: json.boolOr('vendor_known'),
-        imageRev: json.intOr('image_rev'),
       );
 
   /// What a save sends: this read's meta, marked as checked by a person.
@@ -446,7 +447,7 @@ class ExtractionJob {
     return ExtractionJob(
       jobId: json.intReq('job_id'),
       status: json.strReq('status'),
-      result: json.objOf('result', ExtractionResult.fromJson),
+      result: json.objOf('result', ExtractionResult.fromJson)?..meta.imageRev = json.intOr('image_rev'),
       errorKind: error?.str('kind'),
       errorMessage: error?.str('message'),
       sourceImage: error?.str('source_image'),
