@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/format.dart';
 import '../models/sale.dart';
 import '../models/sale_totals.dart';
 
@@ -11,6 +12,7 @@ extension SaleApi on ApiClient {
     String? buyerPhone,
     String? doctorName,
     PaymentMode? paymentMode,
+    DateTime? saleDate,
     required List<CartEntry> lineItems,
     Discount? discount,
   }) async {
@@ -24,6 +26,10 @@ extension SaleApi on ApiClient {
       if (orNull(buyerPhone) != null) 'buyer_phone': buyerPhone,
       if (orNull(doctorName) != null) 'doctor_name': doctorName,
       if (paymentMode != null) 'payment_mode': paymentMode.wire,
+      // Only when the shopkeeper picked another day: absent, the server dates
+      // the sale its own today (India), so a phone with a wrong clock cannot
+      // move today's sales. An older server ignores it.
+      if (saleDate != null) 'sale_date': isoDate(saleDate),
       // `rate` is GST-inclusive and a discount is sent as typed; the server
       // converts it to rupees and decides every total (DAS-111).
       if (Discount.wireOf(discount) != null) 'discount': Discount.wireOf(discount),
