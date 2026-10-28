@@ -8,6 +8,7 @@ import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../data/sale_api.dart';
 import '../models/sale.dart';
+import '../models/sale_date.dart';
 import '../models/sale_totals.dart';
 import '../widgets/cart_line_editor.dart';
 import '../widgets/discount_field.dart';
@@ -35,6 +36,10 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
   final _doctorController = TextEditingController();
   /// Cash unless the shopkeeper taps Online (the user, DAS-150).
   PaymentMode _paymentMode = PaymentMode.cash;
+  /// Another day the shopkeeper picked; null is today (the default).
+  DateTime? _saleDate;
+  /// The server's refusal of the date, under the date row.
+  String? _dateError;
   /// The server's refusal of the phone or the doctor, under its field.
   String? _phoneError;
   String? _doctorError;
@@ -98,6 +103,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
       _message = null;
       _phoneError = null;
       _doctorError = null;
+      _dateError = null;
     });
     try {
       final result = await ApiClient.instance.createSale(
@@ -106,6 +112,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
         buyerPhone: _buyerPhoneController.text.trim(),
         doctorName: _doctorController.text.trim(),
         paymentMode: _paymentMode,
+        saleDate: _saleDate,
         lineItems: widget.cart,
         discount: _saleDiscount,
       );
@@ -115,7 +122,14 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
       final detail = e.detail;
       if (!mounted) return;
       final gone = e.statusCode == 404 ? _goneBatch.firstMatch(e.message) : null;
-      if (detail is Map && detail['error'] == 'insufficient_stock') {
+      if (detail is Map && detail['error'] == 'batch_expired') {
+        final expiry = DateTime.tryParse('${detail['expiry_date']}');
+        setState(() => _message = '${detail['product_name']}: this batch expired on '
+            '${expiry == null ? detail['expiry_date'] : shortDate(expiry)}, before the sale date. '
+            'Change the date or the batch.');
+      } else if (e.statusCode == 422 && detail is String && e.field == 'sale_date') {
+        setState(() => _dateError = detail);
+      } else if (detail is Map && detail['error'] == 'insufficient_stock') {
         setState(() => _message = 'Not enough stock for ${detail['product_name']}: '
             'requested ${detail['requested']}, available ${detail['available']}.');
       } else if (gone != null) {
@@ -157,6 +171,8 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
             errorText: totals.saleError,
           ),
           const SizedBox(height: Spacing.m),
+          _saleDateRow(context),
+          const SizedBox(height: Spacing.s),
           Text('Paid by', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: Spacing.xs),
           SegmentedButton<PaymentMode>(
@@ -214,6 +230,57 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The sale's date: today unless the shopkeeper picks another day. Any past
+  /// day for now (the user), never a future one; see sale_date.dart.
+  Widget _saleDateRow(BuildContext context) {
+    final today = DateTime.now();
+    final shown = _saleDate ?? today;
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            key: const ValueKey('sale-date'),
+            leading: const Icon(Icons.event_rounded),
+            title: const Text('Sale date'),
+            subtitle: Text('${shortDate(shown)} · ${_saleDate == null ? 'today' : 'changed'}'),
+            trailing: _saleDate == null
+                ? const Icon(Icons.edit_calendar_rounded)
+                : TextButton(
+                    onPressed: () => setState(() {
+                      _saleDate = null;
+                      _dateError = null;
+                    }),
+                    child: const Text('Use today'),
+                  ),
+            onTap: () async {
+              final window = saleDateWindow(today);
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: shown,
+                firstDate: window.first,
+                lastDate: window.last,
+                helpText: 'Sale date',
+              );
+              if (picked == null || !mounted) return;
+              setState(() {
+                _saleDate = sameDay(picked, today) ? null : picked;
+                _dateError = null;
+              });
+            },
+          ),
+        ),
+        if (_dateError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: Spacing.xs, left: Spacing.l),
+            child: Text(_dateError!, style: TextStyle(color: theme.colorScheme.error)),
+          ),
+      ],
     );
   }
 

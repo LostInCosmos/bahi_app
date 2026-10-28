@@ -100,4 +100,75 @@ void main() {
     expect(doctorLine('dr sharma'), 'dr sharma');
     expect(doctorLine('Drishti Rao'), 'Dr Drishti Rao', reason: 'a name starting with "Dr" is not a title');
   });
+
+  /// Picks the 1st of this month, or of last month on the 1st (today is not a change).
+  Future<DateTime> pickFirstOfMonth(WidgetTester tester) async {
+    final now = DateTime.now();
+    await tester.tap(find.byKey(const ValueKey('sale-date')));
+    await tester.pumpAndSettle();
+    var day = DateTime(now.year, now.month, 1);
+    if (now.day == 1) {
+      await tester.tap(find.byTooltip('Previous month'));
+      await tester.pumpAndSettle();
+      day = DateTime(now.year, now.month - 1, 1);
+    }
+    await tester.tap(find.text('1').first);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    return day;
+  }
+
+  testWidgets('the sale date shows today and, left alone, is not sent', (tester) async {
+    Map<String, dynamic>? body;
+    await http.runWithClient(() async {
+      await open(tester);
+      expect(find.textContaining('· today'), findsOneWidget);
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+    }, () => MockClient((req) async {
+          body = jsonDecode(req.body) as Map<String, dynamic>;
+          return _json({'sale_id': 5});
+        }));
+    expect(body!.containsKey('sale_date'), isFalse, reason: 'the server dates it its own today');
+  });
+
+  testWidgets('a picked day is sent, and "Use today" takes it back', (tester) async {
+    Map<String, dynamic>? body;
+    await http.runWithClient(() async {
+      await open(tester);
+      final day = await pickFirstOfMonth(tester);
+      expect(find.textContaining('· changed'), findsOneWidget);
+      await tester.tap(find.text('Use today'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('· today'), findsOneWidget);
+
+      await pickFirstOfMonth(tester);
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      expect(body!['sale_date'], '${day.year}-${day.month.toString().padLeft(2, '0')}-01');
+    }, () => MockClient((req) async {
+          body = jsonDecode(req.body) as Map<String, dynamic>;
+          return _json({'sale_id': 5});
+        }));
+  });
+
+  testWidgets("a refused date shows under the date; an expired batch names the medicine", (tester) async {
+    var answer = _json({'detail': 'The sale date cannot be after today.', 'field': 'sale_date'}, 422);
+    await http.runWithClient(() async {
+      await open(tester);
+      await pickFirstOfMonth(tester);
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      expect(find.text('The sale date cannot be after today.'), findsOneWidget);
+
+      answer = _json({
+        'detail': {'error': 'batch_expired', 'product_batch_id': 1, 'product_name': 'Dolo 650', 'expiry_date': '2026-09-30'},
+      }, 422);
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      expect(find.text('Dolo 650: this batch expired on 30 Sep 2026, before the sale date. Change the date or the batch.'),
+          findsOneWidget);
+      expect(find.text('The sale date cannot be after today.'), findsNothing, reason: 'cleared on the next try');
+    }, () => MockClient((req) async => answer));
+  });
 }
