@@ -36,7 +36,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/inventory/presentation`](#libfeaturesinventorypresentation) | `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen` | 2 | 1 |
 | [`lib/features/inventory/widgets`](#libfeaturesinventorywidgets) | `ProductName` | 1 | 3 |
 | [`lib/features/invoice/data`](#libfeaturesinvoicedata) | `InvoiceApi` | 1 | 3 |
-| [`lib/features/invoice/models`](#libfeaturesinvoicemodels) | `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue` +11 | 3 | 5 |
+| [`lib/features/invoice/models`](#libfeaturesinvoicemodels) | `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue` +13 | 3 | 5 |
 | [`lib/features/invoice/presentation`](#libfeaturesinvoicepresentation) | `InvoiceDetailScreen`, `PurchasesScreen`, `PurchasesScreenState`, `ReviewScreen` | 3 | 3 |
 | [`lib/features/invoice/widgets`](#libfeaturesinvoicewidgets) | `ExportOption`, `showExportOptions`, `showSavedTick`, `SavedTick` | 2 | 2 |
 | [`lib/features/sales/data`](#libfeaturessalesdata) | `SaleApi`, `BillFonts`, `isTaxInvoice`, `billFileName`, `buildSaleBillPdf` +1 | 2 | 1 |
@@ -98,7 +98,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `api_client.dart` | 504 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
+| `api_client.dart` | 509 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
 | `api_exception.dart` | 30 | — |
 
 **Public:** `VersionGateLevel`, `ApiClient`, `ApiException`
@@ -264,15 +264,15 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item.dart` | 348 | — |
+| `batch_item.dart` | 368 | — |
 | `bill_search.dart` | 42 | — |
 | `bulk.dart` | 255 | — |
-| `hand_over.dart` | 47 | When a phone's card gives way to the shop's list (DAS-62), and what to do |
+| `hand_over.dart` | 48 | When a phone's card gives way to the shop's list (DAS-62), and what to do |
 | `list_entry.dart` | 38 | One card on the Capture list.  *[ListEntry]* |
 | `pdf_pages.dart` | 105 | — |
 | `seen_state.dart` | 37 | What a capture card is drawing for its bill, as the string the server |
 | `status_filter.dart` | 164 | The categories a shopkeeper filters the capture grid by (DAS-26).  *[StatusFilter]* |
-| `upload_summary.dart` | 139 | One row of `GET /invoices/extract` — a bill this SHOP has uploaded,  *[UploadSummary]* |
+| `upload_summary.dart` | 146 | One row of `GET /invoices/extract` — a bill this SHOP has uploaded,  *[UploadSummary]* |
 
 **Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState`, `normaliseSearch`, `matchesBillSearch`, `UploadSearch`, `BatchItemSearch`, `localSortKey`, `isSavedEntry`, `jobIdOf`, `mayDiscard`, `DiscardPlan`, `planDiscard`, `MoveVia`, `MoveStep`, `moveStep`, `BulkFailure`, `BulkResult`, `runBulk`, `summarise`, `BulkMoveReply`, `MoveBatch`, `MovePlan`, `planMove`, `BulkDiscardReply`, `DiscardBatch`, `DiscardRequests`, `planDiscardRequests`, `splitHandOver`, `ListEntry`, `isPdfPath`, `RenderedPage`, `TooManyPdfPages`, `renderPdf`, `cardSeenState`, `StatusFilter`, `FilterBox`, `matchesStatusFilter` +8
 
@@ -285,9 +285,9 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `capture_intake.dart` | 510 | — |
-| `capture_screen.dart` | 1277 | — |
+| `capture_screen.dart` | 1410 | — |
 | `capture_selection.dart` | 268 | — |
-| `capture_watching.dart` | 449 | Watching the bills the server is reading: the batch long-poll (DAS-19),  *[_Watching]* |
+| `capture_watching.dart` | 452 | Watching the bills the server is reading: the batch long-poll (DAS-19),  *[_Watching]* |
 | `crop_screen.dart` | 128 | One page of a batch capture: drag the four corners onto this bill, pick a  *[CropScreen]* |
 
 **Public:** `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult`
@@ -439,7 +439,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice_api.dart` | 254 | — |
+| `invoice_api.dart` | 273 | — |
 
 **Public:** `InvoiceApi`
 
@@ -451,11 +451,11 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice.dart` | 612 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
+| `invoice.dart` | 669 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
 | `job_status.dart` | 86 | Batch job-status answers (DAS-19): what one held request to |
 | `purchase_export.dart` | 65 | A purchases spreadsheet from `GET /export/excel`, with what the server  *[PurchaseExport]* |
 
-**Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `ExtractionJob`, `InvoiceSummary`, `InvoiceDetail`, `SavedJob`, `JobStatusBrief`, `JobStatusBatch`, `PurchaseExport`, `exportRangeLabel`, `excludedNote`
+**Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `BillDraft`, `DraftReply`, `ExtractionJob`, `InvoiceSummary`, `InvoiceDetail`, `SavedJob`, `JobStatusBrief`, `JobStatusBatch`, `PurchaseExport`, `exportRangeLabel`, `excludedNote`
 
 **Depends on:** `lib/core/utils`
 
@@ -467,7 +467,7 @@ Find the module whose names fit what you are adding, then read its section.
 |---|---|---|
 | `invoice_detail_screen.dart` | 190 | — |
 | `purchases_screen.dart` | 398 | — |
-| `review_screen.dart` | 1291 | — |
+| `review_screen.dart` | 1512 | — |
 
 **Public:** `InvoiceDetailScreen`, `PurchasesScreen`, `PurchasesScreenState`, `ReviewScreen`
 
