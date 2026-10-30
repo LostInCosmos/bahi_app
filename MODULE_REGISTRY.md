@@ -12,18 +12,19 @@ Find the module whose names fit what you are adding, then read its section.
 |---|---|---|---|
 | [`lib`](#lib) | `main` | 1 | 0 |
 | [`lib/app`](#libapp) | `GstBillApp` | 1 | 1 |
-| [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 13 |
+| [`lib/app/theme`](#libapptheme) | `AppColors`, `buildTextTheme`, `amountTextStyle`, `Spacing`, `AppRadius` +1 | 3 | 14 |
 | [`lib/core/api`](#libcoreapi) | `VersionGateLevel`, `ApiClient`, `ApiException` | 2 | 19 |
 | [`lib/core/config`](#libcoreconfig) | `BusinessType`, `businessTypeItems`, `stateOfGstin`, `compareLegalVersions`, `LegalSection` +5 | 3 | 6 |
-| [`lib/core/disk`](#libcoredisk) | `BillImageCache`, `PendingPhotoStore` | 2 | 6 |
+| [`lib/core/disk`](#libcoredisk) | `excludeFromBackup`, `BillImageCache`, `PendingPhotoStore` | 3 | 6 |
 | [`lib/core/navigation`](#libcorenavigation) | `AppRoutes`, `TabScreen` | 2 | 7 |
-| [`lib/core/utils`](#libcoreutils) | `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty` +14 | 6 | 21 |
-| [`lib/core/widgets`](#libcorewidgets) | `ButtonSpinner`, `BusyFilledButton`, `BusyOutlinedButton`, `showConfirmDialog`, `showMessageDialog` +7 | 5 | 10 |
+| [`lib/core/utils`](#libcoreutils) | `AppForeground`, `rupees`, `numText`, `wholeOrFixed2`, `percent` +15 | 7 | 23 |
+| [`lib/core/widgets`](#libcorewidgets) | `ButtonSpinner`, `BusyFilledButton`, `BusyOutlinedButton`, `showConfirmDialog`, `showMessageDialog` +8 | 6 | 11 |
 | [`lib/features/auth/data`](#libfeaturesauthdata) | `AuthApi` | 1 | 3 |
 | [`lib/features/auth/models`](#libfeaturesauthmodels) | `AccountInfo`, `LegalStatus` | 1 | 5 |
 | [`lib/features/auth/presentation`](#libfeaturesauthpresentation) | `AccountScreen`, `LegalAcceptanceScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen` +2 | 5 | 3 |
+| [`lib/features/auth/widgets`](#libfeaturesauthwidgets) | `StockPageCard` | 1 | 1 |
 | [`lib/features/capture/data`](#libfeaturescapturedata) | `BatchStore`, `CaptureApi` | 2 | 3 |
-| [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState` +41 | 7 | 3 |
+| [`lib/features/capture/models`](#libfeaturescapturemodels) | `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState` +43 | 9 | 3 |
 | [`lib/features/capture/presentation`](#libfeaturescapturepresentation) | `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult` | 5 | 1 |
 | [`lib/features/capture/widgets`](#libfeaturescapturewidgets) | `BatchItemCard`, `ChromeButton`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState` +15 | 13 | 1 |
 | [`lib/features/folders/data`](#libfeaturesfoldersdata) | `FolderApi`, `FolderController` | 2 | 3 |
@@ -38,8 +39,8 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/invoice/models`](#libfeaturesinvoicemodels) | `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue` +11 | 3 | 5 |
 | [`lib/features/invoice/presentation`](#libfeaturesinvoicepresentation) | `InvoiceDetailScreen`, `PurchasesScreen`, `PurchasesScreenState`, `ReviewScreen` | 3 | 3 |
 | [`lib/features/invoice/widgets`](#libfeaturesinvoicewidgets) | `ExportOption`, `showExportOptions`, `showSavedTick`, `SavedTick` | 2 | 2 |
-| [`lib/features/sales/data`](#libfeaturessalesdata) | `SaleApi`, `BillFonts`, `isTaxInvoice`, `billFileName`, `buildSaleBillPdf` | 2 | 1 |
-| [`lib/features/sales/models`](#libfeaturessalesmodels) | `rupeesInWords`, `stockNote`, `CartEntry`, `SaleLineItemDetail`, `SaleSummary` +7 | 3 | 3 |
+| [`lib/features/sales/data`](#libfeaturessalesdata) | `SaleApi`, `BillFonts`, `isTaxInvoice`, `billFileName`, `buildSaleBillPdf` +1 | 2 | 1 |
+| [`lib/features/sales/models`](#libfeaturessalesmodels) | `rupeesInWords`, `stockNote`, `CartEntry`, `SaleLineItemDetail`, `SaleSummary` +10 | 4 | 3 |
 | [`lib/features/sales/presentation`](#libfeaturessalespresentation) | `SaleReceiptScreen`, `SaleReviewScreen`, `SalesHistoryScreen`, `SalesHistoryScreenState`, `SalesScreen` +1 | 4 | 2 |
 | [`lib/features/sales/widgets`](#libfeaturessaleswidgets) | `showCartLineEditor`, `parseDiscount`, `DiscountField`, `StockNote`, `SaleTotalsCard` | 4 | 1 |
 | [`lib/features/voice/data`](#libfeaturesvoicedata) | `VoiceApi` | 1 | 2 |
@@ -47,7 +48,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 | [`lib/features/voice/widgets`](#libfeaturesvoicewidgets) | `newRecordingPath`, `deleteRecordingFile`, `hasMicPermission`, `recordingErrorMessage`, `voiceOffMessage` +3 | 1 | 1 |
 
-**Coverage:** 0 of 36 modules state their purpose; 56 of 100 files have a purpose line (5 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 37 modules state their purpose; 60 of 107 files have a purpose line (8 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -67,7 +68,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `app.dart` | 221 | — |
+| `app.dart` | 225 | — |
 
 **Public:** `GstBillApp`
 
@@ -89,7 +90,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 **Depends on:** `lib/core/config`
 
-**Used by:** `lib/app`, `lib/core/widgets`, `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/widgets`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/invoice/widgets`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/presentation`, `lib/features/voice/widgets`
+**Used by:** `lib/app`, `lib/core/widgets`, `lib/features/auth/presentation`, `lib/features/auth/widgets`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/widgets`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/invoice/widgets`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/presentation`, `lib/features/voice/widgets`
 
 ---
 
@@ -97,8 +98,8 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `api_client.dart` | 468 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
-| `api_exception.dart` | 25 | — |
+| `api_client.dart` | 504 | Thin REST client for the FastAPI backend. Holds the base URL and JWT in  *[ApiClient]* |
+| `api_exception.dart` | 30 | — |
 
 **Public:** `VersionGateLevel`, `ApiClient`, `ApiException`
 
@@ -126,10 +127,11 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
+| `backup_exclusion.dart` | 27 | — |
 | `bill_image_cache.dart` | 200 | On-device store for corrected bill photos, so the same image is pulled  *[BillImageCache]* |
-| `pending_photo_store.dart` | 94 | Raw bill photos that have been captured and cropped but not yet uploaded.  *[PendingPhotoStore]* |
+| `pending_photo_store.dart` | 118 | Raw bill photos that have been captured and cropped but not yet uploaded.  *[PendingPhotoStore]* |
 
-**Public:** `BillImageCache`, `PendingPhotoStore`
+**Public:** `excludeFromBackup`, `BillImageCache`, `PendingPhotoStore`
 
 **Used by:** `lib/core/api`, `lib/features/auth/presentation`, `lib/features/capture/data`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/invoice/data`
 
@@ -152,18 +154,19 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
+| `app_foreground.dart` | 71 | Whether this app is on screen, for work that must not run, or must not be  *[AppForeground]* |
 | `format.dart` | 49 | How numbers, money, dates and counts are written for the shopkeeper. |
 | `json.dart` | 76 | Reading a server JSON object into a model, in one place.  *[JsonReads]* |
 | `offset_2d.dart` | 9 | Minimal (x, y) pair — avoids pulling in dart:ui's Offset in files that  *[Offset2D]* |
-| `poll.dart` | 104 | — |
+| `poll.dart` | 114 | — |
 | `share_file.dart` | 79 | — |
 | `snack.dart` | 19 | Telling the shopkeeper something in passing.  *[Snack]* |
 
-**Public:** `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty`, `plural`, `isoDate`, `shortDate`, `formatElapsed`, `JsonReads`, `Offset2D`, `PollAbandoned`, `checkWanted`, `shareOrigin`, `shareBytes`, `sharedFilesDirectory`, `sweepSharedFiles`, `savePdf`, `Snack`
+**Public:** `AppForeground`, `rupees`, `numText`, `wholeOrFixed2`, `percent`, `qty`, `plural`, `isoDate`, `shortDate`, `formatElapsed`, `JsonReads`, `Offset2D`, `PollAbandoned`, `checkWanted`, `shareOrigin`, `shareBytes`, `sharedFilesDirectory`, `sweepSharedFiles`, `savePdf`, `Snack`
 
 **Depends on:** `lib/core/api`
 
-**Used by:** `lib/app`, `lib/core/widgets`, `lib/features/auth/models`, `lib/features/auth/presentation`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/models`, `lib/features/folders/widgets`, `lib/features/inventory/data`, `lib/features/inventory/models`, `lib/features/inventory/presentation`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/invoice/presentation`, `lib/features/sales/models`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/models`, `lib/features/voice/presentation`, `lib/features/voice/widgets`
+**Used by:** `lib/app`, `lib/core/widgets`, `lib/features/auth/models`, `lib/features/auth/presentation`, `lib/features/auth/widgets`, `lib/features/capture/models`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/models`, `lib/features/folders/widgets`, `lib/features/inventory/data`, `lib/features/inventory/models`, `lib/features/inventory/presentation`, `lib/features/invoice/data`, `lib/features/invoice/models`, `lib/features/invoice/presentation`, `lib/features/sales/data`, `lib/features/sales/models`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/models`, `lib/features/voice/presentation`, `lib/features/voice/widgets`
 
 ---
 
@@ -176,12 +179,13 @@ Find the module whose names fit what you are adding, then read its section.
 | `dastavez_logo.dart` | 98 | The bare mark. It is navy, so it needs a light surface behind it — use  *[DastavezLogo]* |
 | `date_range_buttons.dart` | 55 | Two side-by-side date buttons, "From" and "To", each opening a picker.  *[DateRangeButtons]* |
 | `inline_message.dart` | 90 | — |
+| `qr_code_view.dart` | 48 | [data] as a QR code a phone camera can scan: black on white whatever the  *[QrCodeView]* |
 
-**Public:** `ButtonSpinner`, `BusyFilledButton`, `BusyOutlinedButton`, `showConfirmDialog`, `showMessageDialog`, `DastavezLogo`, `DastavezLogoTile`, `DateRangeButtons`, `ErrorText`, `EmptyHint`, `KeyValueRow`, `SectionTitle`
+**Public:** `ButtonSpinner`, `BusyFilledButton`, `BusyOutlinedButton`, `showConfirmDialog`, `showMessageDialog`, `DastavezLogo`, `DastavezLogoTile`, `DateRangeButtons`, `ErrorText`, `EmptyHint`, `KeyValueRow`, `SectionTitle`, `QrCodeView`
 
 **Depends on:** `lib/app/theme`, `lib/core/utils`
 
-**Used by:** `lib/features/auth/presentation`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/widgets`, `lib/features/home/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/presentation`
+**Used by:** `lib/features/auth/presentation`, `lib/features/auth/widgets`, `lib/features/capture/presentation`, `lib/features/capture/widgets`, `lib/features/folders/widgets`, `lib/features/home/presentation`, `lib/features/inventory/presentation`, `lib/features/invoice/presentation`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/presentation`
 
 ---
 
@@ -203,7 +207,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `account.dart` | 85 | — |
+| `account.dart` | 103 | — |
 
 **Public:** `AccountInfo`, `LegalStatus`
 
@@ -215,17 +219,29 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `account_screen.dart` | 324 | Shop details — the mobile counterpart of the web app's Account page.  *[AccountScreen]* |
+| `account_screen.dart` | 334 | Shop details — the mobile counterpart of the web app's Account page.  *[AccountScreen]* |
 | `legal_acceptance_screen.dart` | 122 | "We've updated our Terms and Privacy Policy": shown over the app when the  *[LegalAcceptanceScreen]* |
 | `legal_screen.dart` | 138 | Shows one of the legal documents (`core/config/legal_documents.dart`):  *[LegalScreen]* |
-| `login_screen.dart` | 430 | — |
+| `login_screen.dart` | 432 | — |
 | `sign_out.dart` | 40 | Ends this device's session and lands on the login screen with nothing  *[signOut]* |
 
 **Public:** `AccountScreen`, `LegalAcceptanceScreen`, `LegalScreen`, `LegalLinksText`, `LoginScreen`, `signOut`, `forgetShopOnDevice`
 
-**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/config`, `lib/core/disk`, `lib/core/navigation`, `lib/core/utils`, `lib/core/widgets`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/capture/data`
+**Depends on:** `lib/app/theme`, `lib/core/api`, `lib/core/config`, `lib/core/disk`, `lib/core/navigation`, `lib/core/utils`, `lib/core/widgets`, `lib/features/auth/data`, `lib/features/auth/models`, `lib/features/auth/widgets`, `lib/features/capture/data`
 
 **Used by:** `lib/app`, `lib/features/home/presentation`, `lib/features/sales/presentation`
+
+### `lib/features/auth/widgets`
+
+| file | lines | purpose |
+|---|---|---|
+| `stock_page_card.dart` | 171 | The shop's public stock page (DAS-80) on the Account screen: a QR code  *[StockPageCard]* |
+
+**Public:** `StockPageCard`
+
+**Depends on:** `lib/app/theme`, `lib/core/utils`, `lib/core/widgets`
+
+**Used by:** `lib/features/auth/presentation`
 
 ---
 
@@ -235,7 +251,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_store.dart` | 79 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
+| `batch_store.dart` | 169 | Saves and restores the capture screen's in-progress batch, so it survives  *[BatchStore]* |
 | `capture_api.dart` | 66 | The capture screen's own endpoints: the shop's uploads list and filing or  *[CaptureApi]* |
 
 **Public:** `BatchStore`, `CaptureApi`
@@ -248,15 +264,17 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item.dart` | 329 | — |
+| `batch_item.dart` | 348 | — |
 | `bill_search.dart` | 42 | — |
 | `bulk.dart` | 255 | — |
+| `hand_over.dart` | 47 | When a phone's card gives way to the shop's list (DAS-62), and what to do |
 | `list_entry.dart` | 38 | One card on the Capture list.  *[ListEntry]* |
 | `pdf_pages.dart` | 105 | — |
+| `seen_state.dart` | 37 | What a capture card is drawing for its bill, as the string the server |
 | `status_filter.dart` | 164 | The categories a shopkeeper filters the capture grid by (DAS-26).  *[StatusFilter]* |
 | `upload_summary.dart` | 139 | One row of `GET /invoices/extract` — a bill this SHOP has uploaded,  *[UploadSummary]* |
 
-**Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState`, `normaliseSearch`, `matchesBillSearch`, `UploadSearch`, `BatchItemSearch`, `localSortKey`, `isSavedEntry`, `jobIdOf`, `mayDiscard`, `DiscardPlan`, `planDiscard`, `MoveVia`, `MoveStep`, `moveStep`, `BulkFailure`, `BulkResult`, `runBulk`, `summarise`, `BulkMoveReply`, `MoveBatch`, `MovePlan`, `planMove`, `BulkDiscardReply`, `DiscardBatch`, `DiscardRequests`, `planDiscardRequests`, `ListEntry`, `isPdfPath`, `RenderedPage`, `TooManyPdfPages`, `renderPdf`, `StatusFilter`, `FilterBox`, `matchesStatusFilter`, `categoryOfItem`, `filterByStatus` +6
+**Public:** `BatchItemStatus`, `BatchItemPage`, `BatchItem`, `StartupAction`, `batchState`, `normaliseSearch`, `matchesBillSearch`, `UploadSearch`, `BatchItemSearch`, `localSortKey`, `isSavedEntry`, `jobIdOf`, `mayDiscard`, `DiscardPlan`, `planDiscard`, `MoveVia`, `MoveStep`, `moveStep`, `BulkFailure`, `BulkResult`, `runBulk`, `summarise`, `BulkMoveReply`, `MoveBatch`, `MovePlan`, `planMove`, `BulkDiscardReply`, `DiscardBatch`, `DiscardRequests`, `planDiscardRequests`, `splitHandOver`, `ListEntry`, `isPdfPath`, `RenderedPage`, `TooManyPdfPages`, `renderPdf`, `cardSeenState`, `StatusFilter`, `FilterBox`, `matchesStatusFilter` +8
 
 **Depends on:** `lib/core/disk`, `lib/core/utils`, `lib/features/invoice/models`
 
@@ -266,10 +284,10 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `capture_intake.dart` | 327 | Getting bills in: the camera, the gallery, a PDF rendered to pages  *[_Intake]* |
-| `capture_screen.dart` | 1175 | Adobe-Scanner-style batch flow: add several bill photos (each gets its  *[CaptureScreen]* |
+| `capture_intake.dart` | 510 | — |
+| `capture_screen.dart` | 1277 | — |
 | `capture_selection.dart` | 268 | — |
-| `capture_watching.dart` | 402 | Watching the bills the server is reading: the batch long-poll (DAS-19),  *[_Watching]* |
+| `capture_watching.dart` | 449 | Watching the bills the server is reading: the batch long-poll (DAS-19),  *[_Watching]* |
 | `crop_screen.dart` | 128 | One page of a batch capture: drag the four corners onto this bill, pick a  *[CropScreen]* |
 
 **Public:** `CaptureScreen`, `CaptureScreenState`, `CropScreen`, `CropResult`
@@ -282,8 +300,8 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `batch_item_card.dart` | 290 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
-| `bill_thumbnail.dart` | 147 | — |
+| `batch_item_card.dart` | 298 | One bill in the capture grid: its corrected photo, a status badge, and  *[BatchItemCard]* |
+| `bill_thumbnail.dart` | 162 | — |
 | `capture_bottom_bar.dart` | 103 | "Add another" / gallery buttons once the batch has items, plus either the  *[CaptureBottomBar]* |
 | `capture_empty_state.dart` | 103 | What the capture screen shows before any bill has been added.  *[CaptureEmptyState]* |
 | `confirm_bill_dialog.dart` | 50 | — |
@@ -294,7 +312,7 @@ Find the module whose names fit what you are adding, then read its section.
 | `selection_mark.dart` | 51 | The ring and corner tick a card wears while bills are being chosen.  *[selectionOverlay]* |
 | `status_filter_bar.dart` | 71 | Tickboxes for the statuses a shopkeeper wants to see (DAS-26).  *[StatusFilterBar]* |
 | `unsave_dialog.dart` | 68 | — |
-| `upload_history.dart` | 908 | Every bill, in ONE list: the ones this device holds and the shop's own.  *[UploadHistory]* |
+| `upload_history.dart` | 902 | Every bill, in ONE list: the ones this device holds and the shop's own.  *[UploadHistory]* |
 
 **Public:** `BatchItemCard`, `ChromeButton`, `BillThumbnail`, `CaptureBottomBar`, `CaptureEmptyState`, `ConfirmBillAction`, `showConfirmBillDialog`, `CropCanvas`, `ProcessingBillAction`, `ProcessingBillView`, `showProcessingBillDialog`, `RetryLabel`, `SelectionBar`, `selectionOverlay`, `StatusFilterBar`, `UnsaveChoice`, `showUnsaveDialog`, `showUnsaveUnderReviewDialog`, `UploadHistory`, `UploadHistoryState`
 
@@ -369,7 +387,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `inventory_api.dart` | 65 | — |
-| `product_catalog.dart` | 94 | The shop's whole product list, held once for every product search on the  *[ProductCatalog]* |
+| `product_catalog.dart` | 174 | The shop's whole product list, held once for every product search on the  *[ProductCatalog]* |
 
 **Public:** `ProductListPage`, `InventoryApi`, `ProductCatalog`
 
@@ -395,7 +413,7 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `inventory_screen.dart` | 236 | — |
-| `product_detail_screen.dart` | 348 | Batches sort soonest-expiry first (FEFO) — the same order the sale  *[ProductDetailScreen]* |
+| `product_detail_screen.dart` | 353 | Batches sort soonest-expiry first (FEFO) — the same order the sale  *[ProductDetailScreen]* |
 
 **Public:** `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen`
 
@@ -421,7 +439,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice_api.dart` | 239 | — |
+| `invoice_api.dart` | 254 | — |
 
 **Public:** `InvoiceApi`
 
@@ -433,8 +451,8 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `invoice.dart` | 592 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
-| `job_status.dart` | 77 | Batch job-status answers (DAS-19): what one held request to |
+| `invoice.dart` | 612 | Data models mirroring backend/app/schemas.py — kept in lockstep with the |
+| `job_status.dart` | 86 | Batch job-status answers (DAS-19): what one held request to |
 | `purchase_export.dart` | 65 | A purchases spreadsheet from `GET /export/excel`, with what the server  *[PurchaseExport]* |
 
 **Public:** `LineItem`, `Totals`, `InvoiceData`, `ExtractionMeta`, `ValidationIssue`, `RevalidateResult`, `ExtractionResult`, `ExtractionJob`, `InvoiceSummary`, `InvoiceDetail`, `SavedJob`, `JobStatusBrief`, `JobStatusBatch`, `PurchaseExport`, `exportRangeLabel`, `excludedNote`
@@ -448,8 +466,8 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `invoice_detail_screen.dart` | 190 | — |
-| `purchases_screen.dart` | 396 | — |
-| `review_screen.dart` | 1273 | — |
+| `purchases_screen.dart` | 398 | — |
+| `review_screen.dart` | 1291 | — |
 
 **Public:** `InvoiceDetailScreen`, `PurchasesScreen`, `PurchasesScreenState`, `ReviewScreen`
 
@@ -478,12 +496,12 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `sale_api.dart` | 48 | — |
-| `sale_bill_pdf.dart` | 312 | — |
+| `sale_api.dart` | 64 | — |
+| `sale_bill_pdf.dart` | 323 | — |
 
-**Public:** `SaleApi`, `BillFonts`, `isTaxInvoice`, `billFileName`, `buildSaleBillPdf`
+**Public:** `SaleApi`, `BillFonts`, `isTaxInvoice`, `billFileName`, `buildSaleBillPdf`, `doctorLine`
 
-**Depends on:** `lib/core/api`, `lib/core/config`, `lib/features/auth/models`, `lib/features/sales/models`
+**Depends on:** `lib/core/api`, `lib/core/config`, `lib/core/utils`, `lib/features/auth/models`, `lib/features/sales/models`
 
 **Used by:** `lib/features/sales/presentation`
 
@@ -492,10 +510,11 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `amount_words.dart` | 39 | — |
-| `sale.dart` | 215 | — |
+| `sale.dart` | 245 | — |
+| `sale_date.dart` | 33 | Which dates a sale may carry. Today by default; the shopkeeper may pick |
 | `sale_totals.dart` | 181 | What a sale in progress comes to, worked out the way the server works it |
 
-**Public:** `rupeesInWords`, `stockNote`, `CartEntry`, `SaleLineItemDetail`, `SaleSummary`, `SaleDetail`, `DiscountKind`, `Discount`, `SaleLineInput`, `LineTotals`, `SaleTotals`, `computeSale`
+**Public:** `rupeesInWords`, `stockNote`, `CartEntry`, `SaleLineItemDetail`, `SaleSummary`, `PaymentMode`, `SaleDetail`, `financialYearStart`, `sameDay`, `DiscountKind`, `Discount`, `SaleLineInput`, `LineTotals`, `SaleTotals`, `computeSale`
 
 **Depends on:** `lib/core/utils`
 
@@ -505,10 +524,10 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `sale_receipt_screen.dart` | 268 | Completing the sale is the one moment stock actually leaves inventory —  *[SaleReceiptScreen]* |
-| `sale_review_screen.dart` | 212 | Buyer GSTIN stays optional and out of the way — needed for a business  *[SaleReviewScreen]* |
+| `sale_receipt_screen.dart` | 276 | Completing the sale is the one moment stock actually leaves inventory —  *[SaleReceiptScreen]* |
+| `sale_review_screen.dart` | 330 | Buyer GSTIN stays optional and out of the way — needed for a business  *[SaleReviewScreen]* |
 | `sales_history_screen.dart` | 157 | — |
-| `sales_screen.dart` | 629 | Same search idea as the inventory tab, different tap action — one  *[SalesScreen]* |
+| `sales_screen.dart` | 682 | Same search idea as the inventory tab, different tap action — one  *[SalesScreen]* |
 
 **Public:** `SaleReceiptScreen`, `SaleReviewScreen`, `SalesHistoryScreen`, `SalesHistoryScreenState`, `SalesScreen`, `SalesScreenState`
 
