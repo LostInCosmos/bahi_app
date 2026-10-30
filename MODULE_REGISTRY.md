@@ -115,7 +115,7 @@ Find the module whose names fit what you are adding, then read its section.
 |---|---|---|
 | `business_types.dart` | 25 | — |
 | `gst_states.dart` | 22 | "Uttar Pradesh (09)" for a GSTIN, or null when there is none or its code  *[stateOfGstin]* |
-| `legal_documents.dart` | 610 | The Terms of Service and Privacy Policy, as data. |
+| `legal_documents.dart` | 615 | The Terms of Service and Privacy Policy, as data. |
 
 **Public:** `BusinessType`, `businessTypeItems`, `stateOfGstin`, `compareLegalVersions`, `LegalSection`, `LegalDocument`, `legalDocuments`, `legalDocumentById`, `legalPlaceholdersLeft`, `legalDocumentToMarkdown`
 
