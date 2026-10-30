@@ -21,6 +21,12 @@
 #   E2E_AVD         the virtual device (dastavez_e2e)
 #   E2E_KEEP_SERVER=1  do not stop the server afterwards
 #   E2E_NO_SERVER=1    the server is already up and reset (for repeated runs while developing a flow)
+#   E2E_FLOW_MINUTES   a flow still running after this long (20) is stopped and FAILs, so a hung
+#                   Patrol or Gradle cannot hold the heavy-test lock for hours (it once sat 85
+#                   minutes with an empty log before its build started, DAS-153)
+#   E2E_FAKE_OUTCOME   how the fake extractor reads every photo (clean). A flow that needs a
+#                   flagged bill names its own in flow_outcome() below; before it the server is
+#                   started again with that outcome (a fresh seed), and again after for the rest
 #
 # One heavy test at a time on this machine: a run takes $HEAVY_LOCK (a directory, shared with
 # any other worktree or agent that honours it) and refuses to start while another holds it.
@@ -41,7 +47,7 @@ PORT="${E2E_PORT:-8000}"
 SERIAL="emulator-5554"
 PACKAGE="com.dastavez.bahi"
 RUN_DIR="$APP_DIR/build/e2e/$(date +%Y%m%d-%H%M%S)"
-ALL_FLOWS=(flow_01_signup flow_02_photograph flow_03_sell flow_04_export flow_05_logout_login flow_06_folder_upload)
+ALL_FLOWS=(flow_01_signup flow_02_photograph flow_03_sell flow_04_export flow_05_logout_login flow_06_folder_upload flow_07_corrections)
 FLOWS=("$@"); [ $# -eq 0 ] && FLOWS=("${ALL_FLOWS[@]}")
 
 say() { printf '\n== %s\n' "$*"; }
@@ -67,6 +73,10 @@ cleanup() {
     adb -s "$SERIAL" emu kill >/dev/null 2>&1
     (cd "$APP_DIR/android" && ./gradlew --stop >/dev/null 2>&1)
     pkill -f KotlinCompileDaemon >/dev/null 2>&1
+  fi
+  # Here rather than at the end, so a run that is stopped stops its server too.
+  if [ "${E2E_NO_SERVER:-}" != 1 ] && [ "${E2E_KEEP_SERVER:-}" != 1 ]; then
+    (cd "$BACKEND_DIR" && E2E_PORT="$PORT" ops/e2e_server.sh down >/dev/null 2>&1)
   fi
   rm -rf "$HEAVY_LOCK"
 }
@@ -158,16 +168,42 @@ DEFINES=(
 mkdir -p "$RUN_DIR"
 RESULTS="$RUN_DIR/results.txt"; : >"$RESULTS"   # "<flow> <verdict>" per line (bash 3.2: no maps)
 result() { grep "^$1 " "$RESULTS" | cut -d' ' -f2-; }
+# The fake extractor reads every photo the same way for a whole server run.
+flow_outcome() {
+  case "$1" in
+    flow_07_corrections) echo totals ;;   # a misread grand total: Needs review (DAS-153)
+    *) echo "${E2E_FAKE_OUTCOME-clean}" ;;
+  esac
+}
+outcome="${E2E_FAKE_OUTCOME-clean}"
 cd "$APP_DIR"
 for flow in "${FLOWS[@]}"; do
   target="integration_test/${flow}_test.dart"
   [ -f "$target" ] || { echo "$flow MISSING ($target)" >>"$RESULTS"; continue; }
+  want="$(flow_outcome "$flow")"
+  if [ "$want" != "$outcome" ] && [ "${E2E_NO_SERVER:-}" != 1 ]; then
+    say "server: again, reading every photo as '$want'"
+    (cd "$BACKEND_DIR" && E2E_PORT="$PORT" E2E_FAKE_OUTCOME="$want" ops/e2e_server.sh up >/dev/null) \
+      || { echo "$flow FAIL (server did not restart)" >>"$RESULTS"; continue; }
+    outcome="$want"
+  fi
   say "flow $flow"
   rm -rf integration_test/screenshots
   # Patrol exits 0 when it found no test to run (an empty test APK), so the
   # summary line is checked too.
-  if patrol test -d "$SERIAL" -t "$target" "${DEFINES[@]}" <"/dev/null" >"$RUN_DIR/$flow.log" 2>&1 \
-     && grep -q "Successful: 1" "$RUN_DIR/$flow.log"; then
+  patrol test -d "$SERIAL" -t "$target" "${DEFINES[@]}" <"/dev/null" >"$RUN_DIR/$flow.log" 2>&1 &
+  patrol_pid=$!
+  # The watchdog: stops this flow's Patrol (and the Dart and Gradle it runs)
+  # if it outlives its time.
+  ( sleep $(( ${E2E_FLOW_MINUTES:-20} * 60 )); touch "$RUN_DIR/$flow.timedout"
+    pkill -TERM -f "patrol test -d $SERIAL" 2>/dev/null; pkill -TERM -P "$patrol_pid" 2>/dev/null
+    kill -TERM "$patrol_pid" 2>/dev/null ) &
+  watchdog=$!
+  wait "$patrol_pid"; patrol_rc=$?
+  kill "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
+  if [ -f "$RUN_DIR/$flow.timedout" ]; then
+    echo "$flow FAIL (stopped after ${E2E_FLOW_MINUTES:-20} min; log: build/e2e/$(basename "$RUN_DIR")/$flow.log)" >>"$RESULTS"
+  elif [ "$patrol_rc" -eq 0 ] && grep -q "Successful: 1" "$RUN_DIR/$flow.log"; then
     echo "$flow PASS" >>"$RESULTS"
   else
     echo "$flow FAIL (log: build/e2e/$(basename "$RUN_DIR")/$flow.log)" >>"$RESULTS"
@@ -190,7 +226,4 @@ for flow in "${FLOWS[@]}"; do
   printf '%-18s %s\n' "$flow" "$(result "$flow")"
   [ "$(result "$flow")" = PASS ] || fail=1
 done
-if [ "${E2E_NO_SERVER:-}" != 1 ] && [ "${E2E_KEEP_SERVER:-}" != 1 ]; then
-  (cd "$BACKEND_DIR" && E2E_PORT="$PORT" ops/e2e_server.sh down >/dev/null 2>&1)
-fi
 exit $fail

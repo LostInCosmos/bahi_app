@@ -220,6 +220,17 @@
       "title": "Extra Source Images",
       "type": "array"
      },
+     "folder_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Folder Id"
+     },
      "source_image": {
       "title": "Source Image",
       "type": "string"
@@ -477,6 +488,71 @@
     "title": "Discount",
     "type": "object"
    },
+   "DraftRequest": {
+    "properties": {
+     "base_rev": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Base Rev"
+     },
+     "invoice": {
+      "$ref": "#/components/schemas/InvoiceIn"
+     },
+     "rebase": {
+      "default": false,
+      "title": "Rebase",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "invoice"
+    ],
+    "title": "DraftRequest",
+    "type": "object"
+   },
+   "DraftResult": {
+    "description": "PUT /invoices/extract/{job_id}/draft (DAS-153): /revalidate's answer, and the draft as kept.",
+    "properties": {
+     "draft_rev": {
+      "title": "Draft Rev",
+      "type": "integer"
+     },
+     "draft_saved_at": {
+      "format": "date-time",
+      "title": "Draft Saved At",
+      "type": "string"
+     },
+     "invoice": {
+      "$ref": "#/components/schemas/InvoiceIn"
+     },
+     "issues": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+     },
+     "stale": {
+      "default": false,
+      "title": "Stale",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "invoice",
+     "draft_rev",
+     "draft_saved_at"
+    ],
+    "title": "DraftResult",
+    "type": "object"
+   },
    "ExtractionJobBrief": {
     "description": "One row of GET /invoices/extract \u2014 a bill as a capture card shows it.\n\nDeliberately without `result`, `raw_response` or `validation_issues`,\nfor the reason JobStatusBrief is: those three were measured at ~1,827\nof a row's ~2,005 bytes, and a list of fifty would be ~100 KB of JSON\nto draw fifty thumbnails. The app fetches a result from\nGET /invoices/extract/{id} when someone opens one.\n\n`invoice_id` is what stops a saved bill looking identical to an\nunsaved one. There is no foreign key between the two \u2014 the only link\nis Invoice.source_image_path matching ExtractionLog.source_image \u2014 so\nit is a left join on that path, not a relationship.\n\n`folder_id` comes from that same matched invoice, and is therefore\nnull for everything not yet saved. That is not a gap to fill: an\nupload HAS no folder until a human files it by saving, so\n\"unfiled\" and \"unsaved\" are the same state. It exists so the capture\nscreen can show a folder's own bills instead of every bill the shop\nowns \u2014 without it the client cannot tell which folder an upload\nbelongs to at all.",
     "properties": {
@@ -489,6 +565,17 @@
       "format": "date-time",
       "title": "Created At",
       "type": "string"
+     },
+     "draft_rev": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Draft Rev"
      },
      "error_kind": {
       "anyOf": [
@@ -523,6 +610,11 @@
        }
       ],
       "title": "Folder Id"
+     },
+     "has_draft": {
+      "default": false,
+      "title": "Has Draft",
+      "type": "boolean"
      },
      "image_rev": {
       "default": 0,
@@ -723,6 +815,16 @@
       "title": "Attempt",
       "type": "integer"
      },
+     "draft": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ShopDraft"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "error": {
       "anyOf": [
        {
@@ -817,6 +919,17 @@
       },
       "title": "Extra Source Images",
       "type": "array"
+     },
+     "job_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Job Id"
      },
      "method": {
       "enum": [
@@ -1667,6 +1780,18 @@
        }
       ],
       "title": "Payment Mode"
+     },
+     "sale_date": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sale Date"
      }
     },
     "required": [
@@ -1721,6 +1846,43 @@
      "extraction_meta"
     ],
     "title": "SaveInvoiceRequest",
+    "type": "object"
+   },
+   "ShopDraft": {
+    "description": "DAS-153: the shop's unsaved corrections, as the last phone to send them left them. `stale`: the\nread has changed since (our team corrected or re-read it); its save is refused until the shop keeps\nthe corrections on purpose (PUT with `rebase`) or drops them.",
+    "properties": {
+     "draft_rev": {
+      "title": "Draft Rev",
+      "type": "integer"
+     },
+     "draft_saved_at": {
+      "format": "date-time",
+      "title": "Draft Saved At",
+      "type": "string"
+     },
+     "invoice": {
+      "$ref": "#/components/schemas/InvoiceIn"
+     },
+     "issues": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+     },
+     "stale": {
+      "default": false,
+      "title": "Stale",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "invoice",
+     "draft_rev",
+     "draft_saved_at"
+    ],
+    "title": "ShopDraft",
     "type": "object"
    },
    "SignupRequest": {
@@ -7663,6 +7825,103 @@
      }
     ],
     "summary": "Get Extraction Job",
+    "tags": [
+     "invoices"
+    ]
+   }
+  },
+  "/invoices/extract/{job_id}/draft": {
+   "delete": {
+    "description": "DAS-153: drop the shop's corrections (\"use our team's version\", \"discard my corrections\"). 204 when\nthere were none too.",
+    "operationId": "delete_draft_invoices_extract__job_id__draft_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Delete Draft",
+    "tags": [
+     "invoices"
+    ]
+   },
+   "put": {
+    "description": "DAS-153: keep the shop's corrections to an unsaved bill, for every phone of the shop. Checked as\n/revalidate checks them, with the same answer, plus `draft_rev`, `draft_saved_at` and `stale`.\n409 `{detail, field: \"draft_rev\", current_rev}` when `base_rev` is not the draft kept now; 409 a\nsaved bill; 422 a bill not read yet; 413 over 64 KB.",
+    "operationId": "put_draft_invoices_extract__job_id__draft_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DraftRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DraftResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Put Draft",
     "tags": [
      "invoices"
     ]

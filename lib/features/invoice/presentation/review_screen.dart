@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -199,8 +200,43 @@ class ReviewScreen extends StatefulWidget {
 
   /// The folder the bill is saved into; null is home.
   final int? folderId;
-  const ReviewScreen(
-      {super.key, required this.result, this.onRevalidated, this.folderId});
+
+  /// The read this form corrects (DAS-153). With it, the shop's corrections
+  /// are kept on the server as a draft — every Revalidate writes it, and so
+  /// does leaving the form or the app with changes not yet sent — and the
+  /// save names the read. Null for a bill with no read behind it.
+  final int? jobId;
+
+  /// The corrections to open with instead of [result]'s read: the server's
+  /// draft, or this phone's copy that has not reached the server yet.
+  final BillDraft? draft;
+
+  /// A draft write landed, at revision `rev`.
+  final void Function(int rev)? onDraftSent;
+
+  /// Leaving with changes the server did not get (offline): the caller keeps
+  /// them and sends them later, from `baseRev`.
+  final void Function(ExtractionResult corrected, int? baseRev)? onDraftUnsent;
+
+  /// Changes made on leaving were not kept: another phone had written a
+  /// newer draft first.
+  final VoidCallback? onDraftLost;
+
+  /// The shop took our team's version over its stale corrections.
+  final VoidCallback? onDraftDropped;
+
+  const ReviewScreen({
+    super.key,
+    required this.result,
+    this.onRevalidated,
+    this.folderId,
+    this.jobId,
+    this.draft,
+    this.onDraftSent,
+    this.onDraftUnsent,
+    this.onDraftLost,
+    this.onDraftDropped,
+  });
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -237,6 +273,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   bool _saving = false;
   bool _revalidating = false;
+
+  /// The draft revision this form builds on (DAS-153); null when the server
+  /// holds none.
+  int? _draftRev;
+
+  /// The draft predates our team's change to the read; see [BillDraft.stale].
+  bool _stale = false;
+
+  /// The next draft write keeps the stale corrections, chosen on the banner.
+  bool _rebase = false;
+
+  /// What the server last got (or the form opened with), to tell whether
+  /// leaving has anything to send.
+  String _sent = '';
+  late final AppLifecycleListener _lifecycle;
   String? _error;
   late List<ValidationIssue> _issues;
   bool _overrideErrors = false;
@@ -302,9 +353,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   void initState() {
     super.initState();
-    _issues = List<ValidationIssue>.from(widget.result.issues);
+    final draft = widget.draft;
+    _draftRev = draft?.rev;
+    _stale = draft?.stale ?? false;
+    _issues = List<ValidationIssue>.from(draft?.issues ?? widget.result.issues);
     _indexIssues();
-    final inv = widget.result.invoice;
+    final inv = draft?.invoice ?? widget.result.invoice;
     sellerName = TextEditingController(text: inv.sellerName);
     sellerGstin = TextEditingController(text: inv.sellerGstin);
     sellerAddress = TextEditingController(text: inv.sellerAddress ?? '');
@@ -328,7 +382,98 @@ class _ReviewScreenState extends State<ReviewScreen> {
     totalIgst = TextEditingController(text: _fmtNullable(inv.totals.totalIgst));
     roundOff = TextEditingController(text: _fmtNullable(inv.totals.roundOff));
     grandTotal = TextEditingController(text: _fmt(inv.totals.grandTotal));
+    _sent = _snapshot();
+    // Android may end a hidden app without warning: what is typed goes to the
+    // server when the app is put away, not only when the form is left.
+    _lifecycle = AppLifecycleListener(onHide: () => unawaited(_sendIfChanged()));
     _loadPhoto();
+  }
+
+  String _snapshot() => jsonEncode(_buildInvoiceData().toJson());
+
+  /// Writes the draft if the form holds changes the server has not got.
+  /// Runs on leaving the form, so it must not need the form afterwards: the
+  /// callbacks are taken first.
+  Future<void> _sendIfChanged() async {
+    final jobId = widget.jobId;
+    if (jobId == null || _saving || _revalidating) return;
+    final now = _snapshot();
+    if (now == _sent) return;
+    final corrected = ExtractionResult(invoice: _buildInvoiceData(), meta: widget.result.meta, issues: _issues);
+    final baseRev = _draftRev;
+    final rebase = _rebase;
+    final onSent = widget.onDraftSent, onUnsent = widget.onDraftUnsent, onLost = widget.onDraftLost;
+    final onRevalidated = widget.onRevalidated;
+    final meta = widget.result.meta;
+    _sent = now;
+    try {
+      final reply = await ApiClient.instance
+          .putDraft(jobId, _buildInvoiceData(forceRederiveTax: true), baseRev: baseRev, rebase: rebase);
+      _draftRev = reply.rev;
+      _stale = reply.stale;
+      _rebase = false;
+      onRevalidated?.call(
+        ExtractionResult(invoice: reply.result.invoice, meta: meta, issues: reply.result.issues),
+        reply.result.issues.any((i) => i.isError),
+      );
+      onSent?.call(reply.rev);
+    } on ApiException catch (e) {
+      if (e.statusCode == 409 && e.field == 'draft_rev') {
+        onLost?.call();
+      } else if (e.statusCode >= 500) {
+        _sent = '';
+        onUnsent?.call(corrected, baseRev);
+      }
+      // Any other refusal (saved meanwhile, not this shop's) leaves nothing
+      // to keep.
+    } catch (_) {
+      _sent = '';
+      onUnsent?.call(corrected, baseRev);
+    }
+  }
+
+  /// Fills the form with another version of the bill — the other phone's
+  /// draft, or our team's read — line rows and all.
+  void _replaceInvoice(InvoiceData inv, List<ValidationIssue> issues) {
+    for (final item in items) {
+      item.dispose();
+    }
+    items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
+    _applyInvoiceToControllers(inv);
+    _issues = List<ValidationIssue>.from(issues);
+    _indexIssues();
+    _sent = _snapshot();
+  }
+
+  /// "Use their version" on a stale draft: the corrections go, the read is
+  /// shown.
+  Future<void> _useTeamVersion() async {
+    final jobId = widget.jobId;
+    if (jobId == null) return;
+    try {
+      await ApiClient.instance.deleteDraft(jobId);
+    } catch (e) {
+      if (mounted) setState(() => _error = "Couldn't drop your corrections: $e");
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _replaceInvoice(widget.result.invoice, widget.result.issues);
+      _draftRev = null;
+      _stale = false;
+      _rebase = false;
+      _error = null;
+    });
+    widget.onDraftDropped?.call();
+  }
+
+  /// "Keep my corrections": written at once, over our team's change.
+  Future<void> _keepMine() async {
+    setState(() {
+      _rebase = true;
+      _stale = false;
+    });
+    await _revalidate();
   }
 
   Future<void> _loadPhoto() async {
@@ -362,6 +507,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _photoZoom.dispose();
     for (final c in [
       sellerName,
@@ -518,14 +664,35 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _error = null;
     });
     try {
-      final result = await ApiClient.instance
-          .revalidateInvoice(_buildInvoiceData(forceRederiveTax: true));
+      final jobId = widget.jobId;
+      final RevalidateResult result;
+      if (jobId == null) {
+        result = await ApiClient.instance.revalidateInvoice(_buildInvoiceData(forceRederiveTax: true));
+      } else {
+        final DraftReply reply;
+        try {
+          reply = await ApiClient.instance
+              .putDraft(jobId, _buildInvoiceData(forceRederiveTax: true), baseRev: _draftRev, rebase: _rebase);
+        } on ApiException catch (e) {
+          if (e.statusCode == 409 && e.field == 'draft_rev') {
+            await _showOtherPhonesDraft(jobId);
+            return;
+          }
+          rethrow;
+        }
+        result = reply.result;
+        _draftRev = reply.rev;
+        _stale = reply.stale;
+        _rebase = false;
+        widget.onDraftSent?.call(reply.rev);
+      }
       if (!mounted) return;
       final hasErrors = result.issues.any((i) => i.isError);
       setState(() {
         _issues = result.issues;
         _indexIssues();
         _applyInvoiceToControllers(result.invoice);
+        _sent = _snapshot();
         _error = hasErrors
             ? "Still has flagged fields below — fix and revalidate again, or tick the box to save anyway."
             : (_issues.isNotEmpty
@@ -548,6 +715,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  /// Another phone wrote a newer draft: show it, and say so. What this form
+  /// held is not kept — visibly, rather than either phone's work silently
+  /// overwriting the other's.
+  Future<void> _showOtherPhonesDraft(int jobId) async {
+    final job = await ApiClient.instance.getExtractionJob(jobId);
+    if (!mounted) return;
+    final draft = job.draft;
+    setState(() {
+      if (draft != null) {
+        _replaceInvoice(draft.invoice, draft.issues);
+        _draftRev = draft.rev;
+        _stale = draft.stale;
+      } else {
+        _draftRev = null;
+      }
+      _rebase = false;
+      _error = 'This bill was corrected on another phone. Showing those corrections.';
+    });
+  }
+
   Future<void> _save() async {
     if (_saving) return;
     setState(() {
@@ -562,8 +749,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         meta,
         overrideErrors: _overrideErrors,
         folderId: widget.folderId,
+        jobId: widget.jobId,
       );
       if (!mounted) return;
+      _sent = _snapshot(); // saved: nothing left to send on the way out
       unawaited(HapticFeedback.mediumImpact());
       // Nothing is asked first, so nothing else marks the save as done. Show
       // that it landed before leaving, or a one-tap save looks like a dropped tap.
@@ -597,6 +786,37 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    return PopScope(
+      // Leaving keeps what was typed (DAS-153). A pop that carries the saved
+      // bill's id has nothing left to send.
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop && result == null) unawaited(_sendIfChanged());
+      },
+      child: _buildScaffold(context, colors),
+    );
+  }
+
+  /// Our team changed the read after the shop corrected it (DAS-153).
+  Widget _staleBanner(ColorScheme colors) => Padding(
+        padding: const EdgeInsets.only(bottom: Spacing.l),
+        child: Card(
+          key: const ValueKey('stale-draft'),
+          color: colors.tertiaryContainer,
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.m),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Our team updated this bill after you corrected it. Your corrections are kept.'),
+              const SizedBox(height: Spacing.s),
+              Wrap(spacing: Spacing.s, children: [
+                OutlinedButton(onPressed: _useTeamVersion, child: const Text('Use their version')),
+                FilledButton(onPressed: _keepMine, child: const Text('Keep my corrections')),
+              ]),
+            ]),
+          ),
+        ),
+      );
+
+  Widget _buildScaffold(BuildContext context, ColorScheme colors) {
     return Scaffold(
       appBar: AppBar(title: const Text('Review & save')),
       body: SafeArea(
@@ -612,6 +832,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(Spacing.l),
                   children: [
+                    if (_stale) _staleBanner(colors),
                     AnimatedSize(
                       duration: const Duration(milliseconds: 200),
                       alignment: Alignment.topCenter,

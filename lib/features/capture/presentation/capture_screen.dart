@@ -207,7 +207,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   /// on the Purchases tab would otherwise not show here, and a bill our team
   /// resolved while another tab was in front is asked about again (DAS-76).
   @override
-  Future<void> refresh() => Future.wait([refreshFolders(), recheckNeedsReview()]);
+  Future<void> refresh() => Future.wait([refreshFolders(), recheckNeedsReview(), _resendCorrections()]);
 
   /// Reload the folder tree and send home any bill whose folder is gone.
   Future<void> refreshFolders() async {
@@ -270,7 +270,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     // folder (DAS-151): the server may have it at Home, and this card is the
     // only record of where it belongs. It hands over, or is re-filed, once
     // the list shows its row (see [_handOver]).
-    final finished = restored.where((i) => i.isFinishedOnServer && i.folderId == null).toList();
+    final finished =
+        restored.where((i) => i.isFinishedOnServer && i.folderId == null && !i.correctionUnsent).toList();
     restored.removeWhere(finished.contains);
     for (final item in finished) {
       if (item.status != BatchItemStatus.saved) {
@@ -297,6 +298,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       }
     }
     unawaited(_resumeUploads(toUpload));
+    unawaited(_resendCorrections());
     // A restored pendingConfirm/needsReview bill has nothing above asking
     // for it: `startupAction` is `none` for both, since nothing needs
     // (re-)submitting. Without this, a bill our team or a vendor
@@ -572,10 +574,31 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   /// any other is a fresh read.
   Future<void> _reprocessItem(BatchItem item) async {
     if (!_mayRetry()) return;
+    if (item.correctionRev != null || item.correctionUnsent) {
+      if (!await _confirmDropCorrections() || !mounted) return;
+      setState(() {
+        item.correctionRev = null;
+        item.correctionUnsent = false;
+      });
+    }
     return item.status == BatchItemStatus.failed
         ? _retryFailed(item)
         : _processOne(item);
   }
+
+  /// A fresh read replaces the shop's corrections on the server (DAS-153),
+  /// so a retry asks first.
+  Future<bool> _confirmDropCorrections() => showConfirmDialog(
+        context,
+        title: 'Read this bill again?',
+        message: 'Your corrections to it will be lost.',
+        confirmLabel: 'Read again',
+        destructive: true,
+      );
+
+  /// Whether this card is known to have the shop's corrections behind it.
+  static bool _hasCorrections(BatchItem item) =>
+      item.correctionRev != null || item.correctionUnsent || item.serverDraft != null;
 
   Future<void> _openItem(BatchItem item) async {
     switch (item.status) {
@@ -594,6 +617,12 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         return;
       case BatchItemStatus.pendingConfirm:
         final result = item.result!;
+        // Corrections are saved from the form they were made in (DAS-153):
+        // a one-tap save would save the read instead.
+        if (_hasCorrections(item)) {
+          await _openReview(item, result);
+          return;
+        }
         final action =
             await showConfirmBillDialog(context, item.label, result.invoice);
         if (!mounted) return;
@@ -621,7 +650,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
           BatchItemStatus.ready ||
           BatchItemStatus.processing =>
             const ProcessingBillView(),
-          BatchItemStatus.needsReview => ProcessingBillView(invoice: item.result?.invoice),
+          BatchItemStatus.needsReview =>
+            ProcessingBillView(invoice: item.serverDraft?.invoice ?? item.result?.invoice),
           _ => const ProcessingBillView(inProcessing: false),
         };
     final action = await showProcessingBillDialog(context,
@@ -685,12 +715,40 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     await (item.isUploaded ? _processOne(item) : _uploadAndExtract(item));
   }
 
+  /// The review form, opened on the shop's corrections when there are any
+  /// (DAS-153): this card's own unsent copy first, else what the server
+  /// holds now — asked for, since another phone may have written since.
   Future<void> _openReview(BatchItem item, ExtractionResult result) async {
+    final jobId = item.lastJobId ?? item.jobId;
+    // [result] is this card's bill: the read, or its corrected copy once the
+    // shop has corrected it. The form needs the read too, for "Use their
+    // version" on a stale draft.
+    var read = result;
+    BillDraft? draft;
+    if (item.correctionUnsent) {
+      draft = BillDraft(invoice: result.invoice, issues: result.issues, rev: item.correctionRev);
+    } else if (item.serverDraft != null) {
+      draft = item.serverDraft;
+    } else if (jobId != null && item.status != BatchItemStatus.saved) {
+      try {
+        final job = await ApiClient.instance.getExtractionJob(jobId);
+        draft = job.draft;
+        read = job.result ?? result;
+      } catch (_) {
+        // Offline: this card's own copy is the best there is.
+        if (item.correctionRev != null) {
+          draft = BillDraft(invoice: result.invoice, issues: result.issues, rev: item.correctionRev);
+        }
+      }
+      if (!mounted) return;
+    }
     final savedId = await Navigator.of(context).push<int>(
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
-          result: result,
+          result: read,
           folderId: item.folderId,
+          jobId: jobId,
+          draft: draft,
           onRevalidated: (updatedResult, hasErrors) {
             setState(() {
               item.result = updatedResult;
@@ -701,6 +759,35 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
             });
             _persistBatch();
           },
+          onDraftSent: (rev) {
+            item
+              ..correctionRev = rev
+              ..correctionUnsent = false
+              ..serverDraft = null;
+            _persistBatch();
+          },
+          onDraftUnsent: (corrected, baseRev) {
+            if (!mounted) return;
+            setState(() {
+              item
+                ..result = corrected
+                ..correctionRev = baseRev
+                ..correctionUnsent = true;
+            });
+            _persistBatch();
+          },
+          onDraftLost: () {
+            if (!mounted) return;
+            item.correctionUnsent = false;
+            _say("Your last changes to this bill weren't kept: it was corrected on another phone.");
+          },
+          onDraftDropped: () {
+            item
+              ..correctionRev = null
+              ..correctionUnsent = false
+              ..serverDraft = null;
+            _persistBatch();
+          },
         ),
       ),
     );
@@ -708,9 +795,53 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       setState(() {
         item.status = BatchItemStatus.saved;
         item.savedInvoiceId = savedId;
+        item.correctionRev = null;
+        item.correctionUnsent = false;
+        item.serverDraft = null;
       });
       await _persistBatch();
     }
+  }
+
+  /// Sends corrections the server did not get when their form was left
+  /// (DAS-153): at start-up and whenever the tab is opened, and the card holds
+  /// its copy until one lands. [_resending] keeps two of these from sending
+  /// the same card at once.
+  final Set<BatchItem> _resending = {};
+
+  Future<void> _resendCorrections() async {
+    for (final item in [..._items]) {
+      final jobId = item.lastJobId ?? item.jobId;
+      final result = item.result;
+      if (!item.correctionUnsent || jobId == null || result == null || !_resending.add(item)) continue;
+      try {
+        final reply = await ApiClient.instance.putDraft(jobId, result.invoice, baseRev: item.correctionRev);
+        if (!mounted) return;
+        setState(() {
+          item
+            ..result = ExtractionResult(invoice: reply.result.invoice, meta: result.meta, issues: reply.result.issues)
+            ..status = reply.result.issues.any((i) => i.isError)
+                ? BatchItemStatus.needsReview
+                : BatchItemStatus.pendingConfirm
+            ..correctionRev = reply.rev
+            ..correctionUnsent = false;
+        });
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        if (e.statusCode == 409 || e.statusCode == 404) {
+          // Another phone wrote newer corrections, or the bill was saved or
+          // is gone: nothing here is left to keep.
+          setState(() => item.correctionUnsent = false);
+          if (e.field == 'draft_rev') {
+            _say("Your last changes to a bill weren't kept: it was corrected on another phone.");
+          }
+        }
+      } catch (_) {
+        // Still offline: kept, and sent the next time the tab is opened.
+      }
+      _resending.remove(item);
+    }
+    await _persistBatch();
   }
 
   /// Saves what the server read, by job: the phone sends no values (DAS-71), so
@@ -1096,6 +1227,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       }
       item
         ..result = result
+        ..serverDraft = job.draft
         ..jobId = null // it is finished; nothing to poll
         ..status = upload.invoiceId != null
             ? BatchItemStatus.saved
@@ -1145,6 +1277,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   /// result needs a second look.
   Future<void> _retryUpload(UploadSummary upload, {String? why}) async {
     if (!_mayRetry()) return;
+    if (upload.hasDraft && (!await _confirmDropCorrections() || !mounted)) return;
     // The server counts this bill in the box it is in now; it is about to be
     // read again, so one moves from that box to Working at once.
     _uploadHistory.currentState

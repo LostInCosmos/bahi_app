@@ -258,6 +258,11 @@ class ExtractionMeta {
   // read from the meta it was always 0, so a rotated photo stayed stale).
   int imageRev;
 
+  /// The read this meta belongs to (DAS-153), echoed on a save so the server
+  /// saves against that read and clears its draft. Null from a server that
+  /// does not send it; the server then finds the read by [sourceImage].
+  int? jobId;
+
   ExtractionMeta({
     required this.sourceImage,
     List<String>? extraSourceImages,
@@ -267,6 +272,7 @@ class ExtractionMeta {
     this.reviewedByUser = false,
     this.vendorKnown = false,
     this.imageRev = 0,
+    this.jobId,
   }) : extraSourceImages = extraSourceImages ?? [];
 
   factory ExtractionMeta.fromJson(Map<String, dynamic> json) => ExtractionMeta(
@@ -277,6 +283,7 @@ class ExtractionMeta {
         confidence: json.dbl('confidence'),
         reviewedByUser: json.boolOr('reviewed_by_user'),
         vendorKnown: json.boolOr('vendor_known'),
+        jobId: json.integer('job_id'),
       );
 
   /// What a save sends: this read's meta, marked as checked by a person.
@@ -291,6 +298,7 @@ class ExtractionMeta {
         reviewedByUser: true,
         vendorKnown: vendorKnown,
         imageRev: imageRev,
+        jobId: jobId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -301,6 +309,7 @@ class ExtractionMeta {
         'confidence': confidence,
         'reviewed_by_user': reviewedByUser,
         'vendor_known': vendorKnown,
+        if (jobId != null) 'job_id': jobId,
       };
 }
 
@@ -385,6 +394,48 @@ class ExtractionResult {
       );
 }
 
+/// The shop's unsaved corrections to a read bill, kept on the server so they
+/// survive the phone's card going and reach every phone of the shop
+/// (DAS-153). Written by `PUT /invoices/extract/{job}/draft`, which validates
+/// like `/invoices/revalidate`; [issues] are as of that write.
+class BillDraft {
+  final InvoiceData invoice;
+  final List<ValidationIssue> issues;
+
+  /// Null only for corrections this phone holds that never reached the
+  /// server.
+  final int? rev;
+  final DateTime? savedAt;
+
+  /// The read changed after this was written (our team corrected or re-read
+  /// the bill). Kept, never dropped; saving it is refused until the shop
+  /// chooses to keep it (`rebase`) or takes the team's version.
+  final bool stale;
+
+  const BillDraft({required this.invoice, required this.issues, this.rev, this.savedAt, this.stale = false});
+
+  factory BillDraft.fromJson(Map<String, dynamic> json) => BillDraft(
+        invoice: InvoiceData.fromJson(json['invoice'] as Map<String, dynamic>),
+        issues: json.listOf('issues', ValidationIssue.fromJson),
+        rev: json.intReq('draft_rev'),
+        savedAt: json.utcLenient('draft_saved_at'),
+        stale: json.boolOr('stale'),
+      );
+}
+
+/// What a draft write answers: the same as a revalidate, plus the draft's
+/// new revision.
+class DraftReply {
+  final RevalidateResult result;
+  final int rev;
+  final bool stale;
+
+  const DraftReply(this.result, {required this.rev, this.stale = false});
+
+  factory DraftReply.fromJson(Map<String, dynamic> json) =>
+      DraftReply(RevalidateResult.fromJson(json), rev: json.intReq('draft_rev'), stale: json.boolOr('stale'));
+}
+
 /// GET /invoices/extract/{jobId} — extraction runs in a background worker,
 /// so the client submits a job (see ApiClient.submitExtraction) and polls
 /// this until [isTerminal].
@@ -414,6 +465,10 @@ class ExtractionJob {
   final int? invoiceId;
   final String? reviewState;
 
+  /// The shop's unsaved corrections, if any (DAS-153). [result] stays the
+  /// read — the machine's or our team's — so the original is never lost.
+  final BillDraft? draft;
+
   ExtractionJob({
     required this.jobId,
     required this.status,
@@ -427,6 +482,7 @@ class ExtractionJob {
     this.retryAt,
     this.invoiceId,
     this.reviewState,
+    this.draft,
   });
 
   /// `cancelled` belongs here too: without it a cancelled job was not
@@ -459,6 +515,7 @@ class ExtractionJob {
       retryAt: json.utcLenient('retry_at'),
       invoiceId: json.integer('invoice_id'),
       reviewState: json.str('review_state'),
+      draft: json.objOf('draft', BillDraft.fromJson),
     );
   }
 }

@@ -134,6 +134,9 @@ mixin _Watching on State<CaptureScreen> {
         return;
       }
       if (item.status != BatchItemStatus.needsReview) return;
+      // The card holds the shop's corrections (DAS-153); the read under them
+      // turning clean must not replace them.
+      if (item.correctionRev != null || item.correctionUnsent) return;
       final result = job.result;
       if (result == null) return;
       final stillFlagged = result.issues.any((i) => i.field != 'seller_gstin');
