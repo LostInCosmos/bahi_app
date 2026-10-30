@@ -86,12 +86,19 @@ extension InvoiceApi on ApiClient {
   /// (not a Map, which can't hold duplicate keys) so the backend receives
   /// them as a real list and stitches every page into one Gemini call.
   ///
+  /// [folderId] files the upload from the start (DAS-151), so the server's
+  /// own copy — its list, its counts, its auto-save — is in the folder the
+  /// bill was added in. A server that predates it ignores the field, and the
+  /// phone re-files the bill once its row is listed (see `refileOnServer`).
+  ///
   /// Returns immediately with a job id — extraction now runs in a
   /// background worker, not inline in this request — so the caller polls
   /// getExtractionJob() until it reaches a terminal status.
-  Future<int> submitExtraction(String sourceImage, {List<String> extraSourceImages = const []}) async {
+  Future<int> submitExtraction(String sourceImage,
+      {List<String> extraSourceImages = const [], int? folderId}) async {
     final res = await multipart('/invoices/extract', (request) {
       request.fields['source_image'] = sourceImage;
+      if (folderId != null) request.fields['folder_id'] = '$folderId';
       for (final img in extraSourceImages) {
         request.files.add(http.MultipartFile.fromString('extra_source_images', img));
       }
