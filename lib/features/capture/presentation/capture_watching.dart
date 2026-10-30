@@ -181,6 +181,7 @@ mixin _Watching on State<CaptureScreen> {
         jobId = await ApiClient.instance.submitExtraction(
           item.sourceImages.first,
           extraSourceImages: item.sourceImages.skip(1).toList(),
+          folderId: item.folderId,
         );
         item.jobId = jobId;
         item.lastJobId = jobId;

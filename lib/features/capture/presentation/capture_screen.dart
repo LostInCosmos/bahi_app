@@ -27,6 +27,7 @@ import '../../invoice/presentation/review_screen.dart';
 import '../data/batch_store.dart';
 import '../models/batch_item.dart';
 import '../models/bulk.dart';
+import '../models/hand_over.dart';
 import '../models/list_entry.dart';
 import '../models/upload_summary.dart';
 import '../widgets/batch_item_card.dart';
@@ -265,8 +266,11 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     if (restored.isEmpty || !mounted) return;
     // A bill the server finished last session is the shop list's now
     // (DAS-62): its card here could only be a stale copy — 25 such cards once
-    // said "needs review" for bills discarded long before.
-    final finished = restored.where((i) => i.isFinishedOnServer).toList();
+    // said "needs review" for bills discarded long before. Not one filed in a
+    // folder (DAS-151): the server may have it at Home, and this card is the
+    // only record of where it belongs. It hands over, or is re-filed, once
+    // the list shows its row (see [_handOver]).
+    final finished = restored.where((i) => i.isFinishedOnServer && i.folderId == null).toList();
     restored.removeWhere(finished.contains);
     for (final item in finished) {
       if (item.status != BatchItemStatus.saved) {
@@ -444,11 +448,18 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     if (mounted) unawaited(_folders.load());
   }
 
-  /// The shop's list now shows these bills in the box their cards are in, so
-  /// the cards go and the list's rows are the only ones (DAS-62). One that is
-  /// not saved is still watched by its job — see [_watchedRows].
-  void _handOver(List<BatchItem> items) {
-    final gone = items.where(_items.contains).toList();
+  /// The shop's list now shows these bills in the box and folder their cards
+  /// are in, so the cards go and the list's rows are the only ones (DAS-62).
+  /// One that is not saved is still watched by its job — see [_watchedRows].
+  /// A card whose row is filed elsewhere stays, and the row is moved to the
+  /// card's folder (DAS-151) — once: after that the card hands over to
+  /// wherever the server lists it, so two phones never move a bill back and
+  /// forth, and a move made on the other phone stands.
+  void _handOver(HandOver split) {
+    final again = [for (final m in split.refile) if (_refiled.contains(_jobOf(m.item))) m.item];
+    final refile = [for (final m in split.refile) if (!_refiled.contains(_jobOf(m.item))) m];
+    if (refile.isNotEmpty) unawaited(_refileOnServer(refile));
+    final gone = [...split.handed, ...again].where(_items.contains).toList();
     if (gone.isEmpty) return;
     for (final item in gone) {
       if (item.status != BatchItemStatus.saved) {
@@ -461,6 +472,82 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     });
     _persistBatch();
     _ensureStatusLoop();
+  }
+
+  /// Jobs being re-filed now, or already tried this session: the list reports
+  /// a misfiled card on every build until its row moves, so each is asked at
+  /// most once per session.
+  final Set<int> _refiling = {};
+
+  /// Jobs the server has answered a re-file for: their cards hand over on the
+  /// next list answer, whatever folder it says.
+  final Set<int> _refiled = {};
+
+  static int _jobOf(BatchItem item) => (item.lastJobId ?? item.jobId)!;
+
+  /// Files on the server the bills it lists in another folder than their
+  /// cards (DAS-151): uploads from before the fix or to a server that ignores
+  /// the upload's folder (at Home), and cards moved while their upload was on
+  /// its way (in the folder they were added in). An unsaved bill
+  /// by its job, and one the server saved by itself (a clean read) by its
+  /// invoice, which a job move skips. When the list answers again the cards
+  /// hand over.
+  Future<void> _refileOnServer(List<Misfiled> misfiled) async {
+    final todo = [
+      for (final m in misfiled)
+        if (_refiling.add(_jobOf(m.item))) m
+    ];
+    if (todo.isEmpty) return;
+    final byFolder = <int?, List<Misfiled>>{};
+    for (final m in todo) {
+      byFolder.putIfAbsent(m.item.folderId, () => []).add(m);
+    }
+    var moved = false;
+    for (final MapEntry(key: folder, value: group) in byFolder.entries) {
+      int? invoiceOf(Misfiled m) => m.item.savedInvoiceId ?? m.row.invoiceId;
+      try {
+        final jobs = [
+          for (final m in group)
+            if (m.item.status != BatchItemStatus.saved || invoiceOf(m) == null) _jobOf(m.item)
+        ];
+        final reply = jobs.isEmpty
+            ? const BulkMoveReply()
+            : await ApiClient.instance.bulkMove(jobIds: jobs, folderId: folder);
+        final invoices = [
+          for (final m in group)
+            if (!reply.movedJobs.contains(_jobOf(m.item)) && invoiceOf(m) != null) invoiceOf(m)!
+        ];
+        final second = invoices.isEmpty
+            ? const BulkMoveReply()
+            : await ApiClient.instance.bulkMove(invoiceIds: invoices, folderId: folder);
+        moved |= reply.movedJobs.isNotEmpty || second.movedInvoices.isNotEmpty;
+        // Answered, moved or not (a skip is the server's word too).
+        _refiled.addAll(group.map((m) => _jobOf(m.item)));
+      } on ApiException catch (e) {
+        // The folder is gone (deleted from another phone): the bill stays
+        // where the server has it, and the card goes with it.
+        if (e.statusCode == 404 && mounted) {
+          setState(() {
+            for (final m in group) {
+              m.item.folderId = m.row.folderId;
+            }
+          });
+          moved = true;
+          _refiled.addAll(group.map((m) => _jobOf(m.item)));
+        }
+      } catch (_) {
+        // Offline, timed out or refused: the card keeps its folder and stays,
+        // and the next start of the app asks again. Not sooner — the list
+        // reports it on every build, and a retry per build is a request loop.
+      }
+    }
+    if (!mounted || !todo.any((m) => _refiled.contains(_jobOf(m.item)))) return;
+    if (moved) {
+      await _persistBatch();
+      unawaited(_folders.load()); // bill counts on the folder tiles
+    }
+    // The list's next answer is what the cards hand over to.
+    unawaited(_uploadHistory.currentState?.refresh());
   }
 
   /// Forget a bill on THIS device: its card, its saved state and its photos.
@@ -766,6 +853,9 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         : byStatus.where((i) => i.matchesSearch(_query)).toList();
     final subfolders = _folders.children;
     final filtering = _statusFilter.isNotEmpty || _query.isNotEmpty;
+    // Nothing at all to show. Not while more bills are still to be fetched:
+    // the ones that match may be on a page that has not loaded.
+    final empty = here.isEmpty && subfolders.isEmpty && _visible.isEmpty && _listSettled && !_visibleMore;
     return SafeArea(
       child: Column(
         children: [
@@ -860,13 +950,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
             child: _buildGrid(
               here,
               subfolders,
-              // Not while more bills are still to be fetched: the ones that
-              // match may be on a page that has not loaded.
-              empty: here.isEmpty &&
-                  subfolders.isEmpty &&
-                  _visible.isEmpty &&
-                  _listSettled &&
-                  !_visibleMore,
+              empty: empty,
               filtering: filtering,
             ),
           ),
@@ -882,10 +966,11 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
             )
           else
             CaptureBottomBar(
-              // Bills on screen at all, not just cards this phone holds — those
-              // go to the shop's list once read (DAS-62), and without this a
-              // full list had no way to add another.
-              hasItems: _items.isNotEmpty || _visible.isNotEmpty,
+              // Whenever the empty state's own buttons are not on screen. It
+              // once followed the bills alone, so Home holding only folder
+              // tiles offered no way to take a photo at all (found by the
+              // DAS-151 e2e run).
+              hasItems: !(empty && !filtering),
               allResolved: _allResolved,
               hasUnresolved: _hasUnresolved,
               onTakePhoto: () => _addPhoto(ImageSource.camera),

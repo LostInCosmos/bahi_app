@@ -8,6 +8,7 @@ import '../../../core/widgets/busy_button.dart';
 import '../data/capture_api.dart';
 import '../models/batch_item.dart';
 import '../models/bill_search.dart';
+import '../models/hand_over.dart';
 import '../models/list_entry.dart';
 import '../models/status_filter.dart';
 import '../models/upload_summary.dart';
@@ -86,7 +87,9 @@ class UploadHistory extends StatefulWidget {
   /// list now holds in the same box (DAS-62): the screen drops its own card
   /// and the shop's row is the only one left. Same box, so a row fetched
   /// before the bill finished does not take over from a card that is newer.
-  final void Function(List<BatchItem> items)? onHandOver;
+  /// Same folder too (DAS-151): a card whose row is filed elsewhere is
+  /// reported as `refile` instead, and stays until they agree.
+  final void Function(HandOver split)? onHandOver;
 
   /// Read this bill again. Offered on the cards that want a second look —
   /// the ones that failed and the ones that need review — and never while
@@ -584,18 +587,9 @@ class UploadHistoryState extends State<UploadHistory> {
     return totals;
   }
 
-  /// The phone's finished cards whose bill this list holds in the same box —
-  /// see [UploadHistory.onHandOver].
-  List<BatchItem> get _handedOver {
-    final byJob = {for (final u in _uploads) u.jobId: u};
-    return [
-      for (final item in widget.localItems)
-        if (item.isFinishedOnServer)
-          if (byJob[item.lastJobId ?? item.jobId] case final row?
-              when uploadCategory(row) == categoryOfItem(item))
-            item,
-    ];
-  }
+  /// The phone's finished cards against this list's rows — see
+  /// [UploadHistory.onHandOver] and [splitHandOver].
+  HandOver get _handOverSplit => splitHandOver(widget.localItems, _uploads);
 
   String _reportedTotals = '';
   String _reportedKey = '';
@@ -605,10 +599,10 @@ class UploadHistoryState extends State<UploadHistory> {
   /// its status does not re-announce an unchanged set.
   void _report(List<ListEntry> entries) {
     final handOver = widget.onHandOver;
-    final handed = handOver == null ? const <BatchItem>[] : _handedOver;
-    if (handed.isNotEmpty) {
+    final split = handOver == null ? null : _handOverSplit;
+    if (split != null && (split.handed.isNotEmpty || split.refile.isNotEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) handOver!(handed);
+        if (mounted) handOver!(split);
       });
     }
     final tellTotals = widget.onFolderTotals;
