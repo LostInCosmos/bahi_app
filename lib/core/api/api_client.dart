@@ -435,6 +435,11 @@ class ApiClient {
   Future<http.Response> patchJson(String path, Object body) =>
       _send((h) => _http.patch(_uri(path), headers: h, body: jsonEncode(body)), json: true);
 
+  /// Not retried on its own: a write guarded by a revision (a draft's
+  /// `base_rev`) answers 409 to a repeat of one that went through.
+  Future<http.Response> putJson(String path, Object body, {Duration timeout = readTimeout}) =>
+      _send((h) => _http.put(_uri(path), headers: h, body: jsonEncode(body)), json: true, timeout: timeout);
+
   Future<http.Response> delete(String path) => _send((h) => _http.delete(_uri(path), headers: h));
 
   /// A multipart form, built by [build] — photos and recordings.

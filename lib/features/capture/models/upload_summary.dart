@@ -25,9 +25,8 @@ class UploadSummary {
   /// still only an upload.
   final int? invoiceId;
 
-  /// The folder the saved invoice went into — null for anything unsaved,
-  /// which is the same thing as unfiled: a bill has no folder until
-  /// someone files it by saving.
+  /// The folder the bill is filed in; null is Home. Set from the upload
+  /// since DAS-151, and by a move or a save.
   final int? folderId;
 
   /// How many things validation flagged. 0 for a clean read, and for a
@@ -52,6 +51,11 @@ class UploadSummary {
   /// a server that predates the field. See ExtractionMeta.imageRev.
   final int imageRev;
 
+  /// The shop has unsaved corrections to this bill on the server (DAS-153);
+  /// [issueCount] is then the corrections' count, not the read's. False on a
+  /// server older than the field.
+  final bool hasDraft;
+
   const UploadSummary({
     required this.jobId,
     required this.status,
@@ -65,6 +69,7 @@ class UploadSummary {
     this.invoiceNo,
     this.reviewState,
     this.imageRev = 0,
+    this.hasDraft = false,
   });
 
   factory UploadSummary.fromJson(Map<String, dynamic> json) => UploadSummary(
@@ -82,6 +87,7 @@ class UploadSummary {
         invoiceNo: json.text('invoice_no'),
         reviewState: json.str('review_state'),
         imageRev: json.intOr('image_rev'),
+        hasDraft: json.boolOr('has_draft'),
       );
 
   bool get isSaved => invoiceId != null;
@@ -106,6 +112,7 @@ class UploadSummary {
         invoiceNo: invoiceNo,
         reviewState: reviewState,
         imageRev: imageRev,
+        hasDraft: hasDraft,
       );
 }
 

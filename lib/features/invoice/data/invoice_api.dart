@@ -153,23 +153,42 @@ extension InvoiceApi on ApiClient {
     return RevalidateResult.fromJson(ApiClient.jsonObject(res));
   }
 
+  /// [jobId] names the read this saves (DAS-153), so the server clears its
+  /// draft and checks the read against it; without it the server finds the
+  /// read by the photo, as for older builds.
   Future<int> saveInvoice(
     InvoiceData invoice,
     ExtractionMeta meta, {
     bool overrideErrors = false,
     int? folderId,
+    int? jobId,
   }) async {
     final res = await postJson(
         '/invoices',
         {
           'invoice': invoice.toJson(),
-          'extraction_meta': meta.toJson(),
+          'extraction_meta': {...meta.toJson(), if (jobId != null) 'job_id': jobId},
           'override_errors': overrideErrors,
           'folder_id': folderId,
         },
         timeout: ApiClient.workTimeout);
     return ApiClient.jsonObject(res)['invoice_id'] as int;
   }
+
+  /// Keeps the shop's corrections to a read bill on the server, and checks
+  /// them as [revalidateInvoice] does (DAS-153). [baseRev] is the draft
+  /// revision the form opened with (null for none); a newer one written from
+  /// another phone answers 409 with `field: draft_rev`. [rebase] keeps a
+  /// stale draft over our team's change, after the shop chose to.
+  Future<DraftReply> putDraft(int jobId, InvoiceData invoice, {int? baseRev, bool rebase = false}) async {
+    final res = await putJson('/invoices/extract/$jobId/draft',
+        {'invoice': invoice.toJson(), 'base_rev': baseRev, if (rebase) 'rebase': true},
+        timeout: ApiClient.workTimeout);
+    return DraftReply.fromJson(ApiClient.jsonObject(res));
+  }
+
+  /// Drops the shop's corrections (DAS-153). Nothing there is not an error.
+  Future<void> deleteDraft(int jobId) => delete('/invoices/extract/$jobId/draft');
 
   /// Saves what the server read from this bill — its current result, the
   /// machine's or, if our team has corrected it, theirs (DAS-71). The phone

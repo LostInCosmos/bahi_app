@@ -33,7 +33,8 @@ HandOver splitHandOver(Iterable<BatchItem> items, Iterable<UploadSummary> upload
   final handed = <BatchItem>[];
   final refile = <Misfiled>[];
   for (final item in items) {
-    if (!item.isFinishedOnServer) continue;
+    // Corrections the server has not got are only on this card (DAS-153).
+    if (!item.isFinishedOnServer || item.correctionUnsent) continue;
     final row = byJob[item.lastJobId ?? item.jobId];
     if (row == null || uploadCategory(row) != categoryOfItem(item)) continue;
     if (row.folderId == item.folderId) {

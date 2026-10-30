@@ -154,6 +154,20 @@ class BatchItem {
   /// "waiting for the shopkeeper" state, so it is never uploaded on its own.
   bool draft = false;
 
+  /// The revision of the shop's corrections to this bill on the server
+  /// (DAS-153: `BillDraft`), as this phone last wrote it; null when it wrote
+  /// none. [result] then holds the corrected bill, not the read.
+  int? correctionRev;
+
+  /// Corrections in [result] that the server has not got yet (offline when
+  /// the form was left). The card holds the bill — it does not hand over to
+  /// the shop's list, which would show the read — until they are sent.
+  bool correctionUnsent = false;
+
+  /// The server's draft for a bill opened from the shop's list (DAS-153),
+  /// fetched with its read. Not persisted: such a bill has no card to keep.
+  BillDraft? serverDraft;
+
   /// The bill failed: nothing is in flight for it any more. Clears the retry
   /// state too — a bill still carrying [retryAt] is counted under Working
   /// whatever its status says, so a read that failed straight after a server
@@ -276,6 +290,8 @@ class BatchItem {
         'savedInvoiceId': savedInvoiceId,
         'folderId': folderId,
         if (draft) 'draft': true,
+        if (correctionRev != null) 'correctionRev': correctionRev,
+        if (correctionUnsent) 'correctionUnsent': true,
       };
 
   /// Everything [toJson] writes, as one value that compares equal exactly
@@ -295,6 +311,8 @@ class BatchItem {
         savedInvoiceId,
         folderId,
         draft,
+        correctionRev,
+        correctionUnsent,
       );
 
   static BatchItem? fromJson(Map<String, dynamic> json) {
@@ -331,6 +349,8 @@ class BatchItem {
     item.savedInvoiceId = json.integer('savedInvoiceId');
     item.folderId = json.integer('folderId');
     item.draft = json.boolOr('draft');
+    item.correctionRev = json.integer('correctionRev');
+    item.correctionUnsent = json.boolOr('correctionUnsent');
     final resultJson = json.obj('result');
     if (resultJson != null) {
       item.result = ExtractionResult.fromJson(resultJson)..meta.imageRev = json.intOr('imageRev');
