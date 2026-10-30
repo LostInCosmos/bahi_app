@@ -48,7 +48,7 @@ const kWebsite = 'https://dastavez.co.in';
 
 /// Bumped whenever either document changes in substance. Recorded with the
 /// shopkeeper's acceptance once the server stores it.
-const kLegalVersion = '1.2';
+const kLegalVersion = '1.3';
 
 /// Orders two dotted version strings numerically: `1.2` < `1.10` < `2.0`.
 /// Negative when [a] is older than [b], zero when equal, positive when newer.
@@ -63,7 +63,8 @@ int compareLegalVersions(String a, String b) {
   }
   return 0;
 }
-const kLegalEffectiveDate = '25 October 2026';
+
+const kLegalEffectiveDate = '30 October 2026';
 
 /// One heading and its body: paragraphs, then optional bullet points, then
 /// optional closing paragraphs.
@@ -192,14 +193,16 @@ const kTermsOfService = LegalDocument(
             'named in the Privacy Policy, and letting our team view a bill to correct a read or verify a supplier or '
             'product.',
         'You confirm that you have the right to upload what you upload. In particular, record only your own voice or '
-            'the voice of someone who has agreed to be recorded, and enter a customer\'s name, GSTIN or prescription '
-            'reference only where you are entitled to record it for your business.',
+            'the voice of someone who has agreed to be recorded, and enter a customer\'s name, phone number or GSTIN, a '
+            'prescribing doctor\'s name or a prescription reference only where you are entitled to record it for your '
+            'business.',
       ],
     ),
     LegalSection(
       '6. Data you hold about your customers and suppliers',
       paragraphs: [
-        'When you record a customer\'s name, GSTIN or a prescription reference, or a supplier\'s details, you are the one '
+        'When you record a customer\'s name, phone number or GSTIN, the name of the doctor who prescribed a medicine, a '
+            'prescription reference, or a supplier\'s details, you are the one '
             'deciding why and how that information is used; under the Digital Personal Data Protection Act, 2023 you are '
             'its "Data Fiduciary" and we process it on your behalf as your "Data Processor".',
         'For that data: we process it only to provide the Service to you and as these Terms describe; we protect it with '
@@ -371,7 +374,9 @@ const kPrivacyPolicy = LegalDocument(
         'Voice: recordings you make for a voice sale or a voice command, their transcripts, and the draft sale or '
             'instruction interpreted from them.',
         'Sales and stock: the products, batches, quantities, prices and expiry dates you buy and sell; and, when you '
-            'choose to enter them, a customer\'s name and GSTIN and the prescription reference for a Schedule H1 medicine.',
+            'choose to enter them, a customer\'s name, phone number and GSTIN, the name of the doctor who prescribed the '
+            'medicines, and the prescription reference for a Schedule H1 medicine. Each sale also records whether it was '
+            'paid in cash or online. The customer details you enter are printed on that sale\'s bill.',
         'Technical: the app build number and platform (iOS or Android) sent with every request so we can tell an old '
             'build apart; request logs that record the time, the endpoint, a request id, your user and shop ids and the '
             'network address the request came from; and error reports the app shows you. We use no advertising, '

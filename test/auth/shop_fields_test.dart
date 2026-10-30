@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/core/api/api_client.dart';
+import 'package:gst_bill_app/core/config/legal_documents.dart';
 import 'package:gst_bill_app/features/auth/presentation/account_screen.dart';
 import 'package:gst_bill_app/features/auth/presentation/login_screen.dart';
 import 'package:gst_bill_app/features/sales/presentation/sale_receipt_screen.dart';
@@ -84,7 +85,7 @@ void main() {
         }));
     expect(body!['dl_no'], '20B/UP7820B001234');
     expect(body!['phone'], '98390 123', reason: 'the server cleans and checks it');
-    expect(body!['legal_version'], '1.2');
+    expect(body!['legal_version'], kLegalVersion, reason: 'signup records the version shown');
     final phone = tester.widget<TextField>(find.widgetWithText(TextField, 'Shop phone (optional)'));
     expect(phone.decoration!.errorText, 'Enter a 10-digit phone number.');
   });
