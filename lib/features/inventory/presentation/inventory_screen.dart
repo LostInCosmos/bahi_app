@@ -26,6 +26,9 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
   /// letter is typed — no request per search (DAS-94).
   String _query = '';
 
+  /// Only stock expiring within a month, soonest first. Works with the search.
+  bool _expiringOnly = false;
+
   // Deliberately no fetch here — see the same note in purchases_screen.dart:
   // HomeScreen's tab switcher calls refresh() the first (and every) time
   // this tab is actually selected, so every tab doesn't fetch on app open.
@@ -71,7 +74,10 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final index = _catalog.index;
-    final products = index?.match(_query) ?? const <ProductSummary>[];
+    final matching = index?.match(_query) ?? const <ProductSummary>[];
+    final today = DateTime.now();
+    final expiring = expiringWithinAMonth(matching, today);
+    final products = _expiringOnly ? expiring : matching;
     final loading = index == null && _catalog.isLoading;
     final failure = _catalog.lastError;
     final header = <Widget>[
@@ -101,6 +107,19 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
         ),
         textInputAction: TextInputAction.search,
       ),
+      if (index != null) ...[
+        const SizedBox(height: Spacing.s),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilterChip(
+            key: const ValueKey('inventory-expiring'),
+            avatar: _expiringOnly ? null : const Icon(Icons.event_busy_outlined, size: 18),
+            label: Text('Expiring within a month (${expiring.length})'),
+            selected: _expiringOnly,
+            onSelected: (on) => setState(() => _expiringOnly = on),
+          ),
+        ),
+      ],
       if (products.isNotEmpty) ...[
         const SizedBox(height: Spacing.l),
         Row(
@@ -112,7 +131,7 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
               decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
             ),
             Text(
-              'CURRENT STOCK',
+              _expiringOnly ? 'EXPIRING SOONEST FIRST' : 'CURRENT STOCK',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: colors.onSurfaceVariant,
                     letterSpacing: 0.6,
@@ -133,7 +152,9 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
       if (products.isEmpty && index != null)
         EmptyHint(
           icon: Icons.medication_outlined,
-          text: _query.trim().isEmpty ? 'No products yet' : 'No medicine matches that',
+          text: _expiringOnly
+              ? (_query.trim().isEmpty ? 'Nothing in stock expires within a month' : 'Nothing that matches expires within a month')
+              : (_query.trim().isEmpty ? 'No products yet' : 'No medicine matches that'),
         ),
     ];
     return RefreshIndicator(
@@ -145,7 +166,7 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
         itemCount: header.length + products.length,
         itemBuilder: (context, i) {
           if (i < header.length) return header[i];
-          return _ProductRow(products[i - header.length], index!);
+          return _ProductRow(products[i - header.length], index!, today);
         },
       ),
     );
@@ -155,7 +176,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
 class _ProductRow extends StatelessWidget {
   final ProductSummary product;
   final ProductIndex index;
-  const _ProductRow(this.product, this.index);
+  final DateTime today;
+  const _ProductRow(this.product, this.index, this.today);
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +185,7 @@ class _ProductRow extends StatelessWidget {
     final p = product;
     final outOfStock = p.quantityOnHand <= 0;
     final details = InventoryScreenState._batchDetails(p);
+    final warning = expiryWarning(p, today);
     return Padding(
       padding: const EdgeInsets.only(bottom: Spacing.s),
       child: Card(
@@ -205,6 +228,16 @@ class _ProductRow extends StatelessWidget {
                         details,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
                         overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (warning != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        warning,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.onErrorContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                     ],
                   ],

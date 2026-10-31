@@ -96,3 +96,43 @@ class ProductIndex {
     return q == null ? name : '$name · $q';
   }
 }
+
+/// The same day a month after [today], held to the month's last day: 31 Jan
+/// gives 28 (or 29) Feb, not 3 Mar.
+DateTime oneMonthAfter(DateTime today) {
+  final lastDay = DateTime(today.year, today.month + 2, 0).day;
+  return DateTime(today.year, today.month + 1, today.day > lastDay ? lastDay : today.day);
+}
+
+/// The products in [products] with stock that expires between [today] and a
+/// month after it, both days included, soonest first; a tie keeps the list's
+/// order (by name).
+///
+/// A product's `expiryDate` is its soonest-expiring in-stock batch that has
+/// not expired (DAS-81), so a product has a batch expiring this month exactly
+/// when that one does. Stock already expired is not on the list: the server
+/// leaves it out of that date.
+List<ProductSummary> expiringWithinAMonth(List<ProductSummary> products, DateTime today) {
+  final from = isoDate(today)!;
+  final to = isoDate(oneMonthAfter(today))!;
+  // YYYY-MM-DD strings sort as the dates do.
+  final expiring = [
+    for (final p in products)
+      if (p.expiryDate != null && p.expiryDate!.compareTo(from) >= 0 && p.expiryDate!.compareTo(to) <= 0) p,
+  ];
+  return expiring..sort((a, b) => a.expiryDate!.compareTo(b.expiryDate!));
+}
+
+/// "Expires in 9 days · 09 Nov 2026" for a product whose stock expires
+/// within a month of [today] (see [expiringWithinAMonth]); null otherwise.
+/// The row's own detail line runs out of width before its expiry, so this
+/// is the line that shows the date the filter is about.
+String? expiryWarning(ProductSummary p, DateTime today) {
+  if (expiringWithinAMonth([p], today).isEmpty) return null;
+  final expiry = DateTime.parse(p.expiryDate!);
+  final days = DateTime.utc(expiry.year, expiry.month, expiry.day)
+      .difference(DateTime.utc(today.year, today.month, today.day))
+      .inDays;
+  final when = switch (days) { 0 => 'Expires today', 1 => 'Expires tomorrow', _ => 'Expires in $days days' };
+  return '$when · ${shortDate(expiry)}';
+}
