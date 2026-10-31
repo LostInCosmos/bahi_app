@@ -32,7 +32,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +5 | 1 | 2 |
 | [`lib/features/home/presentation`](#libfeatureshomepresentation) | `HomeScreen`, `HomeTabHost`, `HomeTab` | 2 | 1 |
 | [`lib/features/inventory/data`](#libfeaturesinventorydata) | `ProductListPage`, `InventoryApi`, `ProductCatalog` | 2 | 3 |
-| [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex` | 2 | 4 |
+| [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex` +3 | 2 | 4 |
 | [`lib/features/inventory/presentation`](#libfeaturesinventorypresentation) | `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen` | 2 | 1 |
 | [`lib/features/inventory/widgets`](#libfeaturesinventorywidgets) | `ProductName` | 1 | 3 |
 | [`lib/features/invoice/data`](#libfeaturesinvoicedata) | `InvoiceApi` | 1 | 3 |
@@ -400,9 +400,9 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `product.dart` | 178 | — |
-| `product_search.dart` | 99 | — |
+| `product_search.dart` | 139 | — |
 
-**Public:** `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex`
+**Public:** `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex`, `oneMonthAfter`, `expiringWithinAMonth`, `expiryWarning`
 
 **Depends on:** `lib/core/utils`
 
@@ -412,7 +412,7 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `inventory_screen.dart` | 236 | — |
+| `inventory_screen.dart` | 269 | — |
 | `product_detail_screen.dart` | 353 | Batches sort soonest-expiry first (FEFO) — the same order the sale  *[ProductDetailScreen]* |
 
 **Public:** `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen`
