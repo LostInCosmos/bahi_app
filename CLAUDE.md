@@ -31,6 +31,8 @@ python3 ../backend/ops/check_docs.py      # verifies code_paths + links
 **Engineering knowledge.** Session start: read `../Dastavez-memory/Engineering/Mobile-Engineer/INDEX.md` and `Learning-Roadmap.md`; the rules are in `../Dastavez-memory/Engineering/Shared/Protocol.md`. Task end: record durable lessons there; the report names the notes read and written, or says why none.
 
 ## Find before you write
+**Reuse before building** (user rule, 2026-10-31): look for an existing feature, control, route or function first; if tweaking it works, do only that, with no new screen, route, job or preview the ask did not name. Say what you looked for when proposing anything new. See Shared/Protocol.md §12.
+
 `codeintel` (`../codeintel/`, its own git repo) indexes every file, symbol and import in backend, mobile and admin panel. Before adding a function, look for one that already exists:
 
 ```bash
