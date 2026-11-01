@@ -123,11 +123,15 @@ Future<void> hideKeyboard(PatrolIntegrationTester $) async {
   await $.pump(const Duration(milliseconds: 300));
 }
 
-/// The stock number shown for [product] on the Inventory list ("100 in
-/// stock" in the row's chip), once its row is on screen. A row is a Card
-/// (Inventory lays its own row out; Sell uses a ListTile inside one).
+/// The stock chip on [product]'s Inventory row: "100 in stock", or "45
+/// tablets" for a medicine sold loose (DAS-160). A row is a Card (Inventory
+/// lays its own row out; Sell uses a ListTile inside one).
+final _stockChip = RegExp(r'^[\d,]+ (in stock|tablets?|capsules?|units?)$');
+
+/// The stock number shown for [product] on the Inventory list, once its row
+/// is on screen: packs, or tablets when it is sold loose.
 Future<int> stockShown(PatrolIntegrationTester $, String product) async {
-  final chip = $(Card).containing(product).$(find.textContaining(' in stock'));
+  final chip = $(Card).containing(product).$(find.textContaining(_stockChip));
   await chip.waitUntilVisible(timeout: const Duration(seconds: 30));
   final text = chip.text!;
   return int.parse(text.split(' ').first.replaceAll(',', ''));
@@ -135,6 +139,7 @@ Future<int> stockShown(PatrolIntegrationTester $, String product) async {
 
 /// Waits until the Inventory list shows [stock] for [product]: the list is
 /// refetched when the tab is opened, so the new number can lag by a request.
-Future<void> waitForStock(PatrolIntegrationTester $, String product, int stock) async {
-  await $(Card).containing(product).$('$stock in stock').waitUntilVisible(timeout: const Duration(seconds: 30));
+/// [unit] is the chip's word after the number ("in stock", "tablets").
+Future<void> waitForStock(PatrolIntegrationTester $, String product, int stock, {String unit = 'in stock'}) async {
+  await $(Card).containing(product).$('$stock $unit').waitUntilVisible(timeout: const Duration(seconds: 30));
 }

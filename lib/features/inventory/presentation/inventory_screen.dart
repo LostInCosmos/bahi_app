@@ -62,7 +62,10 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
   /// all three are null together for a product with nothing in stock to
   /// price, so this is "if any", never a partial/misleading row.
   static String? _batchDetails(ProductSummary p) {
+    // "4 strips + 5" beside the tablet count in the chip (DAS-160).
+    final breakdown = p.loose.packBreakdown(p.quantityOnHand);
     final parts = [
+      if (breakdown != null) breakdown,
       if (p.netRate != null) 'Net ${rupees(p.netRate!)}',
       if (p.mrp != null) 'MRP ${rupees(p.mrp!)}',
       if (p.expiryDate != null) 'Exp ${p.expiryDate}',
@@ -251,7 +254,10 @@ class _ProductRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.chip),
                 ),
                 child: Text(
-                  '${qty(p.quantityOnHand)} in stock',
+                  // In tablets when sold loose (DAS-160), else packs as before.
+                  p.loose.loose && p.loose.unitsOnHand != null
+                      ? p.loose.stock(p.quantityOnHand)
+                      : '${qty(p.quantityOnHand)} in stock',
                   style: TextStyle(
                     color: outOfStock ? colors.onErrorContainer : AppColors.statusSaved,
                     fontWeight: FontWeight.w600,

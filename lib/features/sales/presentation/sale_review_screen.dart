@@ -293,7 +293,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
     return Card(
       child: ListTile(
         onTap: () => _edit(i),
-        title: Text('${c.productName} × ${qty(c.qty)}'),
+        title: Text('${c.productName} × ${c.qtyText}'),
         subtitle: c.shortStockNote == null
             ? Text('Batch ${c.batchNo ?? "—"}')
             : Column(

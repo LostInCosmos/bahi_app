@@ -119,7 +119,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
     final lines = [
       '${s.saleNo} • ${s.saleDate}',
       for (final li in s.lineItems) ...[
-        '${li.productName} × ${qty(li.qty)} — ${rupees(li.lineAmount)}',
+        '${li.productName} × ${li.qtyText} — ${rupees(li.lineAmount)}',
         if (li.discountAmount > 0) '  Discount −${rupees(li.discountAmount)}',
       ],
       if (s.discountAmount > 0) 'Discount (whole sale): −${rupees(s.discountAmount)}',
@@ -159,7 +159,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
                     child: Column(
                       children: [
                         for (final li in sale.lineItems) ...[
-                          KeyValueRow('${li.productName} × ${qty(li.qty)}', rupees(li.lineAmount)),
+                          KeyValueRow('${li.productName} × ${li.qtyText}', rupees(li.lineAmount)),
                           if (li.discountAmount > 0)
                             Align(
                               alignment: Alignment.centerRight,

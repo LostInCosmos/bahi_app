@@ -102,7 +102,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     padding: const EdgeInsets.all(Spacing.l),
                     children: [
                       Text(
-                        '${qty(detail!.totalQuantity)} units total, across ${plural(detail.batches.length, 'batch', 'batches')}',
+                        '${detail!.loose.loose && detail.loose.unitsOnHand != null ? detail.loose.stock(detail.totalQuantity) : '${qty(detail.totalQuantity)} units'} total, across ${plural(detail.batches.length, 'batch', 'batches')}',
                         style: TextStyle(color: Theme.of(context).colorScheme.outline),
                       ),
                       const SizedBox(height: Spacing.m),
@@ -169,7 +169,7 @@ class _BatchCard extends StatelessWidget {
               ),
               const SizedBox(height: Spacing.xs),
               Text('Expiry: ${b.expiryDate ?? "—"}'),
-              Text('Quantity: ${qty(b.quantityOnHand)}'),
+              Text('Quantity: ${b.loose.stock(b.quantityOnHand)}'),
               if (b.mrp != null || onEditMrp != null)
                 Row(
                   children: [
