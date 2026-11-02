@@ -98,6 +98,14 @@ String _money(double v) => v.toStringAsFixed(2);
 
 String _qty(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
+/// A line's quantity in the Qty column: "20 tab" when sold by the tablet
+/// (DAS-160), so its rate reads as a tablet's; a pack line as before.
+String _lineQty(SaleLineItemDetail li) {
+  if (!li.loose) return _qty(li.qty);
+  final short = switch (li.unitKind) { 'tablet' => 'tab', 'capsule' => 'cap', _ => 'unit' };
+  return '${_qty(li.qty)} $short';
+}
+
 /// "98390 12345" from the 10 digits the server stores.
 String _phone(String p) => p.length == 10 ? '${p.substring(0, 5)} ${p.substring(5)}' : p;
 
@@ -221,7 +229,7 @@ pw.Widget _items(SaleDetail sale, bool taxInvoice) {
             li.batchNo ?? '',
             _expiry(li.expiryDate),
             li.mrp == null ? '' : _money(li.mrp!),
-            _qty(li.qty),
+            _lineQty(li),
             _money(li.rate),
             li.discountTotal > 0 ? _money(li.discountTotal) : '',
             if (taxInvoice) _qty(li.gstPct),

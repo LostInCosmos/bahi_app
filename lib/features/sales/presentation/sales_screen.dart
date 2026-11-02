@@ -349,7 +349,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
             return Card(
               child: ListTile(
                 title: ProductName(p.name, qualifier: index?.qualifier(p.id)),
-                subtitle: Text('${qty(p.quantityOnHand)} in stock'),
+                subtitle: Text('${p.loose.stock(p.quantityOnHand)} in stock'),
                 // The finger is down: start loading its batches now, not when
                 // it lifts (already held: nothing is asked).
                 trailing: Listener(
@@ -470,7 +470,10 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
     if (detail.id != widget.product.id) return false;
     for (final b in detail.batches) {
       _qtyControllers[b.id] = TextEditingController(text: '1');
-      _rateControllers[b.id] = TextEditingController(text: b.mrp?.toStringAsFixed(2) ?? '');
+      // Sold by the tablet (DAS-160): a tablet's share of the MRP to start
+      // from. The shop may change it; the MRP itself is sometimes corrected.
+      final price = b.loose.loose ? b.loose.unitMrp : b.mrp;
+      _rateControllers[b.id] = TextEditingController(text: price?.toStringAsFixed(2) ?? '');
       _discountControllers[b.id] = TextEditingController();
       _discountKinds[b.id] = DiscountKind.percentage;
     }
@@ -572,7 +575,11 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       final discountError = rate > 0 ? totals.itemErrors[0] : null;
       final priceError = rate <= 0 && _priceTried.contains(b.id) ? 'Enter a price above ₹0' : null;
       final discounted = rate > 0 && discount != null && discountError == null && totals.itemDiscounts > 0;
-      final note = quantity > 0 ? stockNote(quantity, b.quantityOnHand) : null;
+      // A loose batch counts tablets everywhere on its row (DAS-160).
+      final unit = b.loose;
+      final available = unit.loose ? unit.unitsOnHand?.toDouble() : b.quantityOnHand;
+      final note =
+          quantity > 0 ? stockNote(quantity, available, loose: unit.loose, unitKind: unit.unitKind) : null;
 
       return Card(
         margin: const EdgeInsets.only(bottom: 10),
@@ -596,8 +603,11 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                   ),
                 ],
               ),
-              Text('Available: ${qty(b.quantityOnHand)}',
+              Text('Available: ${unit.stock(b.quantityOnHand)}',
                   style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+              if (unit.wholeOnly)
+                Text('Sold whole only, at the pack\'s MRP',
+                    style: TextStyle(color: Theme.of(context).colorScheme.outline)),
               const SizedBox(height: 8),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,7 +617,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                       controller: _qtyControllers[b.id],
                       keyboardType: TextInputType.number,
                       onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(labelText: 'Qty'),
+                      decoration: InputDecoration(labelText: unit.loose ? unit.fieldLabel : 'Qty'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -617,11 +627,19 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                       controller: _rateControllers[b.id],
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(labelText: 'Price (incl. GST)', errorText: priceError),
+                      decoration: InputDecoration(
+                          labelText: unit.loose ? 'Price a ${unit.word} (incl. GST)' : 'Price (incl. GST)',
+                          errorText: priceError),
                     ),
                   ),
                 ],
               ),
+              if (unit.typingHint != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(unit.typingHint!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.outline)),
+                ),
               if (note != null) StockNote(note),
               const SizedBox(height: 12),
               DiscountField(
@@ -651,6 +669,11 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                             context.say('Enter a quantity above 0');
                             return;
                           }
+                          // Tablets are whole; the server refuses part of one.
+                          if (unit.loose && quantity != quantity.roundToDouble()) {
+                            context.say('Enter a whole number of ${unit.word}s');
+                            return;
+                          }
                           // A sale with no price is almost always a missing MRP,
                           // not a gift: refuse it. A free sample is a 100% discount.
                           if (rate <= 0) {
@@ -666,7 +689,9 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                             rate: rate,
                             gstPct: b.gstPct,
                             discount: discounted ? discount : null,
-                            available: b.quantityOnHand,
+                            available: available,
+                            loose: unit.loose,
+                            unitKind: unit.unitKind,
                           ));
                         },
                   child: const Text('Add'),

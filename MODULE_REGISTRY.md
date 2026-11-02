@@ -32,7 +32,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/folders/widgets`](#libfeaturesfolderswidgets) | `FolderBar`, `FolderTile`, `folderTileGrid`, `folderTileGridBox`, `showFolderNameDialog` +5 | 1 | 2 |
 | [`lib/features/home/presentation`](#libfeatureshomepresentation) | `HomeScreen`, `HomeTabHost`, `HomeTab` | 2 | 1 |
 | [`lib/features/inventory/data`](#libfeaturesinventorydata) | `ProductListPage`, `InventoryApi`, `ProductCatalog` | 2 | 3 |
-| [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex` +3 | 2 | 4 |
+| [`lib/features/inventory/models`](#libfeaturesinventorymodels) | `LooseStock`, `unitWord`, `unitCount`, `unitFieldLabel`, `ProductSummary` +7 | 3 | 6 |
 | [`lib/features/inventory/presentation`](#libfeaturesinventorypresentation) | `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen` | 2 | 1 |
 | [`lib/features/inventory/widgets`](#libfeaturesinventorywidgets) | `ProductName` | 1 | 3 |
 | [`lib/features/invoice/data`](#libfeaturesinvoicedata) | `InvoiceApi` | 1 | 3 |
@@ -48,7 +48,7 @@ Find the module whose names fit what you are adding, then read its section.
 | [`lib/features/voice/presentation`](#libfeaturesvoicepresentation) | `VoiceCommandScreen`, `VoiceOrderReviewScreen`, `VoiceSaleScreen` | 3 | 2 |
 | [`lib/features/voice/widgets`](#libfeaturesvoicewidgets) | `newRecordingPath`, `deleteRecordingFile`, `hasMicPermission`, `recordingErrorMessage`, `voiceOffMessage` +3 | 1 | 1 |
 
-**Coverage:** 0 of 37 modules state their purpose; 60 of 107 files have a purpose line (8 from their own doc, the rest from the one declaration the file is named after).
+**Coverage:** 0 of 37 modules state their purpose; 61 of 108 files have a purpose line (8 from their own doc, the rest from the one declaration the file is named after).
 
 ---
 
@@ -399,20 +399,21 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `product.dart` | 178 | — |
+| `loose_stock.dart` | 106 | How a medicine is counted when it is sold by the tablet (DAS-160). The  *[LooseStock]* |
+| `product.dart` | 196 | — |
 | `product_search.dart` | 139 | — |
 
-**Public:** `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex`, `oneMonthAfter`, `expiringWithinAMonth`, `expiryWarning`
+**Public:** `LooseStock`, `unitWord`, `unitCount`, `unitFieldLabel`, `ProductSummary`, `ProductBatchInfo`, `ProductDetail`, `normalizeProductName`, `ProductIndex`, `oneMonthAfter`, `expiringWithinAMonth`, `expiryWarning`
 
 **Depends on:** `lib/core/utils`
 
-**Used by:** `lib/features/inventory/data`, `lib/features/inventory/presentation`, `lib/features/sales/presentation`, `lib/features/voice/presentation`
+**Used by:** `lib/features/inventory/data`, `lib/features/inventory/presentation`, `lib/features/sales/models`, `lib/features/sales/presentation`, `lib/features/sales/widgets`, `lib/features/voice/presentation`
 
 ### `lib/features/inventory/presentation`
 
 | file | lines | purpose |
 |---|---|---|
-| `inventory_screen.dart` | 269 | — |
+| `inventory_screen.dart` | 275 | — |
 | `product_detail_screen.dart` | 353 | Batches sort soonest-expiry first (FEFO) — the same order the sale  *[ProductDetailScreen]* |
 
 **Public:** `InventoryScreen`, `InventoryScreenState`, `ProductDetailScreen`
@@ -496,8 +497,8 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `sale_api.dart` | 64 | — |
-| `sale_bill_pdf.dart` | 323 | — |
+| `sale_api.dart` | 67 | — |
+| `sale_bill_pdf.dart` | 331 | — |
 
 **Public:** `SaleApi`, `BillFonts`, `isTaxInvoice`, `billFileName`, `buildSaleBillPdf`, `doctorLine`
 
@@ -510,13 +511,13 @@ Find the module whose names fit what you are adding, then read its section.
 | file | lines | purpose |
 |---|---|---|
 | `amount_words.dart` | 39 | — |
-| `sale.dart` | 245 | — |
+| `sale.dart` | 272 | — |
 | `sale_date.dart` | 33 | Which dates a sale may carry. Today by default; the shopkeeper may pick |
 | `sale_totals.dart` | 181 | What a sale in progress comes to, worked out the way the server works it |
 
 **Public:** `rupeesInWords`, `stockNote`, `CartEntry`, `SaleLineItemDetail`, `SaleSummary`, `PaymentMode`, `SaleDetail`, `financialYearStart`, `sameDay`, `DiscountKind`, `Discount`, `SaleLineInput`, `LineTotals`, `SaleTotals`, `computeSale`
 
-**Depends on:** `lib/core/utils`
+**Depends on:** `lib/core/utils`, `lib/features/inventory/models`
 
 **Used by:** `lib/features/sales/data`, `lib/features/sales/presentation`, `lib/features/sales/widgets`
 
@@ -527,7 +528,7 @@ Find the module whose names fit what you are adding, then read its section.
 | `sale_receipt_screen.dart` | 276 | Completing the sale is the one moment stock actually leaves inventory —  *[SaleReceiptScreen]* |
 | `sale_review_screen.dart` | 330 | Buyer GSTIN stays optional and out of the way — needed for a business  *[SaleReviewScreen]* |
 | `sales_history_screen.dart` | 157 | — |
-| `sales_screen.dart` | 682 | Same search idea as the inventory tab, different tap action — one  *[SalesScreen]* |
+| `sales_screen.dart` | 707 | Same search idea as the inventory tab, different tap action — one  *[SalesScreen]* |
 
 **Public:** `SaleReceiptScreen`, `SaleReviewScreen`, `SalesHistoryScreen`, `SalesHistoryScreenState`, `SalesScreen`, `SalesScreenState`
 
@@ -539,14 +540,14 @@ Find the module whose names fit what you are adding, then read its section.
 
 | file | lines | purpose |
 |---|---|---|
-| `cart_line_editor.dart` | 156 | — |
+| `cart_line_editor.dart` | 164 | — |
 | `discount_field.dart` | 67 | A discount entry: a number and a ₹ / % toggle beside it. Used per item in  *[DiscountField]* |
 | `stock_note.dart` | 22 | The amber note under a quantity the batch does not hold (DAS-111): a  *[StockNote]* |
 | `totals_card.dart` | 63 | What a sale comes to, as the checkout screen and the receipt both show it:  *[SaleTotalsCard]* |
 
 **Public:** `showCartLineEditor`, `parseDiscount`, `DiscountField`, `StockNote`, `SaleTotalsCard`
 
-**Depends on:** `lib/app/theme`, `lib/core/utils`, `lib/core/widgets`, `lib/features/sales/models`
+**Depends on:** `lib/app/theme`, `lib/core/utils`, `lib/core/widgets`, `lib/features/inventory/models`, `lib/features/sales/models`
 
 **Used by:** `lib/features/sales/presentation`
 

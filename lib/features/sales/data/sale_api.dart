@@ -40,6 +40,9 @@ extension SaleApi on ApiClient {
       'line_items': lineItems
           .map((c) => {
                 'product_batch_id': c.productBatchId,
+                // Tablets and a tablet's price (DAS-160). Absent means packs,
+                // as from every older build.
+                if (c.loose) 'unit': 'loose',
                 'qty': c.qty,
                 'rate': c.rate,
                 if (Discount.wireOf(c.discount) != null) 'discount': Discount.wireOf(c.discount),

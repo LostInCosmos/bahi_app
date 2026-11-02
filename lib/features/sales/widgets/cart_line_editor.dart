@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/widgets/inline_message.dart';
+import '../../inventory/models/loose_stock.dart';
 import '../models/sale.dart';
 import '../models/sale_totals.dart';
 import 'discount_field.dart';
@@ -51,8 +52,13 @@ class _CartLineEditorState extends State<_CartLineEditor> {
     final totals = computeSale([SaleLineInput(qty: quantity, rate: rate, gstPct: e.gstPct, discount: discount)]);
 
     // More than the batch holds is allowed, with a note (DAS-111); none is not.
-    final qtyError = quantity <= 0 ? 'Enter a quantity above 0' : null;
-    final note = qtyError == null ? stockNote(quantity, available) : null;
+    // A loose line counts whole tablets (DAS-160); the server refuses part of one.
+    final qtyError = quantity <= 0
+        ? 'Enter a quantity above 0'
+        : e.loose && quantity != quantity.roundToDouble()
+            ? 'Enter a whole number of ${unitWord(e.unitKind)}s'
+            : null;
+    final note = qtyError == null ? stockNote(quantity, available, loose: e.loose, unitKind: e.unitKind) : null;
     final priceError = rate <= 0 ? 'Enter a price above ₹0' : null;
     // With no price there is no line to take a discount off yet.
     final discountError = rate > 0 ? totals.itemErrors[0] : null;
@@ -71,7 +77,7 @@ class _CartLineEditorState extends State<_CartLineEditor> {
             Text(
               [
                 'Batch ${e.batchNo ?? "—"}',
-                if (available != null) '${qty(available)} in stock',
+                if (available != null) '${e.loose ? unitCount(available, e.unitKind) : qty(available)} in stock',
               ].join(' · '),
               style: TextStyle(color: Theme.of(context).colorScheme.outline),
             ),
@@ -87,7 +93,8 @@ class _CartLineEditorState extends State<_CartLineEditor> {
                     // The reason is written under the row: the field is too
                     // narrow for it. The red outline stays on the field.
                     decoration: InputDecoration(
-                        labelText: 'Qty', error: qtyError == null ? null : const SizedBox.shrink()),
+                        labelText: e.loose ? unitFieldLabel(e.unitKind) : 'Qty',
+                        error: qtyError == null ? null : const SizedBox.shrink()),
                   ),
                 ),
                 const SizedBox(width: Spacing.s),
@@ -98,7 +105,8 @@ class _CartLineEditorState extends State<_CartLineEditor> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                        labelText: 'Price (incl. GST)', error: priceError == null ? null : const SizedBox.shrink()),
+                        labelText: e.loose ? 'Price a ${unitWord(e.unitKind)} (incl. GST)' : 'Price (incl. GST)',
+                        error: priceError == null ? null : const SizedBox.shrink()),
                   ),
                 ),
               ],

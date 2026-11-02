@@ -1,6 +1,7 @@
 library;
 
 import '../../../core/utils/json.dart';
+import 'loose_stock.dart';
 
 class ProductSummary {
   final int id;
@@ -17,6 +18,9 @@ class ProductSummary {
   final double? mrp;
   final String? expiryDate; // YYYY-MM-DD, already stripped of any time component
 
+  /// Sold by the tablet, and its stock in tablets (DAS-160).
+  final LooseStock loose;
+
   ProductSummary({
     required this.id,
     required this.name,
@@ -26,6 +30,7 @@ class ProductSummary {
     this.netRate,
     this.mrp,
     this.expiryDate,
+    this.loose = LooseStock.none,
   });
 
   factory ProductSummary.fromJson(Map<String, dynamic> json) => ProductSummary(
@@ -37,6 +42,7 @@ class ProductSummary {
         netRate: json.dbl('net_rate'),
         mrp: json.dbl('mrp'),
         expiryDate: json.dateOnly('expiry_date'),
+        loose: LooseStock.fromJson(json),
       );
 }
 
@@ -75,6 +81,9 @@ class ProductBatchInfo {
   /// the Edit button is hidden then rather than failing.
   final bool? mrpEdited;
 
+  /// This batch's own pack size and tablets left (DAS-160).
+  final LooseStock loose;
+
   ProductBatchInfo({
     required this.id,
     this.batchNo,
@@ -93,6 +102,7 @@ class ProductBatchInfo {
     this.freeQty,
     this.freeScheme,
     this.mrpEdited,
+    this.loose = LooseStock.none,
   });
 
   /// This batch with the MRP the server just saved for it.
@@ -114,6 +124,7 @@ class ProductBatchInfo {
         freeQty: freeQty,
         freeScheme: freeScheme,
         mrpEdited: true,
+        loose: loose,
       );
 
   factory ProductBatchInfo.fromJson(Map<String, dynamic> json) => ProductBatchInfo(
@@ -134,6 +145,7 @@ class ProductBatchInfo {
         freeQty: json.dbl('free_qty'),
         freeScheme: json.str('free_scheme'),
         mrpEdited: json.boolean('mrp_edited'),
+        loose: LooseStock.fromJson(json),
       );
 }
 
@@ -147,6 +159,9 @@ class ProductDetail {
   final double totalQuantity;
   final List<ProductBatchInfo> batches;
 
+  /// Sold by the tablet, and its stock in tablets across batches (DAS-160).
+  final LooseStock loose;
+
   ProductDetail({
     required this.id,
     required this.name,
@@ -154,6 +169,7 @@ class ProductDetail {
     this.pack,
     required this.totalQuantity,
     required this.batches,
+    this.loose = LooseStock.none,
   });
 
   /// The same product with one batch swapped for [batch].
@@ -164,6 +180,7 @@ class ProductDetail {
         pack: pack,
         totalQuantity: totalQuantity,
         batches: [for (final b in batches) b.id == batch.id ? batch : b],
+        loose: loose,
       );
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) => ProductDetail(
@@ -173,5 +190,6 @@ class ProductDetail {
         pack: json.str('pack'),
         totalQuantity: json.dblReq('total_quantity'),
         batches: json.listOf('batches', ProductBatchInfo.fromJson),
+        loose: LooseStock.fromJson(json),
       );
 }

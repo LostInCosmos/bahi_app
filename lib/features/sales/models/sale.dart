@@ -1,14 +1,16 @@
 library;
 
+import '../../../core/utils/format.dart' as fmt;
 import '../../../core/utils/json.dart';
+import '../../inventory/models/loose_stock.dart';
 import 'sale_totals.dart';
 
 /// What the shopkeeper is told when a sale asks for more than a batch holds
 /// (DAS-111). It never appears on the bill. Null when there is enough, or the
-/// stock is not known.
-String? stockNote(double qty, double? available) {
+/// stock is not known. A line sold [loose] counts tablets ("Only 4 tablets").
+String? stockNote(double qty, double? available, {bool loose = false, String? unitKind}) {
   if (available == null || qty <= available) return null;
-  final have = available <= 0 ? 'None' : 'Only ${available.toStringAsFixed(0)}';
+  final have = available <= 0 ? 'None' : 'Only ${loose ? unitCount(available, unitKind) : available.toStringAsFixed(0)}';
   return '$have in inventory. This note will not appear on the bill.';
 }
 
@@ -27,9 +29,15 @@ class CartEntry {
   /// without it.
   final Discount? discount;
 
-  /// The batch's stock when the line was added. Asking for more is allowed
-  /// (DAS-111): the shopkeeper sees [stockNote], never the customer.
+  /// The batch's stock when the line was added, in the line's own unit.
+  /// Asking for more is allowed (DAS-111): the shopkeeper sees [stockNote],
+  /// never the customer.
   final double? available;
+
+  /// Counted in tablets (DAS-160): [qty], [rate] and [available] are per
+  /// tablet, and the server is told `unit: "loose"`. [unitKind] names them.
+  final bool loose;
+  final String? unitKind;
 
   CartEntry({
     required this.productBatchId,
@@ -40,6 +48,8 @@ class CartEntry {
     required this.gstPct,
     this.discount,
     this.available,
+    this.loose = false,
+    this.unitKind,
   });
 
   /// The same line with what the shopkeeper changed on the review screen.
@@ -52,7 +62,12 @@ class CartEntry {
         gstPct: gstPct,
         discount: discount,
         available: available,
+        loose: loose,
+        unitKind: unitKind,
       );
+
+  /// "20 tablets", or the bare pack count ("2") as before.
+  String get qtyText => loose ? unitCount(qty, unitKind) : fmt.qty(qty);
 
   double get lineAmount => qty * rate;
 
@@ -60,7 +75,7 @@ class CartEntry {
   String? get shortStockNote {
     final a = available;
     if (a == null || qty <= a) return null;
-    return '${a <= 0 ? 'None' : 'Only ${a.toStringAsFixed(0)}'} in inventory · not on the bill';
+    return '${a <= 0 ? 'None' : 'Only ${loose ? unitCount(a, unitKind) : a.toStringAsFixed(0)}'} in inventory · not on the bill';
   }
 
   SaleLineInput get input => SaleLineInput(qty: qty, rate: rate, gstPct: gstPct, discount: discount);
@@ -90,6 +105,11 @@ class SaleLineItemDetail {
   final double? mrp;
   final String? pack;
 
+  /// Sold by the tablet (DAS-160): `qty` is tablets and `rate` is a tablet's.
+  /// False on a pack line and from a server older than the field.
+  final bool loose;
+  final String? unitKind;
+
   SaleLineItemDetail({
     required this.productName,
     required this.qty,
@@ -105,7 +125,12 @@ class SaleLineItemDetail {
     this.expiryDate,
     this.mrp,
     this.pack,
+    this.loose = false,
+    this.unitKind,
   });
+
+  /// "20 tablets", or the bare pack count ("2") as before.
+  String get qtyText => loose ? unitCount(qty, unitKind) : fmt.qty(qty);
 
   double get discountTotal => discountAmount + saleDiscountShare;
 
@@ -130,6 +155,8 @@ class SaleLineItemDetail {
         expiryDate: json.dateOnly('expiry_date'),
         mrp: json.dbl('mrp'),
         pack: json.str('pack'),
+        loose: json.str('unit') == 'loose',
+        unitKind: json.str('unit_kind'),
       );
 }
 
