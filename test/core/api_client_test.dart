@@ -347,7 +347,8 @@ void main() {
       final keys = <String?>[];
       final client = MockClient((req) async {
         keys.add(req.headers['Idempotency-Key']);
-        return keys.length < 3 ? _json({'error': 'in_progress'}, 409) : _json({'sale_id': 7});
+        // The shape every refusal has on the server: a FastAPI HTTPException's `detail`.
+        return keys.length < 3 ? _json({'detail': {'error': 'in_progress'}}, 409) : _json({'sale_id': 7});
       });
       await http.runWithClient(() async {
         final res = await api.postJson('/sales', {'a': 1}, idempotency: IdempotencyKey());
