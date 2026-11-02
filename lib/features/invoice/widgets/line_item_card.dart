@@ -294,6 +294,7 @@ class _LineItemCardState extends State<LineItemCard> {
                   ),
                   IconButton(
                       onPressed: widget.onRemove,
+                      tooltip: 'Remove item',
                       icon: const Icon(Icons.delete_outline)),
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                 ],

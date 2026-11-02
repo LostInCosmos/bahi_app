@@ -101,7 +101,7 @@ class BatchItemCard extends StatelessWidget {
               ),
             ),
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
+              duration: motion(context, 220),
               transitionBuilder: (child, anim) => ScaleTransition(
                   scale: anim,
                   child: FadeTransition(opacity: anim, child: child)),
@@ -137,7 +137,7 @@ class BatchItemCard extends StatelessWidget {
               top: 4,
               right: 4,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
+                duration: motion(context, 220),
                 transitionBuilder: (child, anim) =>
                     ScaleTransition(scale: anim, child: child),
                 child: KeyedSubtree(

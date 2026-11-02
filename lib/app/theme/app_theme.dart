@@ -211,3 +211,9 @@ class _FadeThroughTransitionsBuilder extends PageTransitionsBuilder {
     );
   }
 }
+
+/// [milliseconds] of animation, or none when the device asks for reduced
+/// motion (Android's "Remove animations", iOS "Reduce Motion"): the change
+/// still happens, it just does not move.
+Duration motion(BuildContext context, int milliseconds) =>
+    MediaQuery.disableAnimationsOf(context) ? Duration.zero : Duration(milliseconds: milliseconds);

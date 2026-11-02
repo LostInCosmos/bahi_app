@@ -179,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: Spacing.l),
                           AnimatedSize(
-                            duration: const Duration(milliseconds: 220),
+                            duration: motion(context, 220),
                             curve: Curves.easeOutCubic,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -223,6 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     labelText: 'Password',
                                     prefixIcon: const Icon(Icons.lock_outline),
                                     suffixIcon: IconButton(
+                                      tooltip: _obscurePassword ? 'Show password' : 'Hide password',
                                       icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                     ),
@@ -319,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                           AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 180),
+                            duration: motion(context, 180),
                             child: _error == null
                                 ? const SizedBox.shrink()
                                 : Padding(
@@ -409,7 +410,7 @@ class _ModeToggle extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: motion(context, 200),
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(

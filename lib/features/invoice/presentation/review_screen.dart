@@ -663,7 +663,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   final before = <Widget>[
                     if (_stale) _staleBanner(colors),
                     AnimatedSize(
-                      duration: const Duration(milliseconds: 200),
+                      duration: motion(context, 200),
                       alignment: Alignment.topCenter,
                       child: _issues.isEmpty
                           ? const SizedBox.shrink()
@@ -843,7 +843,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                             "I've checked the flagged fields — save anyway"),
                       ),
                     AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
+                      duration: motion(context, 180),
                       child: _error == null
                           ? const SizedBox.shrink()
                           : Padding(

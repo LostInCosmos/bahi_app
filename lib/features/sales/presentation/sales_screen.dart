@@ -357,6 +357,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
                   onPointerDown: (_) => _catalog.prefetchDetails([p.id]),
                   child: IconButton(
                     icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'Add to sale',
                     // Opens with none in stock too: a sale may go beyond the stock,
                     // with a note (DAS-111). Its batch picker still blocks expiry.
                     onPressed: () => _openPicker(p),

@@ -71,7 +71,7 @@ class CaptureBottomBar extends StatelessWidget {
             // so nothing here waits on a manual "Process" step — this only
             // ever shows "you're all done" or "something still needs a look".
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
+              duration: motion(context, 200),
               child: allResolved
                   ? FilledButton.icon(
                       key: const ValueKey('done'),

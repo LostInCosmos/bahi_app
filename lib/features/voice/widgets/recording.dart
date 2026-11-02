@@ -217,7 +217,7 @@ class MicButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: motion(context, 200),
         width: 96,
         height: 96,
         decoration: BoxDecoration(
