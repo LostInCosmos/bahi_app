@@ -14,6 +14,7 @@ import '../widgets/cart_line_editor.dart';
 import '../widgets/discount_field.dart';
 import '../widgets/stock_note.dart';
 import '../widgets/totals_card.dart';
+import '../../../core/api/idempotency.dart';
 
 /// Buyer GSTIN stays optional and out of the way — needed for a business
 /// customer, irrelevant for the walk-in retail sale that's the common case.
@@ -30,6 +31,8 @@ class SaleReviewScreen extends StatefulWidget {
 }
 
 class _SaleReviewScreenState extends State<SaleReviewScreen> {
+  /// One sale, however many times Complete sale has to be sent.
+  final _saleKey = IdempotencyKey();
   final _buyerNameController = TextEditingController();
   final _buyerGstinController = TextEditingController();
   final _buyerPhoneController = TextEditingController();
@@ -115,6 +118,7 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
         saleDate: _saleDate,
         lineItems: widget.cart,
         discount: _saleDiscount,
+        idempotency: _saleKey,
       );
       if (!mounted) return;
       Navigator.of(context).pop(result['sale_id'] as int);

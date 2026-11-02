@@ -8,6 +8,7 @@ import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/inline_message.dart';
 import '../data/voice_api.dart';
 import '../widgets/recording.dart';
+import '../../../core/api/idempotency.dart';
 
 /// Mic capture for the "Voice sale" flow: tap to start, tap to stop (an
 /// utterance can run 30-60s so press-and-hold would be awkward), then
@@ -43,6 +44,8 @@ class VoiceSaleScreen extends StatefulWidget {
 }
 
 class _VoiceSaleScreenState extends State<VoiceSaleScreen> with RecordingSupport {
+  /// One recording's send, however many times Retry is tapped.
+  final _audioKey = IdempotencyKey();
   // _recording covers the whole session from start() to stop() — including
   // while paused — so dispose()'s "was a session left open" check and the
   // idle/ready-to-send UI branches don't need to know about _paused too.
@@ -147,7 +150,7 @@ class _VoiceSaleScreenState extends State<VoiceSaleScreen> with RecordingSupport
       _errorMessage = null;
     });
     try {
-      final jobId = await ApiClient.instance.submitVoiceOrderAudio(
+      final jobId = await ApiClient.instance.submitVoiceOrderAudio(idempotency: _audioKey, 
         File(path),
         voiceOrderId: widget.appendToOrderId,
       );

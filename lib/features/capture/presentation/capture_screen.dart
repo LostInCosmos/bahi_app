@@ -44,6 +44,7 @@ import '../widgets/confirm_bill_dialog.dart';
 import '../widgets/processing_bill_dialog.dart';
 import '../widgets/unsave_dialog.dart';
 import 'crop_screen.dart';
+import '../../../core/api/idempotency.dart';
 
 part 'capture_intake.dart';
 part 'capture_selection.dart';

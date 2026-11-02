@@ -9,6 +9,7 @@ import '../../../core/utils/offset_2d.dart';
 import '../models/invoice.dart';
 import '../models/job_status.dart';
 import '../models/purchase_export.dart';
+import '../../../core/api/idempotency.dart';
 
 /// What the purchase range means: bills by the date they were UPLOADED, not
 /// the date printed on them. Sent only with a date, because without one the
@@ -95,8 +96,9 @@ extension InvoiceApi on ApiClient {
   /// background worker, not inline in this request — so the caller polls
   /// getExtractionJob() until it reaches a terminal status.
   Future<int> submitExtraction(String sourceImage,
-      {List<String> extraSourceImages = const [], int? folderId}) async {
-    final res = await multipart('/invoices/extract', (request) {
+      {List<String> extraSourceImages = const [], int? folderId, IdempotencyKey? idempotency}) async {
+    final res = await multipart('/invoices/extract',
+        idempotency: idempotency, fingerprint: '$sourceImage|$folderId|${extraSourceImages.join('|')}', (request) {
       request.fields['source_image'] = sourceImage;
       if (folderId != null) request.fields['folder_id'] = '$folderId';
       for (final img in extraSourceImages) {

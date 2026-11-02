@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/business_types.dart';
 import '../disk/bill_image_cache.dart';
 import 'api_exception.dart';
+import 'idempotency.dart';
 
 export 'api_exception.dart';
 
@@ -384,6 +385,8 @@ class ApiClient {
     Map<String, String>? headers,
     bool notModifiedOk = false,
     bool idempotent = false,
+    IdempotencyKey? idempotency,
+    String fingerprint = '',
   }) async {
     final sent = auth ? token : null;
     final sendHeaders = {
@@ -391,6 +394,9 @@ class ApiClient {
       if (json) 'Content-Type': 'application/json',
       'X-App-Build': '$_appBuild',
       'X-App-Platform': _appPlatform,
+      // A write the server must not do twice (see IdempotencyKey): the same
+      // key on every resend of this content until the server has answered.
+      if (idempotency != null) 'Idempotency-Key': idempotency.keyFor(fingerprint),
       ...?headers,
     };
     http.Response res;
@@ -407,6 +413,24 @@ class ApiClient {
       }
     } on TimeoutException {
       throw ServerTimedOut(timeout);
+    }
+    if (idempotency != null) {
+      // 409 in_progress: the first send of this key is still being worked on
+      // (its answer was lost on the way back). Ask again with the same key
+      // until it is answered, within the same patience as the request.
+      final deadline = DateTime.now().add(timeout);
+      while (res.statusCode == 409 && _errorCodeOf(res) == 'in_progress' && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(inProgressRetryDelay);
+        try {
+          res = await request(sendHeaders).timeout(timeout);
+        } on http.ClientException catch (e) {
+          throw ServerUnreachable(e);
+        } on TimeoutException {
+          throw ServerTimedOut(timeout);
+        }
+      }
+      // Answered, one way or the other: the next send is a new attempt.
+      idempotency.answered();
     }
     if (res.statusCode == 401 && sent != null) await _sessionRefused(sent);
     _applyVersionGate(res);
@@ -434,11 +458,32 @@ class ApiClient {
         idempotent: true,
       );
 
-  Future<http.Response> post(String path, {Duration timeout = readTimeout}) =>
-      _send((h) => _http.post(_uri(path), headers: h), timeout: timeout);
+  /// How long a keyed write waits before asking again after `409 in_progress`.
+  @visibleForTesting
+  static Duration inProgressRetryDelay = const Duration(seconds: 2);
 
-  Future<http.Response> postJson(String path, Object body, {bool auth = true, Duration timeout = readTimeout}) =>
-      _send((h) => _http.post(_uri(path), headers: h, body: jsonEncode(body)), auth: auth, json: true, timeout: timeout);
+  /// The server's machine-readable error in [res], top-level or under
+  /// `detail`, or null.
+  static String? _errorCodeOf(http.Response res) {
+    try {
+      final d = jsonDecode(res.body);
+      if (d is! Map) return null;
+      final inner = d['detail'];
+      return (inner is Map ? inner['error'] : d['error']) as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<http.Response> post(String path, {Duration timeout = readTimeout, IdempotencyKey? idempotency}) =>
+      _send((h) => _http.post(_uri(path), headers: h), timeout: timeout, idempotency: idempotency, fingerprint: path);
+
+  Future<http.Response> postJson(String path, Object body,
+      {bool auth = true, Duration timeout = readTimeout, IdempotencyKey? idempotency}) {
+    final encoded = jsonEncode(body);
+    return _send((h) => _http.post(_uri(path), headers: h, body: encoded),
+        auth: auth, json: true, timeout: timeout, idempotency: idempotency, fingerprint: encoded);
+  }
 
   Future<http.Response> patchJson(String path, Object body) =>
       _send((h) => _http.patch(_uri(path), headers: h, body: jsonEncode(body)), json: true);
@@ -451,18 +496,22 @@ class ApiClient {
   Future<http.Response> delete(String path) => _send((h) => _http.delete(_uri(path), headers: h));
 
   /// A multipart form, built by [build] — photos and recordings.
+  /// [fingerprint] names what an [idempotency]-keyed upload carries (the
+  /// file's path, the fields): the same upload sent again keeps its key.
   Future<http.Response> multipart(
     String path,
     FutureOr<void> Function(http.MultipartRequest request) build, {
     Map<String, String>? query,
     Duration timeout = transferTimeout,
+    IdempotencyKey? idempotency,
+    String fingerprint = '',
   }) =>
       _send((h) async {
         final request = http.MultipartRequest('POST', _uri(path, query))..headers.addAll(h);
         await build(request);
         // Through the shared client: `request.send()` would open its own.
         return http.Response.fromStream(await _http.send(request));
-      }, timeout: timeout);
+      }, timeout: timeout, idempotency: idempotency, fingerprint: '$path?$query|$fingerprint');
 
   /// The date filter purchases and sales share, keeping only the ends that are set.
   static Map<String, String> dateRange(String? startDate, String? endDate) => {

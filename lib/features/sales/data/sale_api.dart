@@ -4,6 +4,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/utils/format.dart';
 import '../models/sale.dart';
 import '../models/sale_totals.dart';
+import '../../../core/api/idempotency.dart';
 
 extension SaleApi on ApiClient {
   Future<Map<String, dynamic>> createSale({
@@ -15,9 +16,11 @@ extension SaleApi on ApiClient {
     DateTime? saleDate,
     required List<CartEntry> lineItems,
     Discount? discount,
+    IdempotencyKey? idempotency,
   }) async {
     String? orNull(String? v) => (v == null || v.isEmpty) ? null : v;
-    final res = await postJson('/sales', {
+    // Keyed: a sale whose answer was lost is sent again, not made twice.
+    final res = await postJson('/sales', idempotency: idempotency, {
       'buyer_name': orNull(buyerName),
       'buyer_gstin': orNull(buyerGstin),
       // DAS-150. The server cleans the phone to 10 digits and refuses anything
