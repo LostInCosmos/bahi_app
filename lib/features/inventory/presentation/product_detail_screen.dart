@@ -157,7 +157,7 @@ class _BatchCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Batch ${b.batchNo ?? "—"}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                  Text(batchLabel(b.batchNo), style: const TextStyle(fontWeight: FontWeight.w500)),
                   if (b.isExpired)
                     Chip(
                       label: const Text('EXPIRED', style: TextStyle(fontSize: 11)),
@@ -298,7 +298,7 @@ class _MrpSheetState extends State<_MrpSheet> {
     final colors = Theme.of(context).colorScheme;
     final where = [
       widget.productName,
-      'Batch ${b.batchNo ?? "—"}',
+      batchLabel(b.batchNo),
       if (b.vendorName != null) b.vendorName!,
       if (b.invoiceNo != null) 'Invoice ${b.invoiceNo}',
     ].join(' · ');

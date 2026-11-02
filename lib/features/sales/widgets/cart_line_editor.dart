@@ -76,7 +76,7 @@ class _CartLineEditorState extends State<_CartLineEditor> {
             Text(e.productName, style: Theme.of(context).textTheme.titleMedium),
             Text(
               [
-                'Batch ${e.batchNo ?? "—"}',
+                batchLabel(e.batchNo),
                 if (available != null) '${e.loose ? unitCount(available, e.unitKind) : qty(available)} in stock',
               ].join(' · '),
               style: TextStyle(color: Theme.of(context).colorScheme.outline),

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Keeps a folder of shop data out of the owner's iCloud backup (DAS-135).
 ///
@@ -23,4 +24,14 @@ Future<void> excludeFromBackup(Directory dir) async {
   } catch (_) {
     // marked again on the next run
   }
+}
+
+/// `<Application Support>/[name]`, created if missing and kept out of the
+/// device backup: where the app's own files live between runs. Callers cache
+/// the result; this is one directory lookup per call.
+Future<Directory> appSupportFolder(String name) async {
+  final dir = Directory('${(await getApplicationSupportDirectory()).path}/$name');
+  if (!await dir.exists()) await dir.create(recursive: true);
+  await excludeFromBackup(dir);
+  return dir;
 }

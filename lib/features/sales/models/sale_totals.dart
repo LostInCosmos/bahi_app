@@ -13,6 +13,8 @@ library;
 
 /// How a discount was typed. The wire spelling is the server's
 /// (`percentage` | `amount`).
+import '../../../core/utils/format.dart';
+
 enum DiscountKind {
   amount('amount'),
   percentage('percentage');
@@ -103,7 +105,6 @@ int _paise(double rupees) => (rupees * 100 + 1e-9).round();
 /// `value`% of [basePaise], to the paisa, half up.
 int _percentOf(int basePaise, double value) => (basePaise * value / 100 + 1e-9).round();
 
-String _rupeesText(int paise) => '₹${(paise / 100).toStringAsFixed(2)}';
 
 /// Returns the ₹ a discount comes to against [basePaise], or null with
 /// [error] set when it is out of range.
@@ -115,7 +116,7 @@ String _rupeesText(int paise) => '₹${(paise / 100).toStringAsFixed(2)}';
     return (paise: _percentOf(basePaise, d.value), error: null);
   }
   final paise = _paise(d.value);
-  if (paise > basePaise) return (paise: 0, error: 'More than $of (${_rupeesText(basePaise)})');
+  if (paise > basePaise) return (paise: 0, error: 'More than $of (${rupees(basePaise / 100)})');
   return (paise: paise, error: null);
 }
 

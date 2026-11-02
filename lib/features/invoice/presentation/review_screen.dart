@@ -15,8 +15,22 @@ import '../widgets/saved_tick.dart';
 /// How a number is written into a field, and read back: see [numText]. A
 /// whole number stays whole and a fraction keeps Dart's own spelling, so the
 /// round trip through `double.tryParse` is exact.
-String _fmt(double v) => numText(v);
-String _fmtNullable(double? v) => numText(v);
+/// A field's decoration under its validation issue: the red underline and
+/// message for an error, an amber helper line for a warning, plain when
+/// there is none. The header form and each line card look an issue up
+/// differently and draw it the same.
+InputDecoration _issueDecoration(String label, ValidationIssue? issue) {
+  if (issue == null) return InputDecoration(labelText: label);
+  if (issue.isError) {
+    return InputDecoration(labelText: label, errorText: issue.message, errorMaxLines: 3);
+  }
+  return InputDecoration(
+    labelText: label,
+    helperText: issue.message,
+    helperMaxLines: 3,
+    helperStyle: const TextStyle(color: Color(0xFFB45309)),
+  );
+}
 
 /// A bill doesn't always print a combined GST% — sometimes it only gives
 /// CGST/SGST rates, or only the rupee amounts. Rather than leaving the
@@ -100,8 +114,8 @@ class _LineItemForm {
 
   _LineItemForm.fromLineItem(LineItem item)
       : printedDiscount = item.discount,
-        _origDiscountPct = _fmtNullable(item.discountPct),
-        _origDiscountAmount = _fmtNullable(item.discountAmount),
+        _origDiscountPct = numText(item.discountPct),
+        _origDiscountAmount = numText(item.discountAmount),
         cgstPct = item.cgstPct,
         sgstPct = item.sgstPct,
         igstPct = item.igstPct,
@@ -114,20 +128,20 @@ class _LineItemForm {
         batchNo = TextEditingController(text: item.batchNo ?? ''),
         expiry = TextEditingController(text: item.expiry ?? ''),
         hsnCode = TextEditingController(text: item.hsnCode ?? ''),
-        qty = TextEditingController(text: _fmt(item.qty)),
-        freeQty = TextEditingController(text: _fmtNullable(item.freeQty)),
+        qty = TextEditingController(text: numText(item.qty)),
+        freeQty = TextEditingController(text: numText(item.freeQty)),
         freeScheme = TextEditingController(text: item.freeScheme ?? ''),
-        mrp = TextEditingController(text: _fmtNullable(item.mrp)),
-        rate = TextEditingController(text: _fmt(item.rate)),
+        mrp = TextEditingController(text: numText(item.mrp)),
+        rate = TextEditingController(text: numText(item.rate)),
         discountPct =
-            TextEditingController(text: _fmtNullable(item.discountPct)),
+            TextEditingController(text: numText(item.discountPct)),
         discountAmount =
-            TextEditingController(text: _fmtNullable(item.discountAmount)),
-        gstPct = TextEditingController(text: _fmt(_computeGstPct(item))),
-        cgstAmount = TextEditingController(text: _fmtNullable(item.cgstAmount)),
-        sgstAmount = TextEditingController(text: _fmtNullable(item.sgstAmount)),
-        igstAmount = TextEditingController(text: _fmtNullable(item.igstAmount)),
-        grossAmount = TextEditingController(text: _fmt(item.grossAmount));
+            TextEditingController(text: numText(item.discountAmount)),
+        gstPct = TextEditingController(text: numText(_computeGstPct(item))),
+        cgstAmount = TextEditingController(text: numText(item.cgstAmount)),
+        sgstAmount = TextEditingController(text: numText(item.sgstAmount)),
+        igstAmount = TextEditingController(text: numText(item.igstAmount)),
+        grossAmount = TextEditingController(text: numText(item.grossAmount));
 
   _LineItemForm.empty() : this.fromLineItem(LineItem());
 
@@ -336,18 +350,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     // The supplier's GSTIN is settled by our team, not flagged to the shop
     // (ADR-008, then DAS-71). The server already withholds it, but a stale
     // issue list from an older build must not put the red underline back.
-    final issue = field == 'seller_gstin' ? null : _headerIssues[field];
-    if (issue == null) return InputDecoration(labelText: label);
-    if (issue.isError) {
-      return InputDecoration(
-          labelText: label, errorText: issue.message, errorMaxLines: 3);
-    }
-    return InputDecoration(
-      labelText: label,
-      helperText: issue.message,
-      helperMaxLines: 3,
-      helperStyle: const TextStyle(color: Color(0xFFB45309)),
-    );
+    return _issueDecoration(label, field == 'seller_gstin' ? null : _headerIssues[field]);
   }
 
   @override
@@ -374,14 +377,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
     totalGst = inv.totals.totalGst;
     items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
 
-    subtotal = TextEditingController(text: _fmt(inv.totals.subtotal));
+    subtotal = TextEditingController(text: numText(inv.totals.subtotal));
     totalDiscount =
-        TextEditingController(text: _fmtNullable(inv.totals.totalDiscount));
-    totalCgst = TextEditingController(text: _fmt(inv.totals.totalCgst));
-    totalSgst = TextEditingController(text: _fmt(inv.totals.totalSgst));
-    totalIgst = TextEditingController(text: _fmtNullable(inv.totals.totalIgst));
-    roundOff = TextEditingController(text: _fmtNullable(inv.totals.roundOff));
-    grandTotal = TextEditingController(text: _fmt(inv.totals.grandTotal));
+        TextEditingController(text: numText(inv.totals.totalDiscount));
+    totalCgst = TextEditingController(text: numText(inv.totals.totalCgst));
+    totalSgst = TextEditingController(text: numText(inv.totals.totalSgst));
+    totalIgst = TextEditingController(text: numText(inv.totals.totalIgst));
+    roundOff = TextEditingController(text: numText(inv.totals.roundOff));
+    grandTotal = TextEditingController(text: numText(inv.totals.grandTotal));
     _sent = _snapshot();
     // Android may end a hidden app without warning: what is typed goes to the
     // server when the app is put away, not only when the form is left.
@@ -564,7 +567,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
     if (picked != null) {
       setState(
-          () => invoiceDate.text = picked.toIso8601String().split('T').first);
+          () => invoiceDate.text = isoDate(picked)!);
     }
   }
 
@@ -632,13 +635,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
     totalGst = inv.totals.totalGst;
     placeOfSupply.text = inv.placeOfSupply ?? '';
 
-    subtotal.text = _fmt(inv.totals.subtotal);
-    totalDiscount.text = _fmtNullable(inv.totals.totalDiscount);
-    totalCgst.text = _fmt(inv.totals.totalCgst);
-    totalSgst.text = _fmt(inv.totals.totalSgst);
-    totalIgst.text = _fmtNullable(inv.totals.totalIgst);
-    roundOff.text = _fmtNullable(inv.totals.roundOff);
-    grandTotal.text = _fmt(inv.totals.grandTotal);
+    subtotal.text = numText(inv.totals.subtotal);
+    totalDiscount.text = numText(inv.totals.totalDiscount);
+    totalCgst.text = numText(inv.totals.totalCgst);
+    totalSgst.text = numText(inv.totals.totalSgst);
+    totalIgst.text = numText(inv.totals.totalIgst);
+    roundOff.text = numText(inv.totals.roundOff);
+    grandTotal.text = numText(inv.totals.grandTotal);
 
     for (var i = 0; i < items.length && i < inv.lineItems.length; i++) {
       final item = inv.lineItems[i];
@@ -648,18 +651,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
       form.batchNo.text = item.batchNo ?? '';
       form.expiry.text = item.expiry ?? '';
       form.hsnCode.text = item.hsnCode ?? '';
-      form.qty.text = _fmt(item.qty);
-      form.freeQty.text = _fmtNullable(item.freeQty);
+      form.qty.text = numText(item.qty);
+      form.freeQty.text = numText(item.freeQty);
       form.freeScheme.text = item.freeScheme ?? '';
-      form.mrp.text = _fmtNullable(item.mrp);
-      form.rate.text = _fmt(item.rate);
-      form.discountPct.text = _fmtNullable(item.discountPct);
-      form.discountAmount.text = _fmtNullable(item.discountAmount);
-      form.gstPct.text = _fmt(_computeGstPct(item));
-      form.cgstAmount.text = _fmtNullable(item.cgstAmount);
-      form.sgstAmount.text = _fmtNullable(item.sgstAmount);
-      form.igstAmount.text = _fmtNullable(item.igstAmount);
-      form.grossAmount.text = _fmt(item.grossAmount);
+      form.mrp.text = numText(item.mrp);
+      form.rate.text = numText(item.rate);
+      form.discountPct.text = numText(item.discountPct);
+      form.discountAmount.text = numText(item.discountAmount);
+      form.gstPct.text = numText(_computeGstPct(item));
+      form.cgstAmount.text = numText(item.cgstAmount);
+      form.sgstAmount.text = numText(item.sgstAmount);
+      form.igstAmount.text = numText(item.igstAmount);
+      form.grossAmount.text = numText(item.grossAmount);
       // The server's own answer, so the next save echoes it rather than the
       // rates this form was opened with.
       form.cgstPct = item.cgstPct;
@@ -1353,17 +1356,7 @@ class _LineItemCardState extends State<_LineItemCard> {
     if (issue == null && (field == 'qty' || field == 'rate')) {
       issue = _bySuffix['gross_amount'];
     }
-    if (issue == null) return InputDecoration(labelText: label);
-    if (issue.isError) {
-      return InputDecoration(
-          labelText: label, errorText: issue.message, errorMaxLines: 3);
-    }
-    return InputDecoration(
-      labelText: label,
-      helperText: issue.message,
-      helperMaxLines: 3,
-      helperStyle: const TextStyle(color: Color(0xFFB45309)),
-    );
+    return _issueDecoration(label, issue);
   }
 
   @override

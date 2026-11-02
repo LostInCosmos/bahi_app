@@ -832,7 +832,7 @@ class _BatchLine extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              'Batch ${alloc.batchNo ?? "—"} · qty ${qty(alloc.qty)} · ${rupees(alloc.unitPrice)}',
+              '${batchLabel(alloc.batchNo)} · qty ${qty(alloc.qty)} · ${rupees(alloc.unitPrice)}',
               style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
             ),
           ),

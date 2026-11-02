@@ -589,7 +589,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Batch ${b.batchNo ?? "—"}${isSuggested ? "  (suggested)" : ""}',
+                      '${batchLabel(b.batchNo)}${isSuggested ? "  (suggested)" : ""}',
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),

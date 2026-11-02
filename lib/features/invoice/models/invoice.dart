@@ -4,6 +4,7 @@
 library;
 
 import '../../../core/utils/json.dart';
+import '../../../core/utils/job_states.dart';
 
 class LineItem {
   String productName;
@@ -485,11 +486,9 @@ class ExtractionJob {
     this.draft,
   });
 
-  /// `cancelled` belongs here too: without it a cancelled job was not
-  /// terminal, so the app polled it for ever. Written as the set of finished
-  /// states rather than the set of unfinished ones, so a status the server
-  /// adds later keeps the app polling instead of falsely calling it done.
-  bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
+  /// Finished, one way or another — see `kFinishedJobStates` for why
+  /// `cancelled` is one of them.
+  bool get isTerminal => isFinishedJobStatus(status);
 
   bool get isRetrying => status == 'retrying';
 

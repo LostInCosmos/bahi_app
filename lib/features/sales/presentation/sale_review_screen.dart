@@ -295,10 +295,10 @@ class _SaleReviewScreenState extends State<SaleReviewScreen> {
         onTap: () => _edit(i),
         title: Text('${c.productName} × ${c.qtyText}'),
         subtitle: c.shortStockNote == null
-            ? Text('Batch ${c.batchNo ?? "—"}')
+            ? Text(batchLabel(c.batchNo))
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [Text('Batch ${c.batchNo ?? "—"}'), StockNote(c.shortStockNote!)],
+                children: [Text(batchLabel(c.batchNo)), StockNote(c.shortStockNote!)],
               ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
