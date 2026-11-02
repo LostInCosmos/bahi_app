@@ -4,6 +4,7 @@
 library;
 
 import '../../../core/utils/json.dart';
+import '../../../core/utils/job_states.dart';
 
 /// One bill's state in a batch status answer. Deliberately without a result:
 /// learning a bill is done is cheap and happens often, fetching its result
@@ -39,15 +40,9 @@ class JobStatusBrief {
     this.flagCount,
   });
 
-  bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
+  bool get isTerminal => isFinishedJobStatus(status);
   bool get isRetrying => status == 'retrying';
   bool get isProcessing => status == 'processing';
-
-  /// Nothing more will ever happen to this job — safe to stop asking about
-  /// it. A `done` job that is not yet [saved] is terminal but NOT settled:
-  /// the server keeps the long-poll open on it rather than answering at
-  /// once, exactly as it does for one still in flight (DAS-79).
-  bool get isSettled => status != 'done' ? isTerminal : saved;
 
   /// This answer as the string the server compares with the phone's `seen`
   /// (DAS-132). Mirrors the backend's `status_seen.card_state`, the

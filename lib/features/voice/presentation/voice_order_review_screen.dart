@@ -6,16 +6,15 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/poll.dart';
-import '../../../core/utils/snack.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/inline_message.dart';
-import '../../inventory/data/inventory_api.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../../inventory/models/product.dart';
-import '../../inventory/widgets/product_name.dart';
-import '../../sales/presentation/sale_receipt_screen.dart';
 import '../data/voice_api.dart';
 import '../models/voice.dart';
+import '../widgets/add_item_sheet.dart';
+import '../widgets/voice_line_card.dart';
+import '../widgets/voice_sale_receipt.dart';
 import 'voice_sale_screen.dart';
 
 /// Review/confirm screen for a voice-parsed sale draft. Every mutation
@@ -40,6 +39,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   String? _message;
   bool _confirming = false;
   bool _busy = false; // any in-flight line PATCH
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -48,7 +48,13 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   }
 
   Future<void> _applyLineUpdate(Future<VoiceOrder> Function() call) async {
-    if (_busy) return;
+    // One change at a time: a second typed while the first is still being
+    // sent is not queued, and saying nothing left the field showing a value
+    // the server never got.
+    if (_busy) {
+      setState(() => _message = 'Still saving the last change. Try again in a moment.');
+      return;
+    }
     setState(() {
       _busy = true;
       _message = null;
@@ -122,10 +128,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   }
 
   Future<void> _searchInventoryFor(VoiceOrderLine line) async {
-    final picked = await showModalBottomSheet<_AddItemResult>(
+    final picked = await showModalBottomSheet<AddItemResult>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => const _AddItemSheet(),
+      builder: (ctx) => const AddItemSheet(),
     );
     if (picked == null || !mounted) return;
     await _pickProduct(line, picked.product);
@@ -135,7 +141,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _CandidatePickerSheet(
+      builder: (ctx) => CandidatePickerSheet(
         line: line,
         onPick: (c) {
           Navigator.of(ctx).pop();
@@ -154,7 +160,8 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   }
 
   List<VoiceOrderLine> get _missingPrescriptionLines => _order.lines
-      .where((l) => l.schedule == 'H1' && l.isSellable && (l.prescriptionRef == null || l.prescriptionRef!.trim().isEmpty))
+      .where(
+          (l) => l.schedule == 'H1' && l.isSellable && (l.prescriptionRef == null || l.prescriptionRef!.trim().isEmpty))
       .toList();
 
   Future<void> _confirm() async {
@@ -174,7 +181,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       if (!mounted) return;
       final saleId = result['sale_id'] as int;
       final popResult = await Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => _VoiceSaleReceiptWithUndo(saleId: saleId, voiceOrderId: _order.id)),
+        MaterialPageRoute(builder: (_) => VoiceSaleReceiptWithUndo(saleId: saleId, voiceOrderId: _order.id)),
       );
       if (!mounted) return;
       Navigator.of(context).pop(popResult);
@@ -194,7 +201,8 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       switch (detail['error']) {
         case 'prescription_required':
           final ids = (detail['line_ids'] as List?)?.map((e) => e as int).toSet() ?? <int>{};
-          final names = _order.lines.where((l) => ids.contains(l.id)).map((l) => l.productName ?? l.rawPhrase).join(', ');
+          final names =
+              _order.lines.where((l) => ids.contains(l.id)).map((l) => l.productName ?? l.rawPhrase).join(', ');
           msg = 'Prescription reference required for: ${names.isEmpty ? 'one or more lines' : names}.';
           break;
         case 'stock_changed':
@@ -231,11 +239,34 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     }
   }
 
+  /// Cancels the draft on the server, then leaves. A draft the server says is
+  /// already confirmed or cancelled (409) or gone (404) needs no cancelling;
+  /// any other failure keeps the screen, with the reason — leaving anyway
+  /// used to look like a cancel while the order stayed open on the server.
   Future<void> _cancel() async {
+    if (_cancelling) return;
+    setState(() {
+      _cancelling = true;
+      _message = null;
+    });
     try {
       await ApiClient.instance.cancelVoiceOrder(_order.id);
-    } catch (_) {
-      // best-effort — still leave the review screen either way
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode != 409 && e.statusCode != 404) {
+        setState(() {
+          _cancelling = false;
+          _message = 'Could not cancel: ${e.message}';
+        });
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cancelling = false;
+        _message = 'Could not cancel: $e';
+      });
+      return;
     }
     if (mounted) Navigator.of(context).pop();
   }
@@ -283,10 +314,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   /// sheet instead of "Add more"'s re-record, for the common case where
   /// only a single extra item needs adding.
   Future<void> _addItem() async {
-    final picked = await showModalBottomSheet<_AddItemResult>(
+    final picked = await showModalBottomSheet<AddItemResult>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => const _AddItemSheet(),
+      builder: (ctx) => const AddItemSheet(),
     );
     if (picked == null || !mounted) return;
     await _applyLineUpdate(() => ApiClient.instance.addVoiceOrderLine(
@@ -303,7 +334,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       appBar: AppBar(
         title: const Text('Review voice sale'),
         actions: [
-          TextButton(onPressed: _confirming ? null : _cancel, child: const Text('Cancel')),
+          TextButton(onPressed: _confirming || _cancelling ? null : _cancel, child: const Text('Cancel')),
         ],
       ),
       body: Column(
@@ -314,7 +345,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
               children: [
                 _Header(order: _order),
                 const SizedBox(height: Spacing.l),
-                ..._order.lines.map((l) => _VoiceLineCard(
+                ..._order.lines.map((l) => VoiceLineCard(
                       line: l,
                       busy: _busy,
                       onTapUnresolved: () => _openCandidates(l),
@@ -364,7 +395,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                     ],
                   ),
                   const Spacer(),
-                  BusyFilledButton(busy: _confirming, onPressed: _confirm, label: 'Confirm sale'),
+                  // Not while a line change is still being sent: the sale would
+                  // confirm the lines the server held before it.
+                  BusyFilledButton(
+                      busy: _confirming, onPressed: _busy || _cancelling ? null : _confirm, label: 'Confirm sale'),
                 ],
               ),
             ),
@@ -398,848 +432,11 @@ class _Header extends StatelessWidget {
               style: TextStyle(color: Theme.of(context).colorScheme.outline),
             ),
             const SizedBox(height: Spacing.m),
-            Text('"${order.transcript}"', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic)),
+            Text('"${order.transcript}"',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic)),
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Color/label for a line's status. `resolved` reads as normal (no banner);
-/// `ambiguous` reuses the app's amber "needs a decision" semantic; the three
-/// hard-blocked statuses (`not_found`, `no_stock`, `expired_only`) reuse the
-/// red "failed" semantic since none of them can be sold without either
-/// fixing or skipping the line.
-Color? _statusColor(String status) {
-  switch (status) {
-    case 'ambiguous':
-      return AppColors.statusNeedsReview;
-    case 'not_found':
-    case 'no_stock':
-    case 'expired_only':
-      return AppColors.statusFailed;
-    default:
-      return null;
-  }
-}
-
-String _statusLabel(String status) {
-  switch (status) {
-    case 'ambiguous':
-      return 'Tap to pick the right product';
-    case 'not_found':
-      return 'No matching product — tap to search or skip';
-    case 'no_stock':
-      return 'Out of stock';
-    case 'expired_only':
-      return 'Only expired stock available';
-    default:
-      return '';
-  }
-}
-
-class _VoiceLineCard extends StatefulWidget {
-  final VoiceOrderLine line;
-  final bool busy;
-  final VoidCallback onTapUnresolved;
-  final ValueChanged<VoiceLineCandidate> onPickCandidate;
-  final VoidCallback onToggleSkip;
-  final ValueChanged<String> onSubmitPrescriptionRef;
-  final ValueChanged<String> onSubmitQuantity;
-  final ValueChanged<String> onSubmitMrp;
-  final ValueChanged<String> onSubmitDiscountType;
-  final ValueChanged<String> onSubmitDiscountValue;
-
-  const _VoiceLineCard({
-    required this.line,
-    required this.busy,
-    required this.onTapUnresolved,
-    required this.onPickCandidate,
-    required this.onToggleSkip,
-    required this.onSubmitPrescriptionRef,
-    required this.onSubmitQuantity,
-    required this.onSubmitMrp,
-    required this.onSubmitDiscountType,
-    required this.onSubmitDiscountValue,
-  });
-
-  @override
-  State<_VoiceLineCard> createState() => _VoiceLineCardState();
-}
-
-class _VoiceLineCardState extends State<_VoiceLineCard> {
-  late final TextEditingController _prescriptionController =
-      TextEditingController(text: widget.line.prescriptionRef ?? '');
-  late final TextEditingController _quantityController = TextEditingController(text: numText(widget.line.quantity));
-  late final TextEditingController _mrpController = TextEditingController(text: numText(widget.line.mrp));
-  late final TextEditingController _discountController = TextEditingController(text: numText(widget.line.discountValue));
-
-  @override
-  void didUpdateWidget(covariant _VoiceLineCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.line.prescriptionRef != widget.line.prescriptionRef &&
-        _prescriptionController.text != (widget.line.prescriptionRef ?? '')) {
-      _prescriptionController.text = widget.line.prescriptionRef ?? '';
-    }
-    if (oldWidget.line.quantity != widget.line.quantity && _quantityController.text != numText(widget.line.quantity)) {
-      _quantityController.text = numText(widget.line.quantity);
-    }
-    if (oldWidget.line.mrp != widget.line.mrp && _mrpController.text != numText(widget.line.mrp)) {
-      _mrpController.text = numText(widget.line.mrp);
-    }
-    if (oldWidget.line.discountValue != widget.line.discountValue &&
-        _discountController.text != numText(widget.line.discountValue)) {
-      _discountController.text = numText(widget.line.discountValue);
-    }
-  }
-
-  @override
-  void dispose() {
-    _prescriptionController.dispose();
-    _quantityController.dispose();
-    _mrpController.dispose();
-    _discountController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final line = widget.line;
-    final color = _statusColor(line.status);
-    final tappable = line.status == 'ambiguous' || line.status == 'not_found';
-    final canSkip = line.status != 'resolved' || line.skip; // any unresolved line, or undo-skip a resolved one
-
-    final card = Card(
-      color: color?.withValues(alpha: 0.08),
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.m),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('"${line.rawPhrase}"',
-                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontStyle: FontStyle.italic, fontSize: 12)),
-            const SizedBox(height: Spacing.xs),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ProductName(
-                        '${line.productName ?? '(unmatched)'}'
-                        '${line.strengthSpoken != null ? ' ${line.strengthSpoken}' : ''}',
-                        qualifier: line.productId == null
-                            ? null
-                            : ProductCatalog.instance.index?.qualifier(line.productId!),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      if (line.schedule != null) ...[
-                        const SizedBox(height: Spacing.xs),
-                        _ScheduleBadge(schedule: line.schedule!),
-                      ],
-                      if (line.batchAllocation.length <= 1 && line.batchAllocation.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: Spacing.xs),
-                          child: _BatchLine(alloc: line.batchAllocation.first),
-                        ),
-                      if (line.batchAllocation.length > 1) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(top: Spacing.xs),
-                          child: Text('Split across ${line.batchAllocation.length} batches:',
-                              style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(left: Spacing.m, top: 2),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: line.batchAllocation.map((a) => _BatchLine(alloc: a, indented: true)).toList(),
-                          ),
-                        ),
-                      ],
-                      if (color != null) ...[
-                        const SizedBox(height: Spacing.xs),
-                        Text(_statusLabel(line.status), style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
-                      ],
-                      // Surfaces the same candidates the full picker sheet
-                      // shows, right on the card — a shopkeeper shouldn't
-                      // need an extra tap-to-open-a-sheet step to see the
-                      // 2-3 likely products (e.g. two flavors of the same
-                      // snack) the server already narrowed it down to.
-                      if (tappable && line.candidates.isNotEmpty && !line.skip)
-                        Padding(
-                          padding: const EdgeInsets.only(top: Spacing.xs),
-                          child: Wrap(
-                            spacing: Spacing.xs,
-                            runSpacing: Spacing.xs,
-                            children: [
-                              ...line.candidates.take(4).map((c) => ActionChip(
-                                    label: ProductName(
-                                      c.strength != null && c.strength!.isNotEmpty ? '${c.name} ${c.strength}' : c.name,
-                                      qualifier: ProductCatalog.instance.index?.qualifier(c.id),
-                                    ),
-                                    onPressed: widget.busy ? null : () => widget.onPickCandidate(c),
-                                  )),
-                              if (line.candidates.length > 4)
-                                ActionChip(
-                                  label: const Text('More…'),
-                                  onPressed: widget.busy ? null : widget.onTapUnresolved,
-                                ),
-                            ],
-                          ),
-                        ),
-                      if (line.skip)
-                        Padding(
-                          padding: const EdgeInsets.only(top: Spacing.xs),
-                          child: Chip(
-                            label: const Text('Skipped'),
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: Spacing.s),
-                Text(rupees(line.lineTotal ?? 0), style: amountTextStyle(context)),
-              ],
-            ),
-            if (line.status == 'resolved')
-              Padding(
-                padding: const EdgeInsets.only(top: Spacing.m),
-                child: _PricingRow(
-                  busy: widget.busy,
-                  unit: line.unit,
-                  quantityController: _quantityController,
-                  mrpController: _mrpController,
-                  discountController: _discountController,
-                  discountType: line.discountType ?? 'percentage',
-                  onSubmitQuantity: widget.onSubmitQuantity,
-                  onSubmitMrp: widget.onSubmitMrp,
-                  onSubmitDiscountType: widget.onSubmitDiscountType,
-                  onSubmitDiscountValue: widget.onSubmitDiscountValue,
-                ),
-              ),
-            if (line.schedule == 'H1' && line.isSellable)
-              Padding(
-                padding: const EdgeInsets.only(top: Spacing.m),
-                child: TextField(
-                  controller: _prescriptionController,
-                  enabled: !widget.busy,
-                  decoration: InputDecoration(
-                    labelText: 'Prescription ref. (required for H1)',
-                    isDense: true,
-                    errorText: (line.prescriptionRef == null || line.prescriptionRef!.trim().isEmpty)
-                        ? 'Required before confirming'
-                        : null,
-                  ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: widget.onSubmitPrescriptionRef,
-                  onEditingComplete: () => widget.onSubmitPrescriptionRef(_prescriptionController.text),
-                ),
-              ),
-            if (canSkip)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: widget.busy ? null : widget.onToggleSkip,
-                  child: Text(line.skip ? 'Include again' : 'Skip'),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-
-    if (!tappable) return card;
-    return InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      onTap: widget.busy ? null : widget.onTapUnresolved,
-      child: card,
-    );
-  }
-}
-
-/// Quantity + MRP + discount (percentage-of-MRP or a flat per-unit amount)
-/// editor for a resolved line — every field round-trips through the same
-/// PATCH the rest of this screen uses, so [VoiceOrderReviewScreen] stays the
-/// single source of truth for the recomputed unit_price/line_total.
-class _PricingRow extends StatelessWidget {
-  final bool busy;
-  final String? unit;
-  final TextEditingController quantityController;
-  final TextEditingController mrpController;
-  final TextEditingController discountController;
-  final String discountType;
-  final ValueChanged<String> onSubmitQuantity;
-  final ValueChanged<String> onSubmitMrp;
-  final ValueChanged<String> onSubmitDiscountType;
-  final ValueChanged<String> onSubmitDiscountValue;
-
-  const _PricingRow({
-    required this.busy,
-    required this.unit,
-    required this.quantityController,
-    required this.mrpController,
-    required this.discountController,
-    required this.discountType,
-    required this.onSubmitQuantity,
-    required this.onSubmitMrp,
-    required this.onSubmitDiscountType,
-    required this.onSubmitDiscountValue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            SizedBox(
-              width: 90,
-              child: TextField(
-                controller: quantityController,
-                enabled: !busy,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Qty', isDense: true, suffixText: unit),
-                textInputAction: TextInputAction.done,
-                onSubmitted: onSubmitQuantity,
-                onEditingComplete: () => onSubmitQuantity(quantityController.text),
-              ),
-            ),
-            const SizedBox(width: Spacing.s),
-            Expanded(
-              child: TextField(
-                controller: mrpController,
-                enabled: !busy,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'MRP', isDense: true, prefixText: '₹'),
-                textInputAction: TextInputAction.done,
-                onSubmitted: onSubmitMrp,
-                onEditingComplete: () => onSubmitMrp(mrpController.text),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: Spacing.s),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: discountController,
-                enabled: !busy,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Discount',
-                  isDense: true,
-                  prefixText: discountType == 'amount' ? '₹' : null,
-                  suffixText: discountType == 'percentage' ? '%' : null,
-                ),
-                textInputAction: TextInputAction.done,
-                onSubmitted: onSubmitDiscountValue,
-                onEditingComplete: () => onSubmitDiscountValue(discountController.text),
-              ),
-            ),
-            const SizedBox(width: Spacing.s),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'percentage', label: Text('%')),
-                ButtonSegment(value: 'amount', label: Text('₹')),
-              ],
-              selected: {discountType},
-              showSelectedIcon: false,
-              onSelectionChanged: busy ? null : (s) => onSubmitDiscountType(s.first),
-              style: const ButtonStyle(visualDensity: VisualDensity.compact),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ScheduleBadge extends StatelessWidget {
-  final String schedule;
-  const _ScheduleBadge({required this.schedule});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Spacing.s, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.statusPendingConfirm.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Text(
-        'Schedule $schedule',
-        style: const TextStyle(color: AppColors.statusPendingConfirm, fontWeight: FontWeight.w700, fontSize: 11),
-      ),
-    );
-  }
-}
-
-class _BatchLine extends StatelessWidget {
-  final BatchAllocation alloc;
-  final bool indented;
-  const _BatchLine({required this.alloc, this.indented = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final expiryColor = alloc.expiringSoon ? AppColors.statusNeedsReview : Theme.of(context).colorScheme.outline;
-    return Padding(
-      padding: EdgeInsets.only(top: indented ? 2 : 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Batch ${alloc.batchNo ?? "—"} · qty ${qty(alloc.qty)} · ${rupees(alloc.unitPrice)}',
-              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
-            ),
-          ),
-          if (alloc.expiringSoon) const Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.statusNeedsReview),
-          const SizedBox(width: 2),
-          Text(alloc.expiryDate ?? '—', style: TextStyle(fontSize: 12, color: expiryColor)),
-        ],
-      ),
-    );
-  }
-}
-
-class _CandidatePickerSheet extends StatelessWidget {
-  final VoiceOrderLine line;
-  final void Function(VoiceLineCandidate) onPick;
-  final VoidCallback onSearch;
-  final VoidCallback onSkip;
-  const _CandidatePickerSheet({required this.line, required this.onPick, required this.onSearch, required this.onSkip});
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.l),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('"${line.rawPhrase}"', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: Spacing.s),
-            if (line.candidates.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: Spacing.m),
-                child: Text('No matching products found for this line.'),
-              )
-            else
-              ...line.candidates.map((c) => ListTile(
-                    title: ProductName(c.name, qualifier: ProductCatalog.instance.index?.qualifier(c.id)),
-                    subtitle: (c.strength != null || c.unit != null)
-                        ? Text([c.strength, c.unit].where((s) => s != null && s.isNotEmpty).join(' · '))
-                        : null,
-                    onTap: () => onPick(c),
-                  )),
-            const SizedBox(height: Spacing.s),
-            // Escape hatch for when none of the above are actually right —
-            // none of these candidates are guaranteed correct, they're the
-            // LLM/phonetic-match's best guesses.
-            OutlinedButton.icon(
-              onPressed: onSearch,
-              icon: const Icon(Icons.search),
-              label: const Text('Search inventory instead'),
-            ),
-            const SizedBox(height: Spacing.s),
-            OutlinedButton(onPressed: onSkip, child: const Text('Skip this line')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AddItemResult {
-  final ProductSummary product;
-  final double quantity;
-  final String unit;
-  const _AddItemResult({required this.product, required this.quantity, required this.unit});
-}
-
-/// Search-and-pick sheet for "Add item" — a shopkeeper naming one product
-/// the voice parse missed, rather than re-recording a whole note for it.
-/// Pops an [_AddItemResult], or null if backed out.
-class _AddItemSheet extends StatefulWidget {
-  const _AddItemSheet();
-
-  @override
-  State<_AddItemSheet> createState() => _AddItemSheetState();
-}
-
-class _AddItemSheetState extends State<_AddItemSheet> {
-  static const _units = ['tablet', 'strip', 'capsule', 'bottle', 'tube', 'vial', 'ampoule', 'sachet'];
-
-  final _searchController = TextEditingController();
-  final _qtyController = TextEditingController(text: '1');
-  final _catalog = ProductCatalog.instance;
-
-  /// What is typed, searched on the phone as each letter is typed (DAS-94).
-  String _query = '';
-  String? _error;
-  ProductSummary? _selected;
-  String _unit = 'tablet';
-
-  // "Not in inventory" sub-flow — a small form to create the product (and
-  // its first batch) right here, instead of leaving the shopkeeper stuck
-  // with nothing to pick.
-  bool _creatingNew = false;
-  bool _creating = false;
-  final _newNameController = TextEditingController();
-  final _newMrpController = TextEditingController();
-  final _newGstController = TextEditingController(text: '0');
-
-  @override
-  void initState() {
-    super.initState();
-    _catalog.addListener(_onCatalog);
-    // The list the other tabs hold is searched at once; a fresh one is asked
-    // for alongside, so the stock shown here is current.
-    unawaited(_catalog.refresh());
-  }
-
-  void _onCatalog() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _catalog.removeListener(_onCatalog);
-    _searchController.dispose();
-    _qtyController.dispose();
-    _newNameController.dispose();
-    _newMrpController.dispose();
-    _newGstController.dispose();
-    super.dispose();
-  }
-
-  void _confirm() {
-    final qty = double.tryParse(_qtyController.text.trim());
-    if (qty == null || qty <= 0) {
-      setState(() => _error = 'Enter a quantity greater than 0.');
-      return;
-    }
-    Navigator.of(context).pop(_AddItemResult(product: _selected!, quantity: qty, unit: _unit));
-  }
-
-  void _startCreatingNew() {
-    _newNameController.text = _searchController.text.trim();
-    setState(() {
-      _creatingNew = true;
-      _error = null;
-    });
-  }
-
-  Future<void> _createProduct() async {
-    final name = _newNameController.text.trim();
-    final mrp = double.tryParse(_newMrpController.text.trim());
-    final qty = double.tryParse(_qtyController.text.trim());
-    final gst = double.tryParse(_newGstController.text.trim()) ?? 0;
-    if (name.isEmpty) {
-      setState(() => _error = 'Enter a product name.');
-      return;
-    }
-    if (mrp == null || mrp <= 0) {
-      setState(() => _error = 'Enter an MRP greater than 0.');
-      return;
-    }
-    if (qty == null || qty <= 0) {
-      setState(() => _error = 'Enter a quantity in stock greater than 0.');
-      return;
-    }
-    setState(() {
-      _creating = true;
-      _error = null;
-    });
-    try {
-      final created = await ApiClient.instance.createProduct(
-        name: name,
-        mrp: mrp,
-        quantity: qty,
-        unit: _unit,
-        gstPct: gst,
-      );
-      if (!mounted) return;
-      unawaited(_catalog.refresh()); // so every search finds it from now on
-      setState(() {
-        _selected = created;
-        _creatingNew = false;
-      });
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Could not create product: $e');
-    } finally {
-      if (mounted) setState(() => _creating = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = _selected;
-    final index = _catalog.index;
-    final typed = _query.trim().isNotEmpty;
-    // Nothing until something is typed: the whole shop is not a pick list.
-    final results = typed && index != null ? index.match(_query) : const <ProductSummary>[];
-    final loading = index == null && _catalog.isLoading;
-    final failure =
-        _error ?? (index == null && _catalog.lastError != null ? 'Could not load medicines: ${_catalog.lastError}' : null);
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: Spacing.l,
-          right: Spacing.l,
-          top: Spacing.l,
-          bottom: MediaQuery.of(context).viewInsets.bottom + Spacing.l,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_creatingNew ? 'Add new product' : 'Add item', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: Spacing.m),
-            if (_creatingNew) ...[
-              TextField(
-                controller: _newNameController,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Product name', isDense: true),
-              ),
-              const SizedBox(height: Spacing.s),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _newMrpController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'MRP', isDense: true, prefixText: '₹'),
-                    ),
-                  ),
-                  const SizedBox(width: Spacing.s),
-                  Expanded(
-                    child: TextField(
-                      controller: _newGstController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'GST %', isDense: true),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: Spacing.s),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _qtyController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Quantity in stock', isDense: true),
-                    ),
-                  ),
-                  const SizedBox(width: Spacing.s),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _unit,
-                      decoration: const InputDecoration(labelText: 'Unit', isDense: true),
-                      items: _units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                      onChanged: (v) {
-                        if (v != null) setState(() => _unit = v);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              ErrorText(_error, padding: const EdgeInsets.only(top: Spacing.s)),
-              const SizedBox(height: Spacing.m),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: _creating ? null : () => setState(() => _creatingNew = false),
-                    child: const Text('Back to search'),
-                  ),
-                  const Spacer(),
-                  BusyFilledButton(busy: _creating, onPressed: _createProduct, label: 'Create & continue'),
-                ],
-              ),
-            ] else if (selected == null) ...[
-              TextField(
-                key: const ValueKey('add-item-search'),
-                controller: _searchController,
-                autofocus: true,
-                onChanged: (v) => setState(() => _query = v),
-                decoration: const InputDecoration(
-                  labelText: 'Search a medicine',
-                  isDense: true,
-                  suffixIcon: Icon(Icons.search),
-                ),
-                textInputAction: TextInputAction.search,
-              ),
-              const SizedBox(height: Spacing.s),
-              if (loading) const Center(child: Padding(padding: EdgeInsets.all(Spacing.m), child: CircularProgressIndicator())),
-              ErrorText(failure, padding: const EdgeInsets.only(top: Spacing.s)),
-              // A fixed height, not shrinkWrap: a shrink-wrapped list builds
-              // every row to measure itself, and "p" alone matches hundreds.
-              if (results.isNotEmpty)
-                SizedBox(
-                  height: (results.length * 64.0).clamp(0, MediaQuery.of(context).size.height * 0.4),
-                  child: ListView.builder(
-                    itemCount: results.length,
-                    itemBuilder: (context, i) {
-                      final p = results[i];
-                      return ListTile(
-                        title: ProductName(p.name, qualifier: index?.qualifier(p.id)),
-                        subtitle: Text('${qty(p.quantityOnHand)} in stock'),
-                        enabled: p.quantityOnHand > 0,
-                        onTap: () => setState(() => _selected = p),
-                      );
-                    },
-                  ),
-                ),
-              if (typed && index != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.s),
-                  child: TextButton.icon(
-                    onPressed: _startCreatingNew,
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                    label: const Text("Can't find it? Add as new product"),
-                  ),
-                ),
-            ] else ...[
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: ProductName(selected.name,
-                    qualifier: index?.qualifier(selected.id), style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${qty(selected.quantityOnHand)} in stock'),
-                trailing: TextButton(onPressed: () => setState(() => _selected = null), child: const Text('Change')),
-              ),
-              const SizedBox(height: Spacing.s),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _qtyController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Qty', isDense: true),
-                    ),
-                  ),
-                  const SizedBox(width: Spacing.s),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _unit,
-                      decoration: const InputDecoration(labelText: 'Unit', isDense: true),
-                      items: _units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                      onChanged: (v) {
-                        if (v != null) setState(() => _unit = v);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              ErrorText(_error, padding: const EdgeInsets.only(top: Spacing.s)),
-              const SizedBox(height: Spacing.m),
-              FilledButton(onPressed: _confirm, child: const Text('Add to order')),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Wraps the existing (unmodified) [SaleReceiptScreen] with a 30-second
-/// "Undo" banner — voice sales are the one flow where a misheard line can
-/// slip all the way to a confirmed sale, so a brief undo window matters more
-/// here than on the manual sell flow.
-class _VoiceSaleReceiptWithUndo extends StatefulWidget {
-  final int saleId;
-  final int voiceOrderId;
-  const _VoiceSaleReceiptWithUndo({required this.saleId, required this.voiceOrderId});
-
-  @override
-  State<_VoiceSaleReceiptWithUndo> createState() => _VoiceSaleReceiptWithUndoState();
-}
-
-class _VoiceSaleReceiptWithUndoState extends State<_VoiceSaleReceiptWithUndo> {
-  static const _undoWindow = 30;
-  int _secondsLeft = _undoWindow;
-  Timer? _timer;
-  bool _undoing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_secondsLeft <= 1) {
-        t.cancel();
-        setState(() => _secondsLeft = 0);
-      } else {
-        setState(() => _secondsLeft -= 1);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _undo() async {
-    if (_undoing) return;
-    setState(() => _undoing = true);
-    try {
-      await ApiClient.instance.undoVoiceOrder(widget.voiceOrderId);
-      if (!mounted) return;
-      Navigator.of(context).pop('undone');
-    } catch (e) {
-      if (!mounted) return;
-      context.say('Could not undo: $e');
-      setState(() => _undoing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        SaleReceiptScreen(saleId: widget.saleId),
-        if (_secondsLeft > 0)
-          Positioned(
-            left: Spacing.l,
-            right: Spacing.l,
-            bottom: Spacing.l,
-            child: SafeArea(
-              top: false,
-              child: Material(
-                color: Theme.of(context).colorScheme.inverseSurface,
-                borderRadius: BorderRadius.circular(AppRadius.control),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Spacing.l, vertical: Spacing.m),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Sale recorded · undo within ${_secondsLeft}s',
-                          style: TextStyle(color: Theme.of(context).colorScheme.onInverseSurface),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _undoing ? null : _undo,
-                        child: _undoing
-                            ? const ButtonSpinner()
-                            : Text('UNDO', style: TextStyle(color: Theme.of(context).colorScheme.inversePrimary)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

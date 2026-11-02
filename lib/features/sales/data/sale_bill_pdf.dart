@@ -8,6 +8,7 @@ import '../../../core/config/gst_states.dart';
 import '../../auth/models/account.dart';
 import '../models/amount_words.dart';
 import '../models/sale.dart';
+import '../../../core/utils/format.dart';
 
 /// The two weights of the bill's font. Noto Sans (SIL OFL, bundled under
 /// assets/fonts): the PDF's built-in fonts have no ₹.
@@ -96,14 +97,13 @@ String _expiry(String? iso) {
 
 String _money(double v) => v.toStringAsFixed(2);
 
-String _qty(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
 /// A line's quantity in the Qty column: "20 tab" when sold by the tablet
 /// (DAS-160), so its rate reads as a tablet's; a pack line as before.
 String _lineQty(SaleLineItemDetail li) {
-  if (!li.loose) return _qty(li.qty);
+  if (!li.loose) return numText(li.qty);
   final short = switch (li.unitKind) { 'tablet' => 'tab', 'capsule' => 'cap', _ => 'unit' };
-  return '${_qty(li.qty)} $short';
+  return '${numText(li.qty)} $short';
 }
 
 /// "98390 12345" from the 10 digits the server stores.
@@ -232,7 +232,7 @@ pw.Widget _items(SaleDetail sale, bool taxInvoice) {
             _lineQty(li),
             _money(li.rate),
             li.discountTotal > 0 ? _money(li.discountTotal) : '',
-            if (taxInvoice) _qty(li.gstPct),
+            if (taxInvoice) numText(li.gstPct),
             _money(li.netAmount),
           ];
           return pw.TableRow(children: [
@@ -280,7 +280,7 @@ pw.Widget _totals(SaleDetail sale, bool taxInvoice) {
               ),
               for (final r in summary)
                 pw.TableRow(children: [
-                  _cell(_qty(r.rate), align: pw.TextAlign.center),
+                  _cell(numText(r.rate), align: pw.TextAlign.center),
                   _cell(_money(r.taxable), align: pw.TextAlign.right),
                   _cell(_money(r.cgst), align: pw.TextAlign.right),
                   _cell(_money(r.sgst), align: pw.TextAlign.right),

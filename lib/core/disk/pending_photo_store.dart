@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:path_provider/path_provider.dart';
 
 import 'backup_exclusion.dart';
 
@@ -30,12 +29,8 @@ class PendingPhotoStore {
   static Future<Directory> _directory() async {
     final cached = _dir;
     if (cached != null) return cached;
-    final base = await getApplicationSupportDirectory();
-    final dir = Directory('${base.path}/$_folder');
-    if (!await dir.exists()) await dir.create(recursive: true);
     // The only copy of a bill until it uploads: kept, but not in iCloud.
-    await excludeFromBackup(dir);
-    return _dir = dir;
+    return _dir = await appSupportFolder(_folder);
   }
 
   static Future<File> _file(String id) async => File('${(await _directory()).path}/$id.jpg');

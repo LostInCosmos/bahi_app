@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
@@ -56,10 +55,7 @@ class BatchStore {
   static Future<Directory> _directory() async {
     final cached = _dir;
     if (cached != null) return cached;
-    final dir = Directory('${(await getApplicationSupportDirectory()).path}/capture_batch');
-    if (!await dir.exists()) await dir.create(recursive: true);
-    await excludeFromBackup(dir);
-    return _dir = dir;
+    return _dir = await appSupportFolder('capture_batch');
   }
 
   /// Forgets the folder, for a test that changes it.

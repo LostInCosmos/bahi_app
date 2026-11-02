@@ -64,17 +64,6 @@ void main() {
       expect(queued.maxAttempts, 3, reason: 'a sensible default, not a crash');
     });
 
-    test('a done job is not settled until it is saved (DAS-79)', () {
-      // A clean bill whose own save attempt failed, or a still-flagged one,
-      // sits "done" for a long time; only becoming saved (or truly failing)
-      // means nothing more will happen to it.
-      expect(_brief('done').isSettled, isFalse, reason: 'unsaved');
-      expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done', 'saved': true}).isSettled, isTrue);
-      expect(_brief('failed').isSettled, isTrue, reason: 'saved is irrelevant once it has failed');
-      expect(_brief('cancelled').isSettled, isTrue);
-      expect(_brief('processing').isSettled, isFalse, reason: 'still in flight, not just unsaved');
-    });
-
     test('`saved` parses from the wire, defaulting to false for an old server', () {
       expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done', 'saved': true}).saved, isTrue);
       expect(JobStatusBrief.fromJson({'job_id': 1, 'status': 'done'}).saved, isFalse);

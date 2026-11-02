@@ -10,183 +10,9 @@ import '../../../core/utils/format.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../data/invoice_api.dart';
 import '../models/invoice.dart';
+import '../widgets/line_item_card.dart';
 import '../widgets/saved_tick.dart';
-
-/// How a number is written into a field, and read back: see [numText]. A
-/// whole number stays whole and a fraction keeps Dart's own spelling, so the
-/// round trip through `double.tryParse` is exact.
-String _fmt(double v) => numText(v);
-String _fmtNullable(double? v) => numText(v);
-
-/// A bill doesn't always print a combined GST% — sometimes it only gives
-/// CGST/SGST rates, or only the rupee amounts. Rather than leaving the
-/// field blank (or hiding it) in those cases, derive it: CGST and SGST are
-/// always equal for an intrastate sale, so whichever side is missing
-/// mirrors the one that's present, and a rate not given at all is worked
-/// back out of its amount (amount / (rate*qty) * 100).
-double _computeGstPct(LineItem item) {
-  if (item.gstPct > 0) return item.gstPct;
-  final cgstPct = item.cgstPct ?? 0;
-  final sgstPct = item.sgstPct ?? 0;
-  if (cgstPct > 0 || sgstPct > 0) {
-    final c = cgstPct > 0 ? cgstPct : sgstPct;
-    final s = sgstPct > 0 ? sgstPct : cgstPct;
-    return c + s;
-  }
-  final rateQty = item.rate * item.qty;
-  if (rateQty > 0) {
-    final amount = item.cgstAmount ?? item.sgstAmount;
-    if (amount != null && amount > 0) {
-      return (amount / rateQty * 100) * 2;
-    }
-  }
-  return item.gstPct;
-}
-
-/// Backend validation issues on a line item come back as "Line [N].field"
-/// (N is 0-based, matching this screen's own item index) — not the
-/// "line_items[N].field" shape this screen used to expect. Shared here so
-/// both the row-to-issues split below and each card's own field lookup stay
-/// in sync with whatever the backend actually sends.
-final _lineItemIssuePattern = RegExp(r'^Line \[(\d+)\]\.(.+)$');
-
-/// Holds one line item's editable fields as controllers so the form can be
-/// built/torn down per row without re-parsing on every keystroke.
-class _LineItemForm {
-  // Not editable UI fields (no TextEditingController) — a printed GST rate
-  // is a fixed government slab, not something that goes stale when qty/
-  // rate/discount changes the way cgstAmount/sgstAmount do, so there's no
-  // "recompute" story for these the way forceRederiveTax has for the
-  // amounts below. Plain pass-through fields, carried from the incoming
-  // LineItem straight back out — toLineItem() used to just never set
-  // these, silently dropping a bill's ONLY tax signal on every trip
-  // through this screen when the extraction gave a rate (cgst_pct/
-  // sgst_pct) rather than a plain gst_pct or a rupee amount.
-  double? cgstPct;
-  double? sgstPct;
-  double? igstPct;
-  // The server's per-unit rate after discount (DAS-136): not on the form,
-  // carried back out so the save sends what the server sent.
-  double? netRate;
-
-  // Decided once, from whatever the extraction actually printed — a bill
-  // states its discount as either a percentage or a flat amount, never
-  // both, so only the one that's actually present is worth showing/editing.
-  final bool showDiscountAmount;
-  // The printed Disc value the server resolved from (DAS-9). Not editable —
-  // the two boxes below are. Kept so revalidate can re-resolve it, and
-  // dropped the moment the user overrides either box.
-  final double? printedDiscount;
-  final String _origDiscountPct;
-  final String _origDiscountAmount;
-
-  final TextEditingController productName;
-  final TextEditingController pack;
-  final TextEditingController batchNo;
-  final TextEditingController expiry;
-  final TextEditingController hsnCode;
-  final TextEditingController qty;
-  final TextEditingController freeQty;
-  final TextEditingController freeScheme;
-  final TextEditingController mrp;
-  final TextEditingController rate;
-  final TextEditingController discountPct;
-  final TextEditingController discountAmount;
-  final TextEditingController gstPct;
-  final TextEditingController cgstAmount;
-  final TextEditingController sgstAmount;
-  final TextEditingController igstAmount;
-  final TextEditingController grossAmount;
-
-  _LineItemForm.fromLineItem(LineItem item)
-      : printedDiscount = item.discount,
-        _origDiscountPct = _fmtNullable(item.discountPct),
-        _origDiscountAmount = _fmtNullable(item.discountAmount),
-        cgstPct = item.cgstPct,
-        sgstPct = item.sgstPct,
-        igstPct = item.igstPct,
-        netRate = item.netRate,
-        showDiscountAmount =
-            (item.discountPct == null || item.discountPct == 0) &&
-                item.discountAmount != null,
-        productName = TextEditingController(text: item.productName),
-        pack = TextEditingController(text: item.pack ?? ''),
-        batchNo = TextEditingController(text: item.batchNo ?? ''),
-        expiry = TextEditingController(text: item.expiry ?? ''),
-        hsnCode = TextEditingController(text: item.hsnCode ?? ''),
-        qty = TextEditingController(text: _fmt(item.qty)),
-        freeQty = TextEditingController(text: _fmtNullable(item.freeQty)),
-        freeScheme = TextEditingController(text: item.freeScheme ?? ''),
-        mrp = TextEditingController(text: _fmtNullable(item.mrp)),
-        rate = TextEditingController(text: _fmt(item.rate)),
-        discountPct =
-            TextEditingController(text: _fmtNullable(item.discountPct)),
-        discountAmount =
-            TextEditingController(text: _fmtNullable(item.discountAmount)),
-        gstPct = TextEditingController(text: _fmt(_computeGstPct(item))),
-        cgstAmount = TextEditingController(text: _fmtNullable(item.cgstAmount)),
-        sgstAmount = TextEditingController(text: _fmtNullable(item.sgstAmount)),
-        igstAmount = TextEditingController(text: _fmtNullable(item.igstAmount)),
-        grossAmount = TextEditingController(text: _fmt(item.grossAmount));
-
-  _LineItemForm.empty() : this.fromLineItem(LineItem());
-
-  /// True once the user has typed over either discount box, so their value
-  /// must win over the printed figure the server resolved earlier.
-  bool get discountEdited =>
-      discountPct.text != _origDiscountPct ||
-      discountAmount.text != _origDiscountAmount;
-
-  LineItem toLineItem() => LineItem(
-        productName: productName.text,
-        pack: pack.text.isEmpty ? null : pack.text,
-        batchNo: batchNo.text.isEmpty ? null : batchNo.text,
-        expiry: expiry.text.isEmpty ? null : expiry.text,
-        hsnCode: hsnCode.text.isEmpty ? null : hsnCode.text,
-        qty: double.tryParse(qty.text) ?? 0,
-        freeQty: double.tryParse(freeQty.text),
-        freeScheme: freeScheme.text.isEmpty ? null : freeScheme.text,
-        mrp: double.tryParse(mrp.text),
-        rate: double.tryParse(rate.text) ?? 0,
-        discount: discountEdited ? null : printedDiscount,
-        discountPct: double.tryParse(discountPct.text),
-        discountAmount: double.tryParse(discountAmount.text),
-        gstPct: double.tryParse(gstPct.text) ?? 0,
-        cgstPct: cgstPct,
-        sgstPct: sgstPct,
-        igstPct: igstPct,
-        cgstAmount: double.tryParse(cgstAmount.text),
-        sgstAmount: double.tryParse(sgstAmount.text),
-        igstAmount: double.tryParse(igstAmount.text),
-        grossAmount: double.tryParse(grossAmount.text) ?? 0,
-        netRate: netRate,
-      );
-
-  void dispose() {
-    for (final c in [
-      productName,
-      pack,
-      batchNo,
-      expiry,
-      hsnCode,
-      qty,
-      freeQty,
-      freeScheme,
-      mrp,
-      rate,
-      discountPct,
-      discountAmount,
-      gstPct,
-      cgstAmount,
-      sgstAmount,
-      igstAmount,
-      grossAmount,
-    ]) {
-      c.dispose();
-    }
-  }
-}
-
+import '../widgets/section_card.dart';
 class ReviewScreen extends StatefulWidget {
   final ExtractionResult result;
   // Fired right after a revalidate call completes (clean or not) — lets the
@@ -261,7 +87,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   double? totalDiscount2;
   double? totalGst;
 
-  late List<_LineItemForm> items;
+  late List<LineItemForm> items;
 
   late final TextEditingController subtotal;
   late final TextEditingController totalDiscount;
@@ -318,7 +144,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final header = <String, ValidationIssue>{};
     final lines = <int, List<ValidationIssue>>{};
     for (final i in _issues) {
-      final m = _lineItemIssuePattern.firstMatch(i.field);
+      final m = lineItemIssuePattern.firstMatch(i.field);
       if (m == null) {
         header[i.field] = i;
       } else {
@@ -336,18 +162,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     // The supplier's GSTIN is settled by our team, not flagged to the shop
     // (ADR-008, then DAS-71). The server already withholds it, but a stale
     // issue list from an older build must not put the red underline back.
-    final issue = field == 'seller_gstin' ? null : _headerIssues[field];
-    if (issue == null) return InputDecoration(labelText: label);
-    if (issue.isError) {
-      return InputDecoration(
-          labelText: label, errorText: issue.message, errorMaxLines: 3);
-    }
-    return InputDecoration(
-      labelText: label,
-      helperText: issue.message,
-      helperMaxLines: 3,
-      helperStyle: const TextStyle(color: Color(0xFFB45309)),
-    );
+    return issueDecoration(label, field == 'seller_gstin' ? null : _headerIssues[field]);
   }
 
   @override
@@ -372,16 +187,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
     sellerPhone = inv.sellerPhone;
     totalDiscount2 = inv.totals.totalDiscount2;
     totalGst = inv.totals.totalGst;
-    items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
+    items = inv.lineItems.map((i) => LineItemForm.fromLineItem(i)).toList();
 
-    subtotal = TextEditingController(text: _fmt(inv.totals.subtotal));
+    subtotal = TextEditingController(text: numText(inv.totals.subtotal));
     totalDiscount =
-        TextEditingController(text: _fmtNullable(inv.totals.totalDiscount));
-    totalCgst = TextEditingController(text: _fmt(inv.totals.totalCgst));
-    totalSgst = TextEditingController(text: _fmt(inv.totals.totalSgst));
-    totalIgst = TextEditingController(text: _fmtNullable(inv.totals.totalIgst));
-    roundOff = TextEditingController(text: _fmtNullable(inv.totals.roundOff));
-    grandTotal = TextEditingController(text: _fmt(inv.totals.grandTotal));
+        TextEditingController(text: numText(inv.totals.totalDiscount));
+    totalCgst = TextEditingController(text: numText(inv.totals.totalCgst));
+    totalSgst = TextEditingController(text: numText(inv.totals.totalSgst));
+    totalIgst = TextEditingController(text: numText(inv.totals.totalIgst));
+    roundOff = TextEditingController(text: numText(inv.totals.roundOff));
+    grandTotal = TextEditingController(text: numText(inv.totals.grandTotal));
     _sent = _snapshot();
     // Android may end a hidden app without warning: what is typed goes to the
     // server when the app is put away, not only when the form is left.
@@ -438,22 +253,33 @@ class _ReviewScreenState extends State<ReviewScreen> {
     for (final item in items) {
       item.dispose();
     }
-    items = inv.lineItems.map((i) => _LineItemForm.fromLineItem(i)).toList();
+    items = inv.lineItems.map((i) => LineItemForm.fromLineItem(i)).toList();
     _applyInvoiceToControllers(inv);
     _issues = List<ValidationIssue>.from(issues);
     _indexIssues();
     _sent = _snapshot();
   }
 
+  /// One of the stale banner's two answers is being sent: both its buttons
+  /// are off meanwhile, so a second tap cannot delete the draft twice or
+  /// write it twice.
+  bool _resolvingStale = false;
+
   /// "Use their version" on a stale draft: the corrections go, the read is
   /// shown.
   Future<void> _useTeamVersion() async {
     final jobId = widget.jobId;
-    if (jobId == null) return;
+    if (jobId == null || _resolvingStale) return;
+    setState(() => _resolvingStale = true);
     try {
       await ApiClient.instance.deleteDraft(jobId);
     } catch (e) {
-      if (mounted) setState(() => _error = "Couldn't drop your corrections: $e");
+      if (mounted) {
+        setState(() {
+          _resolvingStale = false;
+          _error = "Couldn't drop your corrections: $e";
+        });
+      }
       return;
     }
     if (!mounted) return;
@@ -463,6 +289,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _stale = false;
       _rebase = false;
       _error = null;
+      _resolvingStale = false;
     });
     widget.onDraftDropped?.call();
   }
@@ -535,7 +362,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     super.dispose();
   }
 
-  void _addItem() => setState(() => items.add(_LineItemForm.empty()));
+  void _addItem() => setState(() => items.add(LineItemForm.empty()));
 
   void _removeItem(int index) => setState(() {
         items[index].dispose();
@@ -552,7 +379,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
     if (picked != null) {
       setState(
-          () => invoiceDate.text = picked.toIso8601String().split('T').first);
+          () => invoiceDate.text = isoDate(picked)!);
     }
   }
 
@@ -620,13 +447,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
     totalGst = inv.totals.totalGst;
     placeOfSupply.text = inv.placeOfSupply ?? '';
 
-    subtotal.text = _fmt(inv.totals.subtotal);
-    totalDiscount.text = _fmtNullable(inv.totals.totalDiscount);
-    totalCgst.text = _fmt(inv.totals.totalCgst);
-    totalSgst.text = _fmt(inv.totals.totalSgst);
-    totalIgst.text = _fmtNullable(inv.totals.totalIgst);
-    roundOff.text = _fmtNullable(inv.totals.roundOff);
-    grandTotal.text = _fmt(inv.totals.grandTotal);
+    subtotal.text = numText(inv.totals.subtotal);
+    totalDiscount.text = numText(inv.totals.totalDiscount);
+    totalCgst.text = numText(inv.totals.totalCgst);
+    totalSgst.text = numText(inv.totals.totalSgst);
+    totalIgst.text = numText(inv.totals.totalIgst);
+    roundOff.text = numText(inv.totals.roundOff);
+    grandTotal.text = numText(inv.totals.grandTotal);
 
     for (var i = 0; i < items.length && i < inv.lineItems.length; i++) {
       final item = inv.lineItems[i];
@@ -636,18 +463,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
       form.batchNo.text = item.batchNo ?? '';
       form.expiry.text = item.expiry ?? '';
       form.hsnCode.text = item.hsnCode ?? '';
-      form.qty.text = _fmt(item.qty);
-      form.freeQty.text = _fmtNullable(item.freeQty);
+      form.qty.text = numText(item.qty);
+      form.freeQty.text = numText(item.freeQty);
       form.freeScheme.text = item.freeScheme ?? '';
-      form.mrp.text = _fmtNullable(item.mrp);
-      form.rate.text = _fmt(item.rate);
-      form.discountPct.text = _fmtNullable(item.discountPct);
-      form.discountAmount.text = _fmtNullable(item.discountAmount);
-      form.gstPct.text = _fmt(_computeGstPct(item));
-      form.cgstAmount.text = _fmtNullable(item.cgstAmount);
-      form.sgstAmount.text = _fmtNullable(item.sgstAmount);
-      form.igstAmount.text = _fmtNullable(item.igstAmount);
-      form.grossAmount.text = _fmt(item.grossAmount);
+      form.mrp.text = numText(item.mrp);
+      form.rate.text = numText(item.rate);
+      form.discountPct.text = numText(item.discountPct);
+      form.discountAmount.text = numText(item.discountAmount);
+      form.gstPct.text = numText(computeGstPct(item));
+      form.cgstAmount.text = numText(item.cgstAmount);
+      form.sgstAmount.text = numText(item.sgstAmount);
+      form.igstAmount.text = numText(item.igstAmount);
+      form.grossAmount.text = numText(item.grossAmount);
       // The server's own answer, so the next save echoes it rather than the
       // rates this form was opened with.
       form.cgstPct = item.cgstPct;
@@ -808,8 +635,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
               const Text('Our team updated this bill after you corrected it. Your corrections are kept.'),
               const SizedBox(height: Spacing.s),
               Wrap(spacing: Spacing.s, children: [
-                OutlinedButton(onPressed: _useTeamVersion, child: const Text('Use their version')),
-                FilledButton(onPressed: _keepMine, child: const Text('Keep my corrections')),
+                OutlinedButton(onPressed: _resolvingStale ? null : _useTeamVersion, child: const Text('Use their version')),
+                FilledButton(onPressed: _resolvingStale ? null : _keepMine, child: const Text('Keep my corrections')),
               ]),
             ]),
           ),
@@ -829,11 +656,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 child: _buildPhotoPane(context, box.maxHeight),
               ),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(Spacing.l),
-                  children: [
+                child: Builder(builder: (context) {
+                  // The header widgets first, then one card per line, then
+                  // the totals and buttons: built as they scroll into view,
+                  // since a long bill has dozens of lines.
+                  final before = <Widget>[
                     if (_stale) _staleBanner(colors),
                     AnimatedSize(
+                      // Never motion(): AnimatedSize cannot take Duration.zero — it finishes
+                      // inside its own layout and asserts (seen on the e2e emulator).
                       duration: const Duration(milliseconds: 200),
                       alignment: Alignment.topCenter,
                       child: _issues.isEmpty
@@ -885,7 +716,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                               ),
                             ),
                     ),
-                    _SectionCard(
+                    SectionCard(
                       title: 'Seller',
                       icon: Icons.storefront_outlined,
                       children: [
@@ -912,7 +743,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       ],
                     ),
                     const SizedBox(height: Spacing.l),
-                    _SectionCard(
+                    SectionCard(
                       title: 'Invoice details',
                       icon: Icons.description_outlined,
                       children: [
@@ -978,15 +809,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       ],
                     ),
                     const SizedBox(height: Spacing.s),
-                    ...List.generate(
-                      items.length,
-                      (i) => _LineItemCard(
-                          form: items[i],
-                          issues: _issuesForLineItem(i),
-                          onRemove: () => _removeItem(i)),
-                    ),
+                  ];
+                  final after = <Widget>[
                     const SizedBox(height: Spacing.l),
-                    _SectionCard(
+                    SectionCard(
                       title: 'Totals',
                       icon: Icons.calculate_outlined,
                       children: [
@@ -1019,7 +845,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                             "I've checked the flagged fields — save anyway"),
                       ),
                     AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
+                      duration: motion(context, 180),
                       child: _error == null
                           ? const SizedBox.shrink()
                           : Padding(
@@ -1044,8 +870,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       busyLabel: 'Saving…',
                     ),
                     const SizedBox(height: Spacing.xl),
-                  ],
-                ),
+                  ];
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(Spacing.l),
+                    itemCount: before.length + items.length + after.length,
+                    itemBuilder: (context, i) {
+                      if (i < before.length) return before[i];
+                      final li = i - before.length;
+                      if (li < items.length) {
+                        return LineItemCard(
+                            form: items[li],
+                            issues: _issuesForLineItem(li),
+                            onRemove: () => _removeItem(li));
+                      }
+                      return after[li - items.length];
+                    },
+                  );
+                }),
               ),
             ],
           ),
@@ -1258,254 +1099,6 @@ class _PhotoButton extends StatelessWidget {
           child: Icon(icon, color: Colors.white, size: 20),
         ),
       ),
-    );
-  }
-}
-
-/// Groups a chunk of the form under a titled card with a leading icon —
-/// splits the review form into scannable sections (seller, invoice, totals)
-/// instead of one long undifferentiated list of fields.
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-  const _SectionCard(
-      {required this.title, required this.icon, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.l),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              Icon(icon,
-                  size: 18, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: Spacing.xs),
-              Text(title, style: Theme.of(context).textTheme.titleSmall),
-            ]),
-            const SizedBox(height: Spacing.m),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LineItemCard extends StatefulWidget {
-  final _LineItemForm form;
-  final List<ValidationIssue> issues;
-  final VoidCallback onRemove;
-  const _LineItemCard(
-      {required this.form, required this.issues, required this.onRemove});
-
-  @override
-  State<_LineItemCard> createState() => _LineItemCardState();
-}
-
-class _LineItemCardState extends State<_LineItemCard> {
-  // Collapsed by default so a long bill doesn't force scrolling past every
-  // clean row to find the one that needs attention — a row with an issue
-  // starts open instead, since that's exactly the one the user came here
-  // to look at.
-  late bool _expanded = widget.issues.isNotEmpty;
-
-  @override
-  void didUpdateWidget(_LineItemCard old) {
-    super.didUpdateWidget(old);
-    // A fresh revalidate can put a NEW issue on a row that was clean (and
-    // collapsed) before — force it open so the user sees it without having
-    // to go hunting through every row again. A row the user already had
-    // open, or already had open for a still-standing issue, is left alone
-    // either way (including one they manually collapsed while it still has
-    // an issue — that's their call, not something to fight every rebuild).
-    if (old.issues.isEmpty && widget.issues.isNotEmpty) {
-      _expanded = true;
-    }
-  }
-
-  // issues here are already filtered to this row by the parent; strip the
-  // "Line [N]." prefix so lookups are by plain field name (e.g. "qty").
-  // Built once per build (seventeen fields ask), in [build].
-  Map<String, ValidationIssue> _bySuffix = const {};
-
-  InputDecoration _decoration(String label, String field) {
-    var issue = _bySuffix[field];
-    // "gross_amount doesn't add up" means qty, rate and the amount don't
-    // reconcile together — the backend can only attach the issue to one
-    // field, but the actual typo could just as easily be in qty or rate, so
-    // flag all three rather than leaving two of them looking clean.
-    if (issue == null && (field == 'qty' || field == 'rate')) {
-      issue = _bySuffix['gross_amount'];
-    }
-    if (issue == null) return InputDecoration(labelText: label);
-    if (issue.isError) {
-      return InputDecoration(
-          labelText: label, errorText: issue.message, errorMaxLines: 3);
-    }
-    return InputDecoration(
-      labelText: label,
-      helperText: issue.message,
-      helperMaxLines: 3,
-      helperStyle: const TextStyle(color: Color(0xFFB45309)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final form = widget.form;
-    final hasError = widget.issues.any((i) => i.isError);
-    final hasIssue = widget.issues.isNotEmpty;
-    _bySuffix = {
-      for (final i in widget.issues)
-        _lineItemIssuePattern.firstMatch(i.field)!.group(2)!: i
-    };
-
-    return Card(
-      margin: const EdgeInsets.only(top: Spacing.m),
-      shape: hasError
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              side: BorderSide(
-                  color: Theme.of(context).colorScheme.error, width: 1.5),
-            )
-          : null,
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.m),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Row(
-                children: [
-                  if (hasIssue)
-                    Padding(
-                      padding: const EdgeInsets.only(right: Spacing.xs),
-                      child: Icon(
-                        hasError
-                            ? Icons.error_outline
-                            : Icons.warning_amber_outlined,
-                        color: hasError
-                            ? Theme.of(context).colorScheme.error
-                            : const Color(0xFFB45309),
-                        size: 20,
-                      ),
-                    ),
-                  Expanded(
-                    child: ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: form.productName,
-                      builder: (context, value, _) => Text(
-                        value.text.isEmpty ? 'Line item' : value.text,
-                        style: Theme.of(context).textTheme.titleSmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                      onPressed: widget.onRemove,
-                      icon: const Icon(Icons.delete_outline)),
-                  Icon(_expanded ? Icons.expand_less : Icons.expand_more),
-                ],
-              ),
-            ),
-            if (_expanded) ...[
-              const SizedBox(height: Spacing.xs),
-              TextField(
-                  controller: form.productName,
-                  decoration: _decoration('Product name', 'product_name')),
-              _pairRow(form.pack, 'Pack', 'pack', form.batchNo, 'Batch no.',
-                  'batch_no'),
-              _pairRow(form.expiry, 'Expiry (MM/YY)', 'expiry', form.qty, 'Qty',
-                  'qty',
-                  numeric: true),
-              if (form.freeScheme.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextField(
-                      controller: form.freeScheme,
-                      decoration: _decoration('Free scheme', 'free_scheme')),
-                ),
-              _pairRow(form.mrp, 'MRP', 'mrp', form.rate, 'Rate', 'rate',
-                  numeric: true),
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: form.showDiscountAmount
-                          ? TextField(
-                              controller: form.discountAmount,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
-                              decoration: _decoration(
-                                  'Discount amt', 'discount_amount'),
-                            )
-                          : TextField(
-                              controller: form.discountPct,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
-                              decoration:
-                                  _decoration('Discount %', 'discount_pct'),
-                            ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: form.gstPct,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: _decoration('GST %', 'gst_pct'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _pairRow(form.cgstAmount, 'CGST amt', 'cgst_amount',
-                  form.sgstAmount, 'SGST amt', 'sgst_amount',
-                  numeric: true),
-              _pairRow(form.igstAmount, 'IGST amt', 'igst_amount',
-                  form.grossAmount, 'Gross amount', 'gross_amount',
-                  numeric: true),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _pairRow(
-    TextEditingController c1,
-    String l1,
-    String f1,
-    TextEditingController c2,
-    String l2,
-    String f2, {
-    bool numeric = false,
-  }) {
-    final type = numeric
-        ? const TextInputType.numberWithOptions(decimal: true)
-        : TextInputType.text;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(children: [
-        Expanded(
-            child: TextField(
-                controller: c1,
-                keyboardType: type,
-                decoration: _decoration(l1, f1))),
-        const SizedBox(width: 8),
-        Expanded(
-            child: TextField(
-                controller: c2,
-                keyboardType: type,
-                decoration: _decoration(l2, f2))),
-      ]),
     );
   }
 }

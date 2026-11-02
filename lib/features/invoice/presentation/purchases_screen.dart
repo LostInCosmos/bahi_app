@@ -145,7 +145,8 @@ class PurchasesScreenState extends State<PurchasesScreen> with TabScreen {
   /// uploaded in the range picked above (all of them with no range).
   Future<void> _openExport() => showExportOptions(
         context,
-        heading: exportRangeLabel(start: isoDate(_startDate), end: isoDate(_endDate), vendorGstin: _gstinController.text),
+        heading:
+            exportRangeLabel(start: isoDate(_startDate), end: isoDate(_endDate), vendorGstin: _gstinController.text),
         options: [
           ExportOption(
             title: 'GSTR2 purchase register',
@@ -296,7 +297,8 @@ class PurchasesScreenState extends State<PurchasesScreen> with TabScreen {
             ),
           ),
       ],
-      if (_invoices.isEmpty && !_loading)
+      // Not under an error: "No purchases yet" beneath "Could not load" reads as fact.
+      if (_invoices.isEmpty && !_loading && _error == null)
         EmptyHint(
           icon: Icons.inbox_outlined,
           padding: const EdgeInsets.only(top: Spacing.xl),

@@ -116,13 +116,13 @@ mixin _Selection on State<CaptureScreen> {
         if (firstError.isEmpty) firstError = '$e';
       }
       refused.addAll(no);
+      if (!mounted) return; // the server answered after the screen went; _dropLocal would setState
       final refusedIds = {for (final e in no) e.id};
       for (final e in batch.entries) {
         final item = e.item;
         if (item != null && !refusedIds.contains(e.id)) _dropLocal(item);
       }
       done += batch.entries.length - no.length;
-      if (!mounted) return;
       setState(() => _moving = _MoveProgress('Discarding $total', total, done + refused.length, 'done'));
     }
 

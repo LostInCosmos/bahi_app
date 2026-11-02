@@ -131,9 +131,13 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
+      // No form until the account has loaded: empty fields over a failed load
+      // once offered a Save that would have cleared the shop's details.
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
+          : _account == null
+              ? LoadFailed(_error, onRetry: _load)
+              : SafeArea(
               child: ListView(
                 padding: const EdgeInsets.all(Spacing.l),
                 children: [

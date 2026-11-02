@@ -95,7 +95,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: ErrorText(_error, padding: EdgeInsets.zero))
+              ? LoadFailed(_error, onRetry: _load)
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
@@ -130,7 +130,8 @@ class _BatchCard extends StatelessWidget {
       if (b.rate != null) 'Rate ${rupees(b.rate!)}',
       if (b.discountPct != null) '${percent(b.discountPct!)} off',
       if (b.discountAmount != null && b.discountPct == null) '${rupees(b.discountAmount!)} off',
-      if (b.freeQty != null && b.freeQty! > 0) '${qty(b.freeQty!)} free${b.freeScheme != null ? ' (${b.freeScheme})' : ''}',
+      if (b.freeQty != null && b.freeQty! > 0)
+        '${qty(b.freeQty!)} free${b.freeScheme != null ? ' (${b.freeScheme})' : ''}',
     ];
     return parts.isEmpty ? null : parts.join(' · ');
   }
@@ -156,7 +157,7 @@ class _BatchCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Batch ${b.batchNo ?? "—"}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                  Text(batchLabel(b.batchNo), style: const TextStyle(fontWeight: FontWeight.w500)),
                   if (b.isExpired)
                     Chip(
                       label: const Text('EXPIRED', style: TextStyle(fontSize: 11)),
@@ -183,7 +184,8 @@ class _BatchCard extends StatelessWidget {
                           else
                             const Text('MRP: not set', style: TextStyle(color: AppColors.accent)),
                           if (b.mrpEdited == true)
-                            Text('edited', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.outline)),
+                            Text('edited',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.outline)),
                         ],
                       ),
                     ),
@@ -223,7 +225,6 @@ class _BatchCard extends StatelessWidget {
     );
   }
 }
-
 
 /// The editor for one batch's MRP. Pops with the MRP the server saved, or
 /// null if the shopkeeper backed out.
@@ -282,7 +283,8 @@ class _MrpSheetState extends State<_MrpSheet> {
         Navigator.of(context).pop();
         return;
       }
-      setState(() => _error = e.errorCode == 'bad_mrp' ? 'That MRP is not allowed. Enter an amount above ₹0.' : 'Could not save: $e');
+      setState(() => _error =
+          e.errorCode == 'bad_mrp' ? 'That MRP is not allowed. Enter an amount above ₹0.' : 'Could not save: $e');
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not save: $e');
     } finally {
@@ -296,13 +298,14 @@ class _MrpSheetState extends State<_MrpSheet> {
     final colors = Theme.of(context).colorScheme;
     final where = [
       widget.productName,
-      'Batch ${b.batchNo ?? "—"}',
+      batchLabel(b.batchNo),
       if (b.vendorName != null) b.vendorName!,
       if (b.invoiceNo != null) 'Invoice ${b.invoiceNo}',
     ].join(' · ');
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, MediaQuery.of(context).viewInsets.bottom + Spacing.l),
+        padding:
+            EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, MediaQuery.of(context).viewInsets.bottom + Spacing.l),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,7 +340,9 @@ class _MrpSheetState extends State<_MrpSheet> {
             const SizedBox(height: Spacing.m),
             Row(
               children: [
-                Expanded(child: OutlinedButton(onPressed: _busy ? null : () => Navigator.of(context).pop(), child: const Text('Cancel'))),
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: _busy ? null : () => Navigator.of(context).pop(), child: const Text('Cancel'))),
                 const SizedBox(width: Spacing.s),
                 Expanded(
                   child: BusyFilledButton(busy: _busy, onPressed: _save, label: _warned ? 'Save anyway' : 'Save'),

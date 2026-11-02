@@ -32,6 +32,4 @@ class ListEntry {
     this.item,
     this.upload,
   }) : assert((item == null) != (upload == null), 'an entry is one or the other');
-
-  bool get isLocal => item != null;
 }

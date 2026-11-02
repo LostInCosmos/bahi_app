@@ -1,6 +1,7 @@
 library;
 
 import '../../../core/utils/json.dart';
+import '../../../core/utils/job_states.dart';
 
 /// One candidate product offered for an ambiguous/not_found voice-order
 /// line — shown in a bottom sheet so the shopkeeper taps the right one.
@@ -130,7 +131,6 @@ class VoiceOrderLine {
         skip: json.boolOr('skip'),
       );
 
-  bool get isUnresolved => status != 'resolved';
   bool get isSellable => status == 'resolved' && !skip;
 }
 
@@ -191,10 +191,8 @@ class VoiceOrderJob {
     this.maxAttempts = 3,
   });
 
-  /// See ExtractionJob.isTerminal — `cancelled` was missing, so a cancelled
-  /// job was polled for ever. Listed as finished states, so an unknown new
-  /// status keeps polling rather than being mistaken for done.
-  bool get isTerminal => status == 'done' || status == 'failed' || status == 'cancelled';
+  /// Finished, one way or another — the same states as a bill's job.
+  bool get isTerminal => isFinishedJobStatus(status);
 
   bool get isRetrying => status == 'retrying';
 

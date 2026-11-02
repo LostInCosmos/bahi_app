@@ -46,3 +46,6 @@ String formatElapsed(Duration d) {
   final s = (d.inSeconds % 60).toString().padLeft(2, '0');
   return '$m:$s';
 }
+
+/// "Batch B12", or "Batch —" for a batch with no number recorded.
+String batchLabel(String? batchNo) => 'Batch ${batchNo ?? "—"}';

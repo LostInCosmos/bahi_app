@@ -58,6 +58,13 @@ class _SavedTickState extends State<SavedTick>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced motion: the tick is simply there, instead of springing in.
+    if (MediaQuery.disableAnimationsOf(context)) _controller.value = 1;
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();

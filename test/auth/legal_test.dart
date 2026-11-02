@@ -1,3 +1,6 @@
+import 'package:http/testing.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -101,14 +104,19 @@ void main() {
   });
 
   testWidgets('Account links to both documents', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: AccountScreen()));
-    await tester.pump(); // the account request fails without a server; the screen still builds
-    await tester.pumpAndSettle();
-    // Below the shop details, which grew with the bill's fields (DAS-121).
-    await tester.scrollUntilVisible(find.text('Terms of Service'), 200, scrollable: find.byType(Scrollable).first);
-    expect(find.text('Terms of Service'), findsOneWidget);
-    await tester.tap(find.text('Terms of Service'));
-    await tester.pumpAndSettle();
-    expect(find.byType(LegalScreen), findsOneWidget);
+    // The screen shows nothing but Try again until the account has loaded.
+    await http.runWithClient(() async {
+      await tester.pumpWidget(const MaterialApp(home: AccountScreen()));
+      await tester.pumpAndSettle();
+      // Below the shop details, which grew with the bill's fields (DAS-121).
+      await tester.scrollUntilVisible(find.text('Terms of Service'), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Terms of Service'), findsOneWidget);
+      await tester.tap(find.text('Terms of Service'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LegalScreen), findsOneWidget);
+    }, () => MockClient((req) async => req.url.path == '/account'
+        ? http.Response(jsonEncode({'tenant_name': 'Shop', 'email': 's@example.com', 'business_type': 'medical'}), 200,
+            headers: {'content-type': 'application/json'})
+        : http.Response('no', 404)));
   });
 }

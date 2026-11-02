@@ -250,7 +250,8 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
       if (!mounted) return;
       setState(() {
         item.status = _VoiceJobStatus.failed;
-        item.errorMessage = e is ApiException ? 'Could not get that voice note: ${e.message}' : 'Could not get that voice note.';
+        item.errorMessage =
+            e is ApiException ? 'Could not get that voice note: ${e.message}' : 'Could not get that voice note.';
       });
       unawaited(_persistVoiceJobs());
     }
@@ -356,6 +357,7 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
                   onPointerDown: (_) => _catalog.prefetchDetails([p.id]),
                   child: IconButton(
                     icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'Add to sale',
                     // Opens with none in stock too: a sale may go beyond the stock,
                     // with a note (DAS-111). Its batch picker still blocks expiry.
                     onPressed: () => _openPicker(p),
@@ -482,10 +484,11 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
   }
 
   Future<void> _load() async {
+    if (_error != null) setState(() => _error = null);
     try {
       final detail = await ProductCatalog.instance.loadDetail(widget.product.id);
       if (!mounted) return;
-      if (!_adopt(detail)) return setState(() => _error = 'Could not load this medicine. Close and try again.');
+      if (!_adopt(detail)) return setState(() => _error = 'Could not load this medicine.');
       setState(() {});
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -532,14 +535,9 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                   ProductName(widget.product.name,
                       qualifier: ProductCatalog.instance.index?.qualifier(widget.product.id),
                       style: Theme.of(context).textTheme.titleMedium),
-                  SizedBox(
-                    height: 120,
-                    child: Center(
-                      child: _error != null
-                          ? Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
-                          : const CircularProgressIndicator(),
-                    ),
-                  ),
+                  _error != null
+                      ? LoadFailed(_error, onRetry: _load)
+                      : const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
                 ],
               )
             : Column(
@@ -578,8 +576,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
       // A loose batch counts tablets everywhere on its row (DAS-160).
       final unit = b.loose;
       final available = unit.loose ? unit.unitsOnHand?.toDouble() : b.quantityOnHand;
-      final note =
-          quantity > 0 ? stockNote(quantity, available, loose: unit.loose, unitKind: unit.unitKind) : null;
+      final note = quantity > 0 ? stockNote(quantity, available, loose: unit.loose, unitKind: unit.unitKind) : null;
 
       return Card(
         margin: const EdgeInsets.only(bottom: 10),
@@ -593,7 +590,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Batch ${b.batchNo ?? "—"}${isSuggested ? "  (suggested)" : ""}',
+                      '${batchLabel(b.batchNo)}${isSuggested ? "  (suggested)" : ""}',
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -638,7 +635,10 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(unit.typingHint!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.outline)),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Theme.of(context).colorScheme.outline)),
                 ),
               if (note != null) StockNote(note),
               const SizedBox(height: 12),
