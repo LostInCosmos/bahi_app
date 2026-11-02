@@ -254,6 +254,58 @@ void main() {
       expect(slow.closed, isFalse);
     });
   });
+
+  group('what a shopkeeper reads when a request fails', () {
+    test("a proxy's HTML error page becomes 'Server error (502)', not the page", () async {
+      final client = MockClient((req) async =>
+          http.Response('<html><body><h1>502 Bad Gateway</h1></body></html>', 502, headers: {'content-type': 'text/html'}));
+      await http.runWithClient(() async {
+        final e = await _outcome(api.get('/invoices')) as ApiException;
+        expect(e.statusCode, 502);
+        expect('$e', 'Server error (502)');
+      }, () => client);
+    });
+
+    test('a plain-text 4xx becomes a generic line, a JSON detail keeps its sentence and its field', () async {
+      await http.runWithClient(() async {
+        expect('${await _outcome(api.get('/a'))}', 'Request failed (404)');
+      }, () => MockClient((req) async => http.Response('not found at all', 404)));
+      await http.runWithClient(() async {
+        final e = await _outcome(api.get('/a')) as ApiException;
+        expect('$e', 'Enter a 10-digit phone number.');
+        expect(e.field, 'buyer_phone');
+      }, () => MockClient((req) async => _json({'detail': 'Enter a 10-digit phone number.', 'field': 'buyer_phone'}, 422)));
+    });
+
+    test('a structured detail stays inspectable, and its message is its sentence or the generic line', () async {
+      await http.runWithClient(() async {
+        final e = await _outcome(api.get('/a')) as ApiException;
+        expect(e.errorCode, 'validation_failed');
+        expect((e.detail as Map)['issues'], hasLength(1));
+        expect('$e', 'Request failed (422)', reason: 'never the JSON blob');
+      }, () => MockClient((req) async => _json({
+            'detail': {'error': 'validation_failed', 'issues': [{'field': 'x'}]}
+          }, 422)));
+      await http.runWithClient(() async {
+        expect('${await _outcome(api.get('/a'))}', 'That bill is being processed.');
+      }, () => MockClient((req) async => _json({
+            'detail': {'error': 'processing', 'message': 'That bill is being processed.'}
+          }, 409)));
+    });
+
+    test('a timeout and a dropped connection read as plain sentences, and keep their types', () async {
+      await http.runWithClient(() async {
+        final e = await _outcome(api.get('/a', timeout: const Duration(milliseconds: 20)));
+        expect(e, isA<TimeoutException>());
+        expect('$e', 'The server took too long to answer. Try again.');
+      }, () => MockClient((req) => Completer<http.Response>().future));
+      await http.runWithClient(() async {
+        final e = await _outcome(api.postJson('/a', {}));
+        expect(e, isA<http.ClientException>());
+        expect('$e', 'Could not reach the server. Check your connection and try again.');
+      }, () => MockClient((req) async => throw http.ClientException('Connection reset by peer', req.url)));
+    });
+  });
 }
 
 /// A client whose requests wait for [answer], and fail if it was closed
@@ -271,4 +323,5 @@ class _ClosableClient extends http.BaseClient {
 
   @override
   void close() => closed = true;
+
 }

@@ -396,9 +396,17 @@ class ApiClient {
     http.Response res;
     try {
       res = await request(sendHeaders).timeout(timeout);
-    } on http.ClientException {
-      if (!idempotent) rethrow;
-      res = await request(sendHeaders).timeout(timeout);
+    } on http.ClientException catch (e) {
+      if (!idempotent) throw ServerUnreachable(e);
+      try {
+        res = await request(sendHeaders).timeout(timeout);
+      } on http.ClientException catch (e) {
+        throw ServerUnreachable(e);
+      } on TimeoutException {
+        throw ServerTimedOut(timeout);
+      }
+    } on TimeoutException {
+      throw ServerTimedOut(timeout);
     }
     if (res.statusCode == 401 && sent != null) await _sessionRefused(sent);
     _applyVersionGate(res);
@@ -484,7 +492,11 @@ class ApiClient {
 
   void _checkOk(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) return;
-    String message = res.body;
+    // What a shopkeeper may read: the server's own sentence when it sent
+    // one, never a 502 page, a stack trace or a JSON blob. Screens show
+    // `'$e'` in ~50 places, so the message is made safe here, once.
+    final generic = res.statusCode >= 500 ? 'Server error (${res.statusCode})' : 'Request failed (${res.statusCode})';
+    String message = generic;
     dynamic detail;
     String? field;
     try {
@@ -492,7 +504,14 @@ class ApiClient {
       if (decoded is Map && decoded['field'] is String) field = decoded['field'] as String;
       if (decoded is Map && decoded['detail'] != null) {
         detail = decoded['detail'];
-        message = detail is String ? detail : jsonEncode(detail);
+        // A structured detail (`{"error": "validation_failed", "issues": …}`)
+        // is for the caller to inspect; its message is whatever sentence it
+        // carries, else the generic line.
+        message = detail is String
+            ? detail
+            : detail is Map && detail['message'] is String
+                ? detail['message'] as String
+                : generic;
       } else if (decoded is Map && decoded['error'] is String) {
         // `{"error": "account_deleted", "message": "…"}` — the shape the
         // login refusal for a deleted account uses. The whole map is the
@@ -501,7 +520,7 @@ class ApiClient {
         message = decoded['message'] is String ? decoded['message'] as String : decoded['error'] as String;
       }
     } catch (_) {
-      // response wasn't JSON — fall back to raw body
+      // Not JSON (an HTML error page from a proxy, plain text): the generic line.
     }
     throw ApiException(res.statusCode, message, detail, field);
   }
