@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -98,5 +99,38 @@ void main() {
     expect(find.byType(HomeScreen), findsNothing);
     expect(_canGoBack(tester), isFalse, reason: 'Back must not reach a signed-out home');
     expect(ApiClient.instance.isLoggedIn, isFalse);
+  });
+
+  testWidgets('a second tap on Log out while the first waits on the server does nothing', (tester) async {
+    ignoreOverflow();
+    FlutterSecureStorage.setMockInitialValues({'token': _token});
+    final held = Completer<http.Response>();
+    var logouts = 0;
+    final slow = MockClient((req) {
+      if (req.url.path == '/auth/logout') {
+        logouts++;
+        return held.future;
+      }
+      return _server.send(req).then(http.Response.fromStream);
+    });
+
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      await tester.pumpWidget(const GstBillApp());
+      await _settle(tester);
+
+      await tester.tap(find.byTooltip('Log out'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Log out'), warnIfMissed: false);
+      await tester.pump();
+      expect(logouts, 1);
+      expect(find.byType(HomeScreen), findsOneWidget, reason: 'still waiting on the server');
+
+      held.complete(http.Response('{}', 200, headers: {'content-type': 'application/json'}));
+      await _settle(tester);
+    }, () => slow);
+
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(logouts, 1);
   });
 }

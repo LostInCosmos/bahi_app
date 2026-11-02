@@ -445,15 +445,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
     _sent = _snapshot();
   }
 
+  /// One of the stale banner's two answers is being sent: both its buttons
+  /// are off meanwhile, so a second tap cannot delete the draft twice or
+  /// write it twice.
+  bool _resolvingStale = false;
+
   /// "Use their version" on a stale draft: the corrections go, the read is
   /// shown.
   Future<void> _useTeamVersion() async {
     final jobId = widget.jobId;
-    if (jobId == null) return;
+    if (jobId == null || _resolvingStale) return;
+    setState(() => _resolvingStale = true);
     try {
       await ApiClient.instance.deleteDraft(jobId);
     } catch (e) {
-      if (mounted) setState(() => _error = "Couldn't drop your corrections: $e");
+      if (mounted) {
+        setState(() {
+          _resolvingStale = false;
+          _error = "Couldn't drop your corrections: $e";
+        });
+      }
       return;
     }
     if (!mounted) return;
@@ -463,6 +474,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _stale = false;
       _rebase = false;
       _error = null;
+      _resolvingStale = false;
     });
     widget.onDraftDropped?.call();
   }
@@ -808,8 +820,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
               const Text('Our team updated this bill after you corrected it. Your corrections are kept.'),
               const SizedBox(height: Spacing.s),
               Wrap(spacing: Spacing.s, children: [
-                OutlinedButton(onPressed: _useTeamVersion, child: const Text('Use their version')),
-                FilledButton(onPressed: _keepMine, child: const Text('Keep my corrections')),
+                OutlinedButton(onPressed: _resolvingStale ? null : _useTeamVersion, child: const Text('Use their version')),
+                FilledButton(onPressed: _resolvingStale ? null : _keepMine, child: const Text('Keep my corrections')),
               ]),
             ]),
           ),

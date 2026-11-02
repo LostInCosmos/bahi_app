@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -174,6 +175,35 @@ void main() {
       await _settle(tester);
       expect(server.puts.last['base_rev'], 5, reason: 'now building on the other phone\'s revision');
     }, () => server.client);
+  });
+
+  testWidgets('a stale draft: a second tap on Use their version while the first is being sent does nothing', (tester) async {
+    final server = _Server();
+    final held = Completer<http.Response>();
+    var deletes = 0;
+    // The delete is held open, so the second tap lands while the first is in flight.
+    final slow = MockClient((req) {
+      if (req.method == 'DELETE') {
+        deletes++;
+        return held.future;
+      }
+      return server.client.send(req).then(http.Response.fromStream);
+    });
+    final stale = BillDraft(invoice: InvoiceData.fromJson(_invoice('T-MINE')), issues: const [], rev: 2, stale: true);
+    await http.runWithClient(() async {
+      await _open(tester, draft: stale);
+      await tester.tap(find.text('Use their version'));
+      await tester.pump();
+      expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Use their version')).onPressed, isNull);
+      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Keep my corrections')).onPressed, isNull);
+      await tester.tap(find.text('Use their version'), warnIfMissed: false);
+      await tester.pump();
+      expect(deletes, 1);
+      held.complete(http.Response('{}', 200, headers: {'content-type': 'application/json'}));
+      await _settle(tester);
+      expect(find.textContaining('Our team updated this bill'), findsNothing);
+      expect(deletes, 1);
+    }, () => slow);
   });
 
   testWidgets("a stale draft: Use their version drops it; Keep my corrections writes it with rebase", (tester) async {

@@ -565,7 +565,11 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   }
 
   @override
-  void _say(String message) => context.say(message);
+  /// Said on this screen, if it is still there: most callers speak after an
+  /// await, and a State's `context` is gone once it is disposed.
+  void _say(String message) {
+    if (mounted) context.say(message);
+  }
 
   // ==================== review, save & retry ====================
 

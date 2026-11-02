@@ -50,9 +50,19 @@ class _VoiceCommandScreenState extends State<VoiceCommandScreen> with RecordingS
     if (!await checkMic() && mounted) setState(() => _errorMessage = kMicPermissionMessage);
   }
 
+  /// Stopping is under way: `_recording` stays true until the recorder has
+  /// closed the file, and a second tap in that gap must not stop it again.
+  bool _stopping = false;
+
   Future<void> _toggleRecording() async {
     if (_recording) {
-      await _stopAndSend();
+      if (_stopping) return;
+      _stopping = true;
+      try {
+        await _stopAndSend();
+      } finally {
+        _stopping = false;
+      }
       return;
     }
     if (!hasPermission) {

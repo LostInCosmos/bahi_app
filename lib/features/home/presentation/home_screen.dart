@@ -32,6 +32,20 @@ class _HomeScreenState extends State<HomeScreen> implements HomeTabHost {
 
   void _push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
+  /// Log out waits on the server (up to its timeout) before the login screen
+  /// appears; the button is off meanwhile so a second tap cannot run it again.
+  bool _loggingOut = false;
+
+  Future<void> _logOut() async {
+    if (_loggingOut) return;
+    setState(() => _loggingOut = true);
+    try {
+      await signOut(context);
+    } finally {
+      if (mounted) setState(() => _loggingOut = false);
+    }
+  }
+
   @override
   void select(String id) => _selectTab(kHomeTabs.indexWhere((t) => t.id == id));
 
@@ -70,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> implements HomeTabHost {
             icon: const Icon(Icons.storefront_outlined),
             tooltip: 'Account',
           ),
-          IconButton(onPressed: () => signOut(context), icon: const Icon(Icons.logout), tooltip: 'Log out'),
+          IconButton(onPressed: _loggingOut ? null : _logOut, icon: const Icon(Icons.logout), tooltip: 'Log out'),
         ],
       ),
       body: IndexedStack(index: _tab, children: _screens),
