@@ -179,7 +179,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: Spacing.l),
                           AnimatedSize(
-                            duration: motion(context, 220),
+                            // Never motion(): AnimatedSize cannot take Duration.zero — it finishes
+                            // inside its own layout and asserts (seen on the e2e emulator).
+                            duration: const Duration(milliseconds: 220),
                             curve: Curves.easeOutCubic,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,

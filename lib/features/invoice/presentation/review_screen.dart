@@ -663,7 +663,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   final before = <Widget>[
                     if (_stale) _staleBanner(colors),
                     AnimatedSize(
-                      duration: motion(context, 200),
+                      // Never motion(): AnimatedSize cannot take Duration.zero — it finishes
+                      // inside its own layout and asserts (seen on the e2e emulator).
+                      duration: const Duration(milliseconds: 200),
                       alignment: Alignment.topCenter,
                       child: _issues.isEmpty
                           ? const SizedBox.shrink()
