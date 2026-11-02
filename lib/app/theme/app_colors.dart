@@ -11,11 +11,9 @@ class AppColors {
 
   // Medical/pharmacy — teal, as before.
   static const seedLight = Color(0xFF0F766E); // teal-700
-  static const seedDark = Color(0xFF2DD4BF); // teal-400
 
   // Kirana/general store — same tonal position as the teal pair above, in red.
   static const seedLightKirana = Color(0xFFB91C1C); // red-700
-  static const seedDarkKirana = Color(0xFFF87171); // red-400
 
   // Dark-theme accent + its deep/container tone, per business type — a
   // richer, more deliberate pine-green / brick-red than a plain Material 3
@@ -30,7 +28,6 @@ class AppColors {
   // the capture empty-state illustration card, the login panel. Neutral
   // (cream/mint), not tied to business type — it reads as "paper", not brand.
   static const spotSurface = Color(0xFFEFF3EA);
-  static const spotSurfaceOn = Color(0xFF16251F);
 
   static const accent = Color(0xFFD97706); // amber-600 — CTA highlight, used sparingly
 

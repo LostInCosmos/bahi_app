@@ -39,8 +39,6 @@ const double _scale = _dpi / _pdfPointsPerInch;
 /// rendering it would lock up the phone.
 const int kMaxPdfPages = 20;
 
-bool isPdfPath(String path) => path.toLowerCase().endsWith('.pdf');
-
 /// One rendered page: the JPEG bytes and the size they were drawn at.
 ///
 /// The size comes back because the caller has to give each page

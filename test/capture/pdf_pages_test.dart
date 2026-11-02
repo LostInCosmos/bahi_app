@@ -11,19 +11,6 @@ import 'package:gst_bill_app/features/capture/models/pdf_pages.dart';
 /// web suite's e2e against a real two-page PDF, which exercises the same
 /// resolution and the same whole-frame-corner rule.
 void main() {
-  group('recognising a PDF', () {
-    test('by extension, whatever its case', () {
-      expect(isPdfPath('/tmp/bill.pdf'), isTrue);
-      expect(isPdfPath('/tmp/BILL.PDF'), isTrue);
-      expect(isPdfPath('/tmp/invoice.Pdf'), isTrue);
-    });
-
-    test('and not a photo', () {
-      expect(isPdfPath('/tmp/bill.jpg'), isFalse);
-      expect(isPdfPath('/tmp/pdf_scan.png'), isFalse);
-    });
-  });
-
   group('the page cap', () {
     test('says how many pages the document had', () {
       /* The message has to name the number, or a shopkeeper cannot tell
