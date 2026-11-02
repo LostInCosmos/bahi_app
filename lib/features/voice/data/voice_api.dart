@@ -5,6 +5,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../../../core/api/api_client.dart';
 import '../models/voice.dart';
+import '../../../core/api/idempotency.dart';
 
 extension VoiceApi on ApiClient {
   /// Uploads a raw recording for the backend to transcribe (Gemini, not
@@ -16,10 +17,12 @@ extension VoiceApi on ApiClient {
   /// Returns immediately with a job id — transcription+parsing now run in a
   /// background worker, not inline in this request — so the caller waits on
   /// getVoiceOrderJob(..., wait: true) until it reaches a terminal status.
-  Future<int> submitVoiceOrderAudio(File audioFile, {int? voiceOrderId}) async {
+  Future<int> submitVoiceOrderAudio(File audioFile, {int? voiceOrderId, IdempotencyKey? idempotency}) async {
     final res = await multipart(
       '/voice-orders/parse-audio',
       query: voiceOrderId != null ? {'voice_order_id': voiceOrderId.toString()} : null,
+      idempotency: idempotency,
+      fingerprint: audioFile.path,
       (request) async => request.files
           .add(await http.MultipartFile.fromPath('audio', audioFile.path, contentType: MediaType('audio', 'wav'))),
     );
@@ -102,9 +105,11 @@ extension VoiceApi on ApiClient {
     int orderId, {
     String? buyerName,
     String? buyerGstin,
+    IdempotencyKey? idempotency,
   }) async {
     final res = await postJson(
         '/voice-orders/$orderId/confirm',
+        idempotency: idempotency,
         {
           'buyer_name': (buyerName == null || buyerName.isEmpty) ? null : buyerName,
           'buyer_gstin': (buyerGstin == null || buyerGstin.isEmpty) ? null : buyerGstin,

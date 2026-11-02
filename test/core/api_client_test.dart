@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/core/api/api_client.dart';
+import 'package:gst_bill_app/core/api/idempotency.dart';
 import 'package:gst_bill_app/features/auth/data/auth_api.dart';
 import 'package:gst_bill_app/features/folders/data/folder_api.dart';
 import 'package:gst_bill_app/features/invoice/data/invoice_api.dart';
@@ -304,6 +305,75 @@ void main() {
         expect(e, isA<http.ClientException>());
         expect('$e', 'Could not reach the server. Check your connection and try again.');
       }, () => MockClient((req) async => throw http.ClientException('Connection reset by peer', req.url)));
+    });
+  });
+
+  group('Idempotency-Key on a write (quality pass)', () {
+    setUp(() => ApiClient.inProgressRetryDelay = const Duration(milliseconds: 10));
+    tearDown(() => ApiClient.inProgressRetryDelay = const Duration(seconds: 2));
+
+    test('the key is kept across a lost answer, and changes after an answer or a changed body', () async {
+      final keys = <String?>[];
+      var answer = 0; // 0: drop the connection, else that status
+      final client = MockClient((req) async {
+        keys.add(req.headers['Idempotency-Key']);
+        if (answer == 0) throw http.ClientException('Connection reset by peer', req.url);
+        return _json({'sale_id': 5}, answer);
+      });
+      final key = IdempotencyKey();
+      await http.runWithClient(() async {
+        expect(await _outcome(api.postJson('/sales', {'a': 1}, idempotency: key)), isA<http.ClientException>());
+        expect(await _outcome(api.postJson('/sales', {'a': 1}, idempotency: key)), isA<http.ClientException>());
+        expect(keys[1], keys[0], reason: 'the answer was lost: the same write, the same key');
+        expect(keys[0], hasLength(32));
+
+        await _outcome(api.postJson('/sales', {'a': 2}, idempotency: key));
+        expect(keys[2], isNot(keys[0]), reason: 'a different body is a different write');
+
+        answer = 422;
+        await _outcome(api.postJson('/sales', {'a': 2}, idempotency: key));
+        answer = 200;
+        await api.postJson('/sales', {'a': 2}, idempotency: key);
+        expect(keys[4], isNot(keys[3]), reason: 'a refusal is an answer: the next send is a new attempt');
+
+        await api.postJson('/sales', {'a': 2}, idempotency: key);
+        expect(keys[5], isNot(keys[4]), reason: 'the same sale sent again on purpose is a new sale');
+      }, () => client);
+      expect(await _outcome(http.runWithClient(() => api.postJson('/sales', {'a': 1}), () => client)), isNull);
+      expect(keys.last, isNull, reason: 'no key asked for: no header');
+    });
+
+    test('409 in_progress is asked again with the same key until it is answered', () async {
+      final keys = <String?>[];
+      final client = MockClient((req) async {
+        keys.add(req.headers['Idempotency-Key']);
+        return keys.length < 3 ? _json({'error': 'in_progress'}, 409) : _json({'sale_id': 7});
+      });
+      await http.runWithClient(() async {
+        final res = await api.postJson('/sales', {'a': 1}, idempotency: IdempotencyKey());
+        expect(res.statusCode, 200);
+      }, () => client);
+      expect(keys, hasLength(3));
+      expect(keys.toSet(), hasLength(1), reason: 'one key, three sends');
+    });
+
+    test('an upload keeps its key for the same file, and a timeout keeps it too', () async {
+      final keys = <String?>[];
+      var hang = true;
+      final client = MockClient((req) {
+        keys.add(req.headers['Idempotency-Key']);
+        return hang ? Completer<http.Response>().future : Future.value(_json({'job_id': 9}));
+      });
+      final key = IdempotencyKey();
+      Future<Object?> send() => _outcome(api.multipart('/invoices/extract', (r) {
+            r.fields['source_image'] = 'a.jpg';
+          }, timeout: const Duration(milliseconds: 20), idempotency: key, fingerprint: 'a.jpg'));
+      await http.runWithClient(() async {
+        expect(await send(), isA<TimeoutException>());
+        hang = false;
+        expect(await send(), isNull);
+        expect(keys[1], keys[0]);
+      }, () => client);
     });
   });
 }

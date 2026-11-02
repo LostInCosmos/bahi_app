@@ -182,6 +182,7 @@ mixin _Watching on State<CaptureScreen> {
         item.jobId = jobId;
       } else {
         jobId = await ApiClient.instance.submitExtraction(
+          idempotency: item.uploadKey ??= IdempotencyKey(),
           item.sourceImages.first,
           extraSourceImages: item.sourceImages.skip(1).toList(),
           folderId: item.folderId,

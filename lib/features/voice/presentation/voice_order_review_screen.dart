@@ -16,6 +16,7 @@ import '../widgets/add_item_sheet.dart';
 import '../widgets/voice_line_card.dart';
 import '../widgets/voice_sale_receipt.dart';
 import 'voice_sale_screen.dart';
+import '../../../core/api/idempotency.dart';
 
 /// Review/confirm screen for a voice-parsed sale draft. Every mutation
 /// (candidate pick, skip toggle, prescription ref) round-trips through the
@@ -40,6 +41,9 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   bool _confirming = false;
   bool _busy = false; // any in-flight line PATCH
   bool _cancelling = false;
+
+  /// One confirmation of this draft, however many times it has to be sent.
+  final _confirmKey = IdempotencyKey();
 
   @override
   void initState() {
@@ -177,7 +181,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       _message = null;
     });
     try {
-      final result = await ApiClient.instance.confirmVoiceOrder(_order.id);
+      final result = await ApiClient.instance.confirmVoiceOrder(_order.id, idempotency: _confirmKey);
       if (!mounted) return;
       final saleId = result['sale_id'] as int;
       final popResult = await Navigator.of(context).push<String>(

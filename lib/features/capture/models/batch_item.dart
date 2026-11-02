@@ -4,6 +4,7 @@ import '../../../core/utils/json.dart';
 import '../../../core/utils/offset_2d.dart';
 import '../../../core/disk/pending_photo_store.dart';
 import '../../invoice/models/invoice.dart';
+import '../../../core/api/idempotency.dart';
 
 /// Where one bill is in the capture flow. A clean extraction (0 issues)
 /// saves itself, server-side, with no tap (DAS-79) — such a bill goes
@@ -101,6 +102,11 @@ class BatchItem {
   /// exists, so a retry reuses it (ApiClient.retryExtraction) instead of
   /// creating a new row each time.
   int? lastJobId;
+
+  /// This bill's submission, however many times it is retried before the
+  /// server answers (a lost answer must not make a second bill). Not
+  /// persisted: a retry after a restart is a new attempt.
+  IdempotencyKey? uploadKey;
 
   ExtractionResult? result;
   String? errorMessage;

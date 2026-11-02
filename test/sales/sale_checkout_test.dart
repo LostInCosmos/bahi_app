@@ -187,4 +187,36 @@ void main() {
     expect(find.text('Items'), findsNothing);
     expect(find.text('Includes GST ₹21.42 (CGST ₹10.71 + SGST ₹10.71)'), findsOneWidget);
   });
+
+  testWidgets('Complete sale after a lost answer sends the same Idempotency-Key; after a refusal, a new one', (tester) async {
+    tallPhone(tester);
+    final keys = <String?>[];
+    var answer = 0;
+    await http.runWithClient(() async {
+      await tester.pumpWidget(MaterialApp(home: SaleReviewScreen(cart: _cart())));
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Could not reach the server'), findsOneWidget);
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      expect(keys, hasLength(2));
+      expect(keys[1], keys[0], reason: 'the first answer was lost: the same sale');
+
+      answer = 422;
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      answer = 200;
+      await tester.tap(find.text('Complete sale'));
+      await tester.pumpAndSettle();
+      expect(keys, hasLength(4));
+      expect(keys[2], keys[1], reason: 'still the same unanswered sale');
+      expect(keys[3], isNot(keys[2]), reason: 'the refusal was an answer');
+    }, () => MockClient((req) async {
+          if (req.url.path != '/sales') return http.Response('no', 404);
+          keys.add(req.headers['Idempotency-Key']);
+          if (answer == 0) throw http.ClientException('Connection reset by peer', req.url);
+          if (answer == 422) return _json({'detail': 'Enter a 10-digit phone number.', 'field': 'buyer_phone'}, 422);
+          return _json({'sale_id': 5, 'sale_no': 'S-0005', 'grand_total': 250.0});
+        }));
+  });
 }
