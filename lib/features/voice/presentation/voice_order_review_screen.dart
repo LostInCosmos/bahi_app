@@ -40,6 +40,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   String? _message;
   bool _confirming = false;
   bool _busy = false; // any in-flight line PATCH
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -48,7 +49,13 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   }
 
   Future<void> _applyLineUpdate(Future<VoiceOrder> Function() call) async {
-    if (_busy) return;
+    // One change at a time: a second typed while the first is still being
+    // sent is not queued, and saying nothing left the field showing a value
+    // the server never got.
+    if (_busy) {
+      setState(() => _message = 'Still saving the last change. Try again in a moment.');
+      return;
+    }
     setState(() {
       _busy = true;
       _message = null;
@@ -154,7 +161,8 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
   }
 
   List<VoiceOrderLine> get _missingPrescriptionLines => _order.lines
-      .where((l) => l.schedule == 'H1' && l.isSellable && (l.prescriptionRef == null || l.prescriptionRef!.trim().isEmpty))
+      .where(
+          (l) => l.schedule == 'H1' && l.isSellable && (l.prescriptionRef == null || l.prescriptionRef!.trim().isEmpty))
       .toList();
 
   Future<void> _confirm() async {
@@ -194,7 +202,8 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       switch (detail['error']) {
         case 'prescription_required':
           final ids = (detail['line_ids'] as List?)?.map((e) => e as int).toSet() ?? <int>{};
-          final names = _order.lines.where((l) => ids.contains(l.id)).map((l) => l.productName ?? l.rawPhrase).join(', ');
+          final names =
+              _order.lines.where((l) => ids.contains(l.id)).map((l) => l.productName ?? l.rawPhrase).join(', ');
           msg = 'Prescription reference required for: ${names.isEmpty ? 'one or more lines' : names}.';
           break;
         case 'stock_changed':
@@ -231,11 +240,34 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
     }
   }
 
+  /// Cancels the draft on the server, then leaves. A draft the server says is
+  /// already confirmed or cancelled (409) or gone (404) needs no cancelling;
+  /// any other failure keeps the screen, with the reason — leaving anyway
+  /// used to look like a cancel while the order stayed open on the server.
   Future<void> _cancel() async {
+    if (_cancelling) return;
+    setState(() {
+      _cancelling = true;
+      _message = null;
+    });
     try {
       await ApiClient.instance.cancelVoiceOrder(_order.id);
-    } catch (_) {
-      // best-effort — still leave the review screen either way
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode != 409 && e.statusCode != 404) {
+        setState(() {
+          _cancelling = false;
+          _message = 'Could not cancel: ${e.message}';
+        });
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cancelling = false;
+        _message = 'Could not cancel: $e';
+      });
+      return;
     }
     if (mounted) Navigator.of(context).pop();
   }
@@ -303,7 +335,7 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
       appBar: AppBar(
         title: const Text('Review voice sale'),
         actions: [
-          TextButton(onPressed: _confirming ? null : _cancel, child: const Text('Cancel')),
+          TextButton(onPressed: _confirming || _cancelling ? null : _cancel, child: const Text('Cancel')),
         ],
       ),
       body: Column(
@@ -364,7 +396,10 @@ class _VoiceOrderReviewScreenState extends State<VoiceOrderReviewScreen> {
                     ],
                   ),
                   const Spacer(),
-                  BusyFilledButton(busy: _confirming, onPressed: _confirm, label: 'Confirm sale'),
+                  // Not while a line change is still being sent: the sale would
+                  // confirm the lines the server held before it.
+                  BusyFilledButton(
+                      busy: _confirming, onPressed: _busy || _cancelling ? null : _confirm, label: 'Confirm sale'),
                 ],
               ),
             ),
@@ -398,7 +433,8 @@ class _Header extends StatelessWidget {
               style: TextStyle(color: Theme.of(context).colorScheme.outline),
             ),
             const SizedBox(height: Spacing.m),
-            Text('"${order.transcript}"', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic)),
+            Text('"${order.transcript}"',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic)),
           ],
         ),
       ),
@@ -473,7 +509,8 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
       TextEditingController(text: widget.line.prescriptionRef ?? '');
   late final TextEditingController _quantityController = TextEditingController(text: numText(widget.line.quantity));
   late final TextEditingController _mrpController = TextEditingController(text: numText(widget.line.mrp));
-  late final TextEditingController _discountController = TextEditingController(text: numText(widget.line.discountValue));
+  late final TextEditingController _discountController =
+      TextEditingController(text: numText(widget.line.discountValue));
 
   @override
   void didUpdateWidget(covariant _VoiceLineCard oldWidget) {
@@ -518,7 +555,8 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('"${line.rawPhrase}"',
-                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontStyle: FontStyle.italic, fontSize: 12)),
+                style:
+                    TextStyle(color: Theme.of(context).colorScheme.outline, fontStyle: FontStyle.italic, fontSize: 12)),
             const SizedBox(height: Spacing.xs),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,9 +568,8 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                       ProductName(
                         '${line.productName ?? '(unmatched)'}'
                         '${line.strengthSpoken != null ? ' ${line.strengthSpoken}' : ''}',
-                        qualifier: line.productId == null
-                            ? null
-                            : ProductCatalog.instance.index?.qualifier(line.productId!),
+                        qualifier:
+                            line.productId == null ? null : ProductCatalog.instance.index?.qualifier(line.productId!),
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       if (line.schedule != null) ...[
@@ -560,7 +597,8 @@ class _VoiceLineCardState extends State<_VoiceLineCard> {
                       ],
                       if (color != null) ...[
                         const SizedBox(height: Spacing.xs),
-                        Text(_statusLabel(line.status), style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
+                        Text(_statusLabel(line.status),
+                            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
                       ],
                       // Surfaces the same candidates the full picker sheet
                       // shows, right on the card — a shopkeeper shouldn't
@@ -988,8 +1026,8 @@ class _AddItemSheetState extends State<_AddItemSheet> {
     // Nothing until something is typed: the whole shop is not a pick list.
     final results = typed && index != null ? index.match(_query) : const <ProductSummary>[];
     final loading = index == null && _catalog.isLoading;
-    final failure =
-        _error ?? (index == null && _catalog.lastError != null ? 'Could not load medicines: ${_catalog.lastError}' : null);
+    final failure = _error ??
+        (index == null && _catalog.lastError != null ? 'Could not load medicines: ${_catalog.lastError}' : null);
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1079,7 +1117,8 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                 textInputAction: TextInputAction.search,
               ),
               const SizedBox(height: Spacing.s),
-              if (loading) const Center(child: Padding(padding: EdgeInsets.all(Spacing.m), child: CircularProgressIndicator())),
+              if (loading)
+                const Center(child: Padding(padding: EdgeInsets.all(Spacing.m), child: CircularProgressIndicator())),
               ErrorText(failure, padding: const EdgeInsets.only(top: Spacing.s)),
               // A fixed height, not shrinkWrap: a shrink-wrapped list builds
               // every row to measure itself, and "p" alone matches hundreds.
