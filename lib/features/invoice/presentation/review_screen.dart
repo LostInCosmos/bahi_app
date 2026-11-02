@@ -656,9 +656,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 child: _buildPhotoPane(context, box.maxHeight),
               ),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(Spacing.l),
-                  children: [
+                child: Builder(builder: (context) {
+                  // The header widgets first, then one card per line, then
+                  // the totals and buttons: built as they scroll into view,
+                  // since a long bill has dozens of lines.
+                  final before = <Widget>[
                     if (_stale) _staleBanner(colors),
                     AnimatedSize(
                       duration: const Duration(milliseconds: 200),
@@ -805,13 +807,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       ],
                     ),
                     const SizedBox(height: Spacing.s),
-                    ...List.generate(
-                      items.length,
-                      (i) => LineItemCard(
-                          form: items[i],
-                          issues: _issuesForLineItem(i),
-                          onRemove: () => _removeItem(i)),
-                    ),
+                  ];
+                  final after = <Widget>[
                     const SizedBox(height: Spacing.l),
                     SectionCard(
                       title: 'Totals',
@@ -871,8 +868,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       busyLabel: 'Saving…',
                     ),
                     const SizedBox(height: Spacing.xl),
-                  ],
-                ),
+                  ];
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(Spacing.l),
+                    itemCount: before.length + items.length + after.length,
+                    itemBuilder: (context, i) {
+                      if (i < before.length) return before[i];
+                      final li = i - before.length;
+                      if (li < items.length) {
+                        return LineItemCard(
+                            form: items[li],
+                            issues: _issuesForLineItem(li),
+                            onRemove: () => _removeItem(li));
+                      }
+                      return after[li - items.length];
+                    },
+                  );
+                }),
               ),
             ],
           ),

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
-import '../../../core/utils/format.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/inventory_api.dart';
@@ -247,7 +246,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                       final p = results[i];
                       return ListTile(
                         title: ProductName(p.name, qualifier: index?.qualifier(p.id)),
-                        subtitle: Text('${qty(p.quantityOnHand)} in stock'),
+                        subtitle: Text('${p.loose.stock(p.quantityOnHand)} in stock'),
                         enabled: p.quantityOnHand > 0,
                         onTap: () => setState(() => _selected = p),
                       );
@@ -268,7 +267,7 @@ class _AddItemSheetState extends State<AddItemSheet> {
                 contentPadding: EdgeInsets.zero,
                 title: ProductName(selected.name,
                     qualifier: index?.qualifier(selected.id), style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${qty(selected.quantityOnHand)} in stock'),
+                subtitle: Text('${selected.loose.stock(selected.quantityOnHand)} in stock'),
                 trailing: TextButton(onPressed: () => setState(() => _selected = null), child: const Text('Change')),
               ),
               const SizedBox(height: Spacing.s),
