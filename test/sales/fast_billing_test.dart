@@ -152,7 +152,7 @@ void main() {
       await tester.tap(plusOf('Paracetamol 500mg'));
       await tester.pumpAndSettle();
       expect(find.text('Batch PANTO-2  (suggested)'), findsNothing);
-      expect(find.text('Could not load this medicine. Close and try again.'), findsOneWidget);
+      expect(find.text('Could not load this medicine.'), findsOneWidget);
     }, () => server.client);
   });
 

@@ -51,13 +51,16 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _error = null);
     try {
       final sale = await ApiClient.instance.getSaleDetail(widget.saleId);
       if (!mounted) return;
       setState(() => _sale = sale);
       await _loadShop();
     } catch (e) {
-      if (mounted) setState(() => _error = 'Could not load receipt: $e');
+      // The sale itself went through: this screen opens with its id. Said
+      // plainly, or "could not load" reads as the sale having failed.
+      if (mounted) setState(() => _error = 'The sale is recorded, but its receipt could not be loaded: $e');
     }
   }
 
@@ -141,7 +144,7 @@ class _SaleReceiptScreenState extends State<SaleReceiptScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Sale complete')),
       body: sale == null
-          ? Center(child: _error != null ? ErrorText(_error, padding: EdgeInsets.zero) : const CircularProgressIndicator())
+          ? (_error != null ? LoadFailed(_error, onRetry: _load) : const Center(child: CircularProgressIndicator()))
           : ListView(
               padding: const EdgeInsets.all(Spacing.l),
               children: [
@@ -251,8 +254,7 @@ class _ShopDetailsNudge extends StatelessWidget {
           children: [
             Text('Your drug licence no. and phone are not on your bills.',
                 style: TextStyle(fontWeight: FontWeight.w600, color: colors.onTertiaryContainer)),
-            Text('Add them in Account and every bill shows them.',
-                style: TextStyle(color: colors.onTertiaryContainer)),
+            Text('Add them in Account and every bill shows them.', style: TextStyle(color: colors.onTertiaryContainer)),
             // In the card's own text colour: the theme's primary is too close
             // to this card's background on the dark theme to read.
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [

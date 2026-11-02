@@ -88,12 +88,15 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> with TabScreen {
         children: [
           Expanded(child: BusyOutlinedButton(busy: _loading, onPressed: refresh, label: 'Refresh')),
           const SizedBox(width: Spacing.s),
-          Expanded(child: BusyFilledButton(busy: _exporting, onPressed: _export, label: 'Export', icon: Icons.ios_share)),
+          Expanded(
+              child: BusyFilledButton(busy: _exporting, onPressed: _export, label: 'Export', icon: Icons.ios_share)),
         ],
       ),
       ErrorText(_error),
       const SizedBox(height: Spacing.m),
-      if (_sales.isEmpty && !_loading) const EmptyHint(icon: Icons.point_of_sale_outlined, text: 'No sales yet'),
+      // Not under an error: "No sales yet" beneath "Could not load" reads as fact.
+      if (_sales.isEmpty && !_loading && _error == null)
+        const EmptyHint(icon: Icons.point_of_sale_outlined, text: 'No sales yet'),
     ];
     return RefreshIndicator(
       onRefresh: refresh,
@@ -141,7 +144,8 @@ class _SaleRow extends StatelessWidget {
                   children: [
                     Text('${s.saleNo}${s.buyerName != null ? ' — ${s.buyerName}' : ''}',
                         style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                    Text(s.saleDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+                    Text(s.saleDate,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
                   ],
                 ),
               ),

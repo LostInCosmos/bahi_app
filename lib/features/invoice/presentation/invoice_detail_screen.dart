@@ -90,7 +90,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       appBar: AppBar(title: Text(detail?.invoiceNo ?? 'Invoice')),
       body: SafeArea(
         child: _error != null
-            ? Center(child: Padding(padding: const EdgeInsets.all(Spacing.l), child: Text(_error!)))
+            ? LoadFailed(_error, onRetry: _load)
             : detail == null
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
@@ -163,7 +163,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       const SizedBox(height: Spacing.l),
                       const SectionTitle('Totals'),
                       KeyValueRow('Subtotal', '₹${wholeOrFixed2(detail.subtotal)}'),
-                      if (detail.totalDiscount != null) KeyValueRow('Discount', '₹${wholeOrFixed2(detail.totalDiscount!)}'),
+                      if (detail.totalDiscount != null)
+                        KeyValueRow('Discount', '₹${wholeOrFixed2(detail.totalDiscount!)}'),
                       KeyValueRow('CGST', '₹${wholeOrFixed2(detail.totalCgst)}'),
                       KeyValueRow('SGST', '₹${wholeOrFixed2(detail.totalSgst)}'),
                       if (detail.totalIgst != null) KeyValueRow('IGST', '₹${wholeOrFixed2(detail.totalIgst!)}'),
