@@ -51,6 +51,31 @@ class EmptyHint extends StatelessWidget {
   }
 }
 
+/// A screen whose one load failed: the reason and a Try again button, and
+/// nothing else — never a form of empty fields over it, which a Save could
+/// send (the account screen once could). [message] null shows a generic line.
+class LoadFailed extends StatelessWidget {
+  final String? message;
+  final VoidCallback onRetry;
+
+  const LoadFailed(this.message, {super.key, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(Spacing.l),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ErrorText(message ?? 'Could not load this.', padding: EdgeInsets.zero, textAlign: TextAlign.center),
+              const SizedBox(height: Spacing.m),
+              OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Try again')),
+            ],
+          ),
+        ),
+      );
+}
+
 /// A label on the left, a value on the right — one line of a detail screen
 /// or a totals card.
 class KeyValueRow extends StatelessWidget {
@@ -68,7 +93,8 @@ class KeyValueRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(label, style: style ?? TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+          Expanded(
+              child: Text(label, style: style ?? TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
           Text(value, style: style),
         ],
       ),
