@@ -48,7 +48,7 @@ void main() {
     refuse = false;
     SharedPreferences.setMockInitialValues({});
     PackageInfo.setMockInitialValues(
-        appName: 'Dastavez', packageName: 'com.dastavez.bahi', version: '1.0.0', buildNumber: '2002', buildSignature: '');
+        appName: 'Dastavez', packageName: 'com.dastavez.app', version: '1.0.0', buildNumber: '2002', buildSignature: '');
     FlutterSecureStorage.setMockInitialValues({'token': _token});
     imageCache.clear();
   });

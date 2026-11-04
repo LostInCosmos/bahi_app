@@ -3,7 +3,7 @@
 // integration_test/ becomes one Android instrumentation test, listed at run
 // time by asking the app, so the orchestrator can run them one by one with
 // the app's data cleared in between. Built only into the test APK.
-package com.dastavez.bahi;
+package com.dastavez.app;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;

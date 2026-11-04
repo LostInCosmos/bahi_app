@@ -50,6 +50,6 @@ patrol:
   test_directory: integration_test
   screenshot_on_failure: true   # Android: the screen at the failing step, beside the per-step shots
   android:
-    package_name: com.dastavez.bahi
+    package_name: com.dastavez.app
   ios:
-    bundle_id: com.dastavez.bahi
+    bundle_id: com.dastavez.app

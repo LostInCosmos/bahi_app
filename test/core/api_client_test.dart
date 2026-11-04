@@ -112,7 +112,7 @@ void main() {
     setUp(() async {
       PackageInfo.setMockInitialValues(
         appName: 'Dastavez',
-        packageName: 'com.dastavez.bahi',
+        packageName: 'com.dastavez.app',
         version: '1.0.0',
         buildNumber: '2002',
         buildSignature: '',
