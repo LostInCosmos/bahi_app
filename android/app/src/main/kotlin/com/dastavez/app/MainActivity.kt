@@ -1,4 +1,4 @@
-package com.dastavez.bahi
+package com.dastavez.app
 
 import android.app.Activity
 import android.content.Intent
