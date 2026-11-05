@@ -149,6 +149,25 @@ class ProductBatchInfo {
       );
 }
 
+/// One correction of a product's stock count by the shop (DAS-172): packs
+/// [from] → [to], and whether the shop typed packs or tablets.
+class StockEdit {
+  final int id;
+  final double from;
+  final double to;
+  final String unit;
+  final String at; // ISO date-time from the server
+  const StockEdit({required this.id, required this.from, required this.to, required this.unit, required this.at});
+
+  factory StockEdit.fromJson(Map<String, dynamic> json) => StockEdit(
+        id: json.intReq('id'),
+        from: json.dblReq('from'),
+        to: json.dblReq('to'),
+        unit: json.str('unit') ?? 'pack',
+        at: json.strReq('at'),
+      );
+}
+
 /// GET /inventory/products/{id} — batches already arrive FEFO-sorted
 /// (soonest expiry first) from the backend.
 class ProductDetail {
@@ -162,6 +181,10 @@ class ProductDetail {
   /// Sold by the tablet, and its stock in tablets across batches (DAS-160).
   final LooseStock loose;
 
+  /// The shop's own stock corrections, newest first (DAS-172). Null from a
+  /// server that cannot take one: the Edit stock button is hidden then.
+  final List<StockEdit>? stockEdits;
+
   ProductDetail({
     required this.id,
     required this.name,
@@ -170,7 +193,10 @@ class ProductDetail {
     required this.totalQuantity,
     required this.batches,
     this.loose = LooseStock.none,
+    this.stockEdits,
   });
+
+  bool get canEditStock => stockEdits != null;
 
   /// The same product with one batch swapped for [batch].
   ProductDetail withBatch(ProductBatchInfo batch) => ProductDetail(
@@ -181,6 +207,7 @@ class ProductDetail {
         totalQuantity: totalQuantity,
         batches: [for (final b in batches) b.id == batch.id ? batch : b],
         loose: loose,
+        stockEdits: stockEdits,
       );
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) => ProductDetail(
@@ -191,5 +218,6 @@ class ProductDetail {
         totalQuantity: json.dblReq('total_quantity'),
         batches: json.listOf('batches', ProductBatchInfo.fromJson),
         loose: LooseStock.fromJson(json),
+        stockEdits: json.containsKey('stock_edits') ? json.listOf('stock_edits', StockEdit.fromJson) : null,
       );
 }

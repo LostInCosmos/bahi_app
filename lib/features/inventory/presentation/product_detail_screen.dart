@@ -11,6 +11,7 @@ import '../../../core/widgets/inline_message.dart';
 import '../../invoice/presentation/invoice_detail_screen.dart';
 import '../data/inventory_api.dart';
 import '../data/product_catalog.dart';
+import '../models/loose_stock.dart';
 import '../models/product.dart';
 import '../widgets/product_name.dart';
 
@@ -83,6 +84,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     context.say('MRP saved: ${rupees(saved)}');
   }
 
+  /// Opens the stock-count editor (DAS-172) and, once the server has saved
+  /// the count, reads the product again (the batches changed under it) and
+  /// refreshes the list the Sell and Inventory tabs show.
+  Future<void> _editStock() async {
+    final saved = await showModalBottomSheet<StockEditResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _StockSheet(detail: _detail!),
+    );
+    if (saved == null || !mounted) return;
+    final loose = _detail!.loose.loose && saved.unitsOnHand != null;
+    context.say('Stock saved: ${loose ? _detail!.loose.count(saved.unitsOnHand!) : plural(saved.quantityOnHand.round(), 'pack')}');
+    unawaited(ProductCatalog.instance.refresh());
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = _detail;
@@ -101,14 +118,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(Spacing.l),
                     children: [
-                      Text(
-                        '${detail!.loose.loose && detail.loose.unitsOnHand != null ? detail.loose.stock(detail.totalQuantity) : '${qty(detail.totalQuantity)} units'} total, across ${plural(detail.batches.length, 'batch', 'batches')}',
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${detail!.loose.loose && detail.loose.unitsOnHand != null ? detail.loose.stock(detail.totalQuantity) : '${qty(detail.totalQuantity)} units'} total, across ${plural(detail.batches.length, 'batch', 'batches')}',
+                              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                            ),
+                          ),
+                          // Only when the server can take a count (DAS-172).
+                          if (detail.canEditStock)
+                            TextButton.icon(
+                              key: const ValueKey('edit-stock'),
+                              onPressed: _editStock,
+                              icon: const Icon(Icons.edit, size: 16),
+                              label: const Text('Edit stock'),
+                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: Spacing.m),
                       if (detail.batches.isEmpty) const Text('No batches in stock.'),
                       for (final b in detail.batches)
                         _BatchCard(b, onEditMrp: b.mrpEdited == null ? null : () => _editMrp(b)),
+                      if (detail.stockEdits case final edits? when edits.isNotEmpty) ...[
+                        const SizedBox(height: Spacing.m),
+                        const SectionTitle('Stock corrections'),
+                        for (final e in edits) _StockEditRow(e, loose: detail.loose),
+                      ],
                     ],
                   ),
                 ),
@@ -347,6 +384,128 @@ class _MrpSheetState extends State<_MrpSheet> {
                 Expanded(
                   child: BusyFilledButton(busy: _busy, onPressed: _save, label: _warned ? 'Save anyway' : 'Save'),
                 ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// One stock correction, as the shop made it: "0 → 5 tablets · 05 Nov 2026".
+class _StockEditRow extends StatelessWidget {
+  final StockEdit edit;
+  final LooseStock loose;
+  const _StockEditRow(this.edit, {required this.loose});
+
+  @override
+  Widget build(BuildContext context) {
+    // `from`/`to` are packs; shown in tablets when the product is counted so.
+    String count(double packs) => loose.loose ? loose.count((packs * loose.unitsPerPack!).round()) : qty(packs);
+    final when = DateTime.tryParse(edit.at)?.toLocal();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+      child: KeyValueRow('${count(edit.from)} → ${count(edit.to)}', when == null ? edit.at : shortDate(when)),
+    );
+  }
+}
+
+/// The editor for a product's stock count (DAS-172): tablets for a product
+/// sold loose, packs otherwise. Pops with what the server saved, or null if
+/// the shopkeeper backed out.
+class _StockSheet extends StatefulWidget {
+  final ProductDetail detail;
+  const _StockSheet({required this.detail});
+
+  @override
+  State<_StockSheet> createState() => _StockSheetState();
+}
+
+class _StockSheetState extends State<_StockSheet> {
+  static const _max = 1000000.0;
+  bool get _loose => widget.detail.loose.loose && widget.detail.loose.unitsOnHand != null;
+  late final TextEditingController _controller = TextEditingController(
+      text: _loose ? widget.detail.loose.unitsOnHand.toString() : numText(widget.detail.totalQuantity));
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final value = double.tryParse(_controller.text.trim());
+    final whole = value != null && value == value.roundToDouble();
+    if (value == null || value < 0 || value > _max || (_loose && !whole)) {
+      setState(() => _error = _loose
+          ? 'Enter a whole number of ${widget.detail.loose.word}s, 0 or more'
+          : 'Enter a count from 0 to ${qty(_max)}');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final saved = _loose
+          ? await ApiClient.instance.setProductStock(widget.detail.id, unitsOnHand: value.round())
+          : await ApiClient.instance.setProductStock(widget.detail.id, quantityOnHand: value);
+      if (mounted) Navigator.of(context).pop(saved);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 404) {
+        ProductCatalog.instance.noteMergedAway();
+        context.say(ProductCatalog.mergedAwayMessage);
+        Navigator.of(context).pop();
+        return;
+      }
+      setState(() => _error = e.errorCode == 'bad_quantity' ? 'That count is not allowed.' : 'Could not save: $e');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not save: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.detail;
+    final colors = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Padding(
+        padding:
+            EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, MediaQuery.of(context).viewInsets.bottom + Spacing.l),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Edit stock', style: Theme.of(context).textTheme.titleMedium),
+            Text(d.name, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+            const SizedBox(height: Spacing.m),
+            TextField(
+              key: const ValueKey('stock-count'),
+              controller: _controller,
+              autofocus: true,
+              enabled: !_busy,
+              keyboardType: TextInputType.numberWithOptions(decimal: !_loose),
+              onChanged: (_) => setState(() => _error = null),
+              decoration: InputDecoration(
+                labelText: _loose ? '${d.loose.fieldLabel} in stock' : 'Packs in stock',
+                helperText: 'Counted now. A higher count adds stock; a lower one takes it off the soonest-expiring batch first.',
+                helperMaxLines: 3,
+                errorText: _error,
+              ),
+            ),
+            const SizedBox(height: Spacing.m),
+            Row(
+              children: [
+                TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+                const Spacer(),
+                BusyFilledButton(busy: _busy, onPressed: _save, label: 'Save'),
               ],
             ),
           ],
