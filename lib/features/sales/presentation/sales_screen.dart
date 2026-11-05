@@ -692,6 +692,7 @@ class _BatchPickerSheetState extends State<_BatchPickerSheet> {
                             available: available,
                             loose: unit.loose,
                             unitKind: unit.unitKind,
+                            pack: _detail!.pack,
                           ));
                         },
                   child: const Text('Add'),

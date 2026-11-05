@@ -1,11 +1,14 @@
 /// A rupee amount in words, the Indian way (lakh, crore), as a bill prints it:
-/// `1234.50` → "Rupees One Thousand Two Hundred Thirty-Four and Fifty Paise Only".
+/// `1234.50` → "One Thousand Two Hundred Thirty-Four Rupees and Fifty Paise Only".
+///
+/// "Rupees" follows its number (DAS-170): with it in front, "Rupees One
+/// Thousand Eight and Eighty-Six Paise" read as if the eighty-six were rupees.
 String rupeesInWords(double amount) {
   final paise = (amount.abs() * 100).round();
   final rupees = paise ~/ 100;
   final rest = paise % 100;
-  final words = rupees == 0 ? 'Zero' : _indian(rupees);
-  return rest == 0 ? 'Rupees $words Only' : 'Rupees $words and ${_belowHundred(rest)} Paise Only';
+  final words = '${rupees == 0 ? 'Zero' : _indian(rupees)} ${rupees == 1 ? 'Rupee' : 'Rupees'}';
+  return rest == 0 ? '$words Only' : '$words and ${_belowHundred(rest)} ${rest == 1 ? 'Paisa' : 'Paise'} Only';
 }
 
 const _ones = [

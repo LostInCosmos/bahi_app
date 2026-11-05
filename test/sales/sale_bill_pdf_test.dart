@@ -109,13 +109,97 @@ void main() {
     expect(stateOfGstin('99X'), isNull);
   });
 
-  test('amounts in words, the Indian way', () {
-    expect(rupeesInWords(0), 'Rupees Zero Only');
-    expect(rupeesInWords(699), 'Rupees Six Hundred Ninety-Nine Only');
-    expect(rupeesInWords(1234.5), 'Rupees One Thousand Two Hundred Thirty-Four and Fifty Paise Only');
-    expect(rupeesInWords(150000), 'Rupees One Lakh Fifty Thousand Only');
-    expect(rupeesInWords(21000000), 'Rupees Two Crore Ten Lakh Only');
-    expect(rupeesInWords(100.05), 'Rupees One Hundred and Five Paise Only');
+  test('amounts in words, the Indian way, with Rupees after its number (DAS-170)', () {
+    expect(rupeesInWords(0), 'Zero Rupees Only');
+    expect(rupeesInWords(1), 'One Rupee Only');
+    expect(rupeesInWords(699), 'Six Hundred Ninety-Nine Rupees Only');
+    expect(rupeesInWords(1008.86), 'One Thousand Eight Rupees and Eighty-Six Paise Only');
+    expect(rupeesInWords(1234.5), 'One Thousand Two Hundred Thirty-Four Rupees and Fifty Paise Only');
+    expect(rupeesInWords(150000), 'One Lakh Fifty Thousand Rupees Only');
+    expect(rupeesInWords(21000000), 'Two Crore Ten Lakh Rupees Only');
+    expect(rupeesInWords(100.05), 'One Hundred Rupees and Five Paise Only');
+    expect(rupeesInWords(0.01), 'Zero Rupees and One Paisa Only');
+  });
+
+  test('a quantity says what it counts: tablets, capsules, strips or pcs, never "unit" (DAS-170)', () {
+    expect(saleQtyText(14, loose: true, unitKind: 'capsule', pack: '1*10'), '14 capsules');
+    expect(saleQtyText(1, loose: true, unitKind: 'tablet', pack: '1×10'), '1 tablet');
+    expect(saleQtyText(7, loose: true, unitKind: null, pack: '1*10'), '7 pcs');
+    expect(saleQtyText(2, loose: false, unitKind: 'tablet', pack: '1×10'), '2 strips');
+    expect(saleQtyText(1, loose: false, pack: '1*15'), '1 strip');
+    expect(saleQtyText(1, loose: false, pack: '10*10'), '1 pc');
+    expect(saleQtyText(3, loose: false, pack: '100ML'), '3 pcs');
+    expect(saleQtyText(1, loose: false, pack: '1P'), '1 pc');
+    expect(saleQtyText(2, loose: false, pack: null), '2 pcs');
+    expect(isStripPack('1x30'), isTrue);
+    expect(isStripPack('1x60'), isFalse);
+    expect(isStripPack('1*1'), isFalse);
+    for (final t in [
+      saleQtyText(5, loose: true, unitKind: null),
+      saleQtyText(5, loose: false, pack: 'BOX'),
+      SaleLineItemDetail.fromJson({'product_name': 'X', 'qty': 7, 'rate': 1, 'gst_pct': 5, 'cgst_amount': 0, 'sgst_amount': 0, 'line_amount': 7, 'unit': 'loose', 'pack': '1*10'}).qtyText,
+    ]) {
+      expect(t, isNot(contains('unit')));
+    }
+  });
+
+  test('the item table has no Pack column; Qty is wide enough for "14 capsules" on one line', () {
+    expect(billColumns(true), isNot(contains('Pack')));
+    expect(billColumns(false), isNot(contains('Pack')));
+    expect(billColumns(true), contains('Qty'));
+    // The Qty column's share of the A4 width (595 − 56 pt of margins), at the
+    // 8 pt table font: Noto Sans sets "14 capsules" in about 44 pt.
+    final total = billColumns(true).fold(0.0, (s, h) => s + billColumnWidth(h));
+    expect(539 * billColumnWidth('Qty') / total - 4, greaterThan(46));
+  });
+
+  test('sample bills for a look by eye: pack-only, loose-only, mixed and long (DAS-170)', () async {
+    SaleLineItemDetail li(String name, double qty, double rate, double amount,
+            {bool loose = false, String? kind, String? pack, String? hsn, String? batch, String? exp, double? mrp, double disc = 0}) =>
+        SaleLineItemDetail(
+          productName: name, qty: qty, rate: rate, gstPct: 5, cgstAmount: amount * 0.05 / 2.1, sgstAmount: amount * 0.05 / 2.1,
+          lineAmount: amount, discountAmount: disc, hsn: hsn, batchNo: batch, expiryDate: exp, mrp: mrp, pack: pack,
+          loose: loose, unitKind: kind,
+        );
+    SaleDetail sale(String no, List<SaleLineItemDetail> lines, {String? buyer, String? doctor}) {
+      final total = lines.fold(0.0, (s, l) => s + l.netAmount);
+      return SaleDetail(
+        id: 1, saleNo: no, saleDate: '2026-11-04', buyerName: buyer, doctorName: doctor, paymentMode: PaymentMode.cash,
+        subtotal: 0, totalCgst: lines.fold(0.0, (s, l) => s + l.cgstAmount), totalSgst: lines.fold(0.0, (s, l) => s + l.sgstAmount),
+        grandTotal: total, lineItems: lines,
+      );
+    }
+    final packOnly = sale('2026-27/0101', [
+      li('NERVITOP GEL', 1, 265, 265, pack: '1P', hsn: '30049081', batch: 'BYJ02AEA', exp: '2027-01-31', mrp: 265, disc: 26.5),
+      li('CALTROL PLUS CAP', 2, 195, 390, pack: '1*10', hsn: '30049099', batch: 'P610601', exp: '2028-01-31', mrp: 195, kind: 'capsule'),
+      li('BENADRYL COUGH SYRUP 100ML', 1, 112.5, 112.5, pack: '100ML', hsn: '30049011', batch: 'ZCG-029A', exp: '2027-06-30', mrp: 112.5),
+      li('NACMED-SP TAB', 1, 108.2, 108.2, pack: '10*10', hsn: '300490', batch: 'UT-260900D', mrp: 108.2, kind: 'tablet'),
+    ], buyer: 'Anuj');
+    final looseOnly = sale('2026-27/0102', [
+      li('CALTROL PLUS CAP', 14, 19.5, 273, loose: true, kind: 'capsule', pack: '1*10', hsn: '30049099', batch: 'P610601', exp: '2028-01-31', mrp: 195, disc: 27.3),
+      li('GABAFIX-MNT', 7, 25.87, 181.09, loose: true, kind: null, pack: '1*10', hsn: '300490', batch: '26S38TA500', exp: '2028-03-31', mrp: 258.7, disc: 18.11),
+      li('NACMED-SP TAB', 14, 1.08, 15.12, loose: true, kind: 'tablet', pack: '10*10', hsn: '300490', batch: 'UT-260900D', mrp: 108.2, disc: 1.51),
+    ], buyer: 'Anuj', doctor: 'Raghvendra Tripathi');
+    final mixed = sale('2026-27/0012', [
+      li('NERVITOP GEL', 1, 265, 265, pack: '1P', hsn: '30049081', batch: 'BYJ02AEA', exp: '2027-01-31', mrp: 265, disc: 26.5),
+      li('CALTROL PLUS CAP', 14, 19.5, 273, loose: true, kind: 'capsule', pack: '1*10', hsn: '30049099', batch: 'P610601', exp: '2028-01-31', mrp: 195, disc: 27.3),
+      li('GABAFIX-MNT', 7, 25.87, 181.09, loose: true, kind: null, pack: '1*10', hsn: '300490', batch: '26S38TA500', exp: '2028-03-31', mrp: 258.7, disc: 18.11),
+      li('CALCITAS D3 SOFTGEL', 7, 32.75, 229.25, loose: true, kind: null, pack: '1*10', hsn: '3004', batch: 'VHD2601005', exp: '2027-12-31', disc: 22.93),
+      li('NACMED-SP TAB', 14, 1.08, 15.12, loose: true, kind: 'tablet', pack: '10*10', hsn: '300490', batch: 'UT-260900D', mrp: 108.2, disc: 1.51),
+      li('EASE-D CAP', 14, 11.25, 157.5, loose: true, kind: 'capsule', pack: '1*10', hsn: '30049099', batch: 'ZCG-029A', exp: '2027-06-30', mrp: 112.5, disc: 15.75),
+      li('CROCIN ADVANCE 500 MG TABLET STRIP OF FIFTEEN', 2, 30, 60, pack: '1*15', hsn: '30049099', batch: 'CR2611', exp: '2028-09-30', mrp: 30, kind: 'tablet'),
+    ], buyer: 'Anuj', doctor: 'Raghvendra Tripathi');
+    final long = sale('2026-27/0103', [
+      for (var i = 0; i < 45; i++)
+        i % 3 == 0
+            ? li('LONG NAME MEDICINE NUMBER $i 500 MG TABLET', 2, 30, 60, pack: '1*10', hsn: '30049099', batch: 'B$i', exp: '2028-06-30', mrp: 30, kind: 'tablet')
+            : li('MEDICINE $i', 14, 11.25, 157.5, loose: true, kind: i.isEven ? 'tablet' : 'capsule', pack: '1*10', hsn: '3004', batch: 'B$i', exp: '2028-06-30', mrp: 112.5),
+    ], buyer: 'City Nursing Home');
+    Directory('build/bill_samples').createSync(recursive: true);
+    for (final (name, s) in [('pack_only', packOnly), ('loose_only', looseOnly), ('mixed', mixed), ('long', long)]) {
+      File('build/bill_samples/das170_$name.pdf').writeAsBytesSync(await buildSaleBillPdf(s, _shop(), _fonts()));
+    }
+    expect(_pages(await buildSaleBillPdf(mixed, _shop(), _fonts(), compress: false)), 1);
   });
 
   test('a sale line reads the bill fields, and an older server leaves them null', () {
