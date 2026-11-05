@@ -171,6 +171,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('sale-add-new-product')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('new-product-mrp')), '90');
+      await tester.enterText(find.byKey(const ValueKey('new-product-gst')), '12');
       await tester.tap(find.text('Create & continue'));
       await tester.pumpAndSettle();
       expect(find.textContaining("'ZINCOVIT DROPS' already exists"), findsOneWidget);
@@ -199,6 +200,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Pick one'), findsOneWidget);
       await tester.enterText(find.byKey(const ValueKey('new-product-mrp')), '265');
+      await tester.tap(find.text('Create & continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter the GST rate on the pack: 0, 5, 12 or 18.'), findsOneWidget, reason: 'GST is not prefilled');
+      await tester.enterText(find.byKey(const ValueKey('new-product-gst')), '5');
       await tester.tap(find.text('Create & continue'));
       await tester.pumpAndSettle();
       expect(find.text('Pick a unit: how this item is counted.'), findsOneWidget);

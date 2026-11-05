@@ -64,7 +64,9 @@ class NewProductForm extends StatefulWidget {
 class _NewProductFormState extends State<NewProductForm> {
   late final _nameController = TextEditingController(text: widget.initialName);
   final _mrpController = TextEditingController();
-  final _gstController = TextEditingController(text: '0');
+  // Empty on purpose (DAS-172 review): a prefilled 0 filed every untouched
+  // item as GST-free, and most medicines are 5% or 12%.
+  final _gstController = TextEditingController();
   final _qtyController = TextEditingController(text: '1');
   late String? _unit = guessUnit(widget.initialName);
 
@@ -85,11 +87,13 @@ class _NewProductFormState extends State<NewProductForm> {
   Future<void> _create() async {
     final name = _nameController.text.trim();
     final mrp = double.tryParse(_mrpController.text.trim());
-    final gst = double.tryParse(_gstController.text.trim()) ?? 0;
+    final gst = double.tryParse(_gstController.text.trim());
     final qty = widget.askQuantity ? double.tryParse(_qtyController.text.trim()) : 0.0;
     if (name.isEmpty) return setState(() => _error = 'Enter a product name.');
     if (mrp == null || mrp <= 0) return setState(() => _error = 'Enter an MRP greater than 0.');
-    if (gst < 0 || gst > 100) return setState(() => _error = 'Enter a GST rate from 0 to 100.');
+    if (gst == null || gst < 0 || gst > 100) {
+      return setState(() => _error = 'Enter the GST rate on the pack: 0, 5, 12 or 18.');
+    }
     final unit = _unit;
     if (unit == null) return setState(() => _error = 'Pick a unit: how this item is counted.');
     if (qty == null || qty < 0 || (widget.askQuantity && qty <= 0)) {
@@ -155,7 +159,7 @@ class _NewProductFormState extends State<NewProductForm> {
                 key: const ValueKey('new-product-gst'),
                 controller: _gstController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'GST %', isDense: true),
+                decoration: const InputDecoration(labelText: 'GST %', isDense: true, hintText: '5, 12, 18…'),
               ),
             ),
           ],
