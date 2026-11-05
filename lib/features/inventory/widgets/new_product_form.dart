@@ -12,6 +12,24 @@ import '../data/product_catalog.dart';
 /// The units a product typed in by hand can be counted in.
 const kProductUnits = ['tablet', 'strip', 'capsule', 'bottle', 'tube', 'vial', 'ampoule', 'sachet'];
 
+/// The unit a product name gives away ("ZINCOVIT DROPS" → bottle, "DOLO 650
+/// TAB" → tablet), or null when it says nothing: then the shopkeeper picks,
+/// rather than a default quietly filing drops and bottles as tablets
+/// (DAS-172 review).
+String? guessUnit(String name) {
+  final n = ' ${name.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), ' ')} ';
+  bool has(List<String> words) => words.any((w) => n.contains(' $w ') || n.contains(' $w') && RegExp(' $w[0-9]').hasMatch(n));
+  if (has(['TAB', 'TABS', 'TABLET', 'TABLETS', 'DT', 'MD', 'SR', 'XR', 'ER', 'CR', 'OD'])) return 'tablet';
+  if (has(['CAP', 'CAPS', 'CAPSULE', 'CAPSULES', 'SOFTGEL', 'SOFTGELS'])) return 'capsule';
+  if (has(['DROPS', 'DROP', 'SYRUP', 'SYP', 'SUSP', 'SUSPENSION', 'SOLUTION', 'SOLN', 'LOTION', 'SHAMPOO', 'OIL', 'ML', 'BOTTLE', 'MOUTHWASH', 'LIQUID'])) return 'bottle';
+  if (has(['CREAM', 'GEL', 'OINTMENT', 'OINT', 'TUBE', 'PASTE', 'BALM'])) return 'tube';
+  if (has(['INJ', 'INJECTION', 'VIAL'])) return 'vial';
+  if (has(['AMP', 'AMPOULE', 'AMPULE'])) return 'ampoule';
+  if (has(['SACHET', 'SACHETS', 'POWDER', 'ORS'])) return 'sachet';
+  if (has(['STRIP'])) return 'strip';
+  return null;
+}
+
 /// The form that creates a product the shop does not have yet: name, MRP,
 /// GST and unit. With [askQuantity] it also takes the stock (the voice
 /// orders' "Add item" box); without it the product starts at 0 stock, to be
@@ -48,7 +66,10 @@ class _NewProductFormState extends State<NewProductForm> {
   final _mrpController = TextEditingController();
   final _gstController = TextEditingController(text: '0');
   final _qtyController = TextEditingController(text: '1');
-  String _unit = 'tablet';
+  late String? _unit = guessUnit(widget.initialName);
+
+  /// Set once the shopkeeper chose a unit by hand: the name no longer re-guesses it.
+  bool _unitPicked = false;
   String? _error;
   bool _creating = false;
 
@@ -69,6 +90,8 @@ class _NewProductFormState extends State<NewProductForm> {
     if (name.isEmpty) return setState(() => _error = 'Enter a product name.');
     if (mrp == null || mrp <= 0) return setState(() => _error = 'Enter an MRP greater than 0.');
     if (gst < 0 || gst > 100) return setState(() => _error = 'Enter a GST rate from 0 to 100.');
+    final unit = _unit;
+    if (unit == null) return setState(() => _error = 'Pick a unit: how this item is counted.');
     if (qty == null || qty < 0 || (widget.askQuantity && qty <= 0)) {
       return setState(() => _error = 'Enter a quantity in stock greater than 0.');
     }
@@ -81,7 +104,7 @@ class _NewProductFormState extends State<NewProductForm> {
         name: name,
         mrp: mrp,
         quantity: qty,
-        unit: _unit,
+        unit: unit,
         gstPct: gst,
         source: widget.source,
       );
@@ -109,6 +132,9 @@ class _NewProductFormState extends State<NewProductForm> {
           key: const ValueKey('new-product-name'),
           controller: _nameController,
           autofocus: true,
+          onChanged: (v) {
+            if (!_unitPicked) setState(() => _unit = guessUnit(v));
+          },
           textCapitalization: TextCapitalization.characters,
           decoration: const InputDecoration(labelText: 'Product name', isDense: true),
         ),
@@ -149,11 +175,18 @@ class _NewProductFormState extends State<NewProductForm> {
             ],
             Expanded(
               child: DropdownButtonFormField<String>(
+                key: const ValueKey('new-product-unit'),
                 initialValue: _unit,
                 decoration: const InputDecoration(labelText: 'Unit', isDense: true),
+                hint: const Text('Pick one'),
                 items: kProductUnits.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
                 onChanged: (v) {
-                  if (v != null) setState(() => _unit = v);
+                  if (v != null) {
+                    setState(() {
+                      _unit = v;
+                      _unitPicked = true;
+                    });
+                  }
                 },
               ),
             ),

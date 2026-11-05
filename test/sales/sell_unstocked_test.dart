@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gst_bill_app/core/api/api_client.dart';
 import 'package:gst_bill_app/features/inventory/data/inventory_api.dart';
 import 'package:gst_bill_app/features/inventory/data/product_catalog.dart';
+import 'package:gst_bill_app/features/inventory/widgets/new_product_form.dart';
 import 'package:gst_bill_app/features/sales/presentation/sale_review_screen.dart';
 import 'package:gst_bill_app/features/sales/presentation/sales_screen.dart';
 
@@ -138,7 +139,7 @@ void main() {
       await tester.tap(find.text('Create & continue'));
       await tester.pumpAndSettle();
 
-      expect(server.created.single, {'name': 'ZINCOVIT DROPS', 'mrp': 90, 'quantity': 0, 'unit': 'tablet', 'gst_pct': 12, 'source': 'sale'});
+      expect(server.created.single, {'name': 'ZINCOVIT DROPS', 'mrp': 90, 'quantity': 0, 'unit': 'bottle', 'gst_pct': 12, 'source': 'sale'});
       // Its batch picker opened at once, at the MRP, with none in stock.
       expect(find.text('ZINCOVIT DROPS'), findsWidgets);
       expect(find.text('Available: 0'), findsOneWidget);
@@ -166,7 +167,7 @@ void main() {
   testWidgets('a name the shop already has is refused by the server and the form says which', (tester) async {
     final server = _Server()..conflictStatus = 409;
     await open(tester, server, () async {
-      await search(tester, 'zincovit');
+      await search(tester, 'zincovit drops');
       await tester.tap(find.byKey(const ValueKey('sale-add-new-product')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('new-product-mrp')), '90');
@@ -174,6 +175,38 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining("'ZINCOVIT DROPS' already exists"), findsOneWidget);
       expect(find.text('Add new product'), findsOneWidget, reason: 'the form stays open to fix the name');
+    });
+  });
+
+  test('the unit is guessed from the name, and left for the shopkeeper when the name says nothing', () {
+    expect(guessUnit('ZINCOVIT DROPS'), 'bottle');
+    expect(guessUnit('Dolo 650 Tab'), 'tablet');
+    expect(guessUnit('CALTROL PLUS CAP'), 'capsule');
+    expect(guessUnit('BETADINE OINTMENT 20G'), 'tube');
+    expect(guessUnit('BENADRYL COUGH SYRUP 100ML'), 'bottle');
+    expect(guessUnit('ORS ORANGE 21G SACHET'), 'sachet');
+    expect(guessUnit('AMOXY 500 INJ'), 'vial');
+    expect(guessUnit('CALCITAS D3 SOFTGEL'), 'capsule');
+    expect(guessUnit('NERVITOP'), isNull);
+    expect(guessUnit(''), isNull);
+  });
+
+  testWidgets('a name that says nothing leaves the unit unpicked, and Create asks for it', (tester) async {
+    final server = _Server();
+    await open(tester, server, () async {
+      await search(tester, 'nervitop');
+      await tester.tap(find.byKey(const ValueKey('sale-add-new-product')));
+      await tester.pumpAndSettle();
+      expect(find.text('Pick one'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('new-product-mrp')), '265');
+      await tester.tap(find.text('Create & continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pick a unit: how this item is counted.'), findsOneWidget);
+      expect(server.created, isEmpty);
+      // Typing a telling name fills it in.
+      await tester.enterText(find.byKey(const ValueKey('new-product-name')), 'NERVITOP GEL');
+      await tester.pumpAndSettle();
+      expect(find.text('tube'), findsOneWidget);
     });
   });
 

@@ -151,7 +151,7 @@ void main() {
       await openPicker(tester);
       await tester.enterText(find.widgetWithText(TextField, 'Tablets'), '50');
       await tester.pump();
-      expect(find.text('Only 45 tablets in inventory. This note will not appear on the bill.'), findsOneWidget);
+      expect(find.text('Only 45 tablets in inventory. The item is still billed; only this note stays off the bill.'), findsOneWidget);
     }, () => _server(_strip));
   });
 
