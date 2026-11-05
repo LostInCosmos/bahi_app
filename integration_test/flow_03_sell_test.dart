@@ -1,6 +1,6 @@
 // Flow 3: sell 20 of the seeded strip by typing, and see the stock fall by 20
 // in Inventory. The strip (1x10) is sold loose (DAS-160) and its name states
-// no form, so the sale line counts "units"; flow 8 sells real tablets.
+// no form, so the sale line counts "pcs" (DAS-170); flow 8 sells real tablets.
 //
 // The stock before the sale is read from the screen, not assumed, so the
 // flow holds whether or not the server was reset since the last sale.
@@ -24,11 +24,11 @@ void main() {
     await $('Add').tap();
     await $(find.textContaining('View cart')).tap();
     await $('Review sale').waitUntilVisible();
-    await $('${E2E.product} × 20 units').waitUntilVisible();
+    await $('${E2E.product} × 20 pcs').waitUntilVisible();
     await steps.shot('review');
     await $('Complete sale').tap();
     await $('Sale complete').waitUntilVisible(timeout: const Duration(seconds: 30));
-    await $(find.textContaining('× 20 units')).waitUntilVisible();
+    await $(find.textContaining('× 20 pcs')).waitUntilVisible();
     await steps.shot('receipt');
     await $('New sale').tap(); // back to the Sell tab
 
