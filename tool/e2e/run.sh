@@ -47,7 +47,7 @@ PORT="${E2E_PORT:-8000}"
 SERIAL="emulator-5554"
 PACKAGE="com.dastavez.app"
 RUN_DIR="$APP_DIR/build/e2e/$(date +%Y%m%d-%H%M%S)"
-ALL_FLOWS=(flow_01_signup flow_02_photograph flow_03_sell flow_04_export flow_05_logout_login flow_06_folder_upload flow_07_corrections flow_08_sell_loose)
+ALL_FLOWS=(flow_01_signup flow_02_photograph flow_03_sell flow_04_export flow_05_logout_login flow_06_folder_upload flow_07_corrections flow_08_sell_loose flow_09_sell_unstocked)
 FLOWS=("$@"); [ $# -eq 0 ] && FLOWS=("${ALL_FLOWS[@]}")
 
 say() { printf '\n== %s\n' "$*"; }

@@ -116,11 +116,11 @@ void main() {
 
   test('the oversell note counts tablets on a loose line', () {
     expect(stockNote(50, 45, loose: true, unitKind: 'tablet'),
-        'Only 45 tablets in inventory. This note will not appear on the bill.');
-    expect(stockNote(5, 3), 'Only 3 in inventory. This note will not appear on the bill.');
+        'Only 45 tablets in inventory. The item is still billed; only this note stays off the bill.');
+    expect(stockNote(5, 3), 'Only 3 in inventory. The item is still billed; only this note stays off the bill.');
     final c = CartEntry(
         productBatchId: 7, productName: 'P', qty: 50, rate: 10, gstPct: 12, available: 45, loose: true, unitKind: 'tablet');
-    expect(c.shortStockNote, 'Only 45 tablets in inventory · not on the bill');
+    expect(c.shortStockNote, 'Only 45 tablets in inventory · still billed');
     expect(c.edited(qty: 20, rate: 10).loose, isTrue, reason: 'an edit keeps the unit');
   });
 }

@@ -67,17 +67,17 @@ void main() {
     test('says how much there is, only when the sale asks for more', () {
       expect(stockNote(10, 45), isNull);
       expect(stockNote(45, 45), isNull);
-      expect(stockNote(60, 45), 'Only 45 in inventory. This note will not appear on the bill.');
-      expect(stockNote(2, 0), 'None in inventory. This note will not appear on the bill.');
+      expect(stockNote(60, 45), 'Only 45 in inventory. The item is still billed; only this note stays off the bill.');
+      expect(stockNote(2, 0), 'None in inventory. The item is still billed; only this note stays off the bill.');
       expect(stockNote(60, null), isNull, reason: 'stock not known: nothing to say');
     });
 
     test('the review list carries its short form', () {
       CartEntry line(double qty, double? available) =>
           CartEntry(productBatchId: 1, productName: 'X', qty: qty, rate: 20, gstPct: 12, available: available);
-      expect(line(60, 45).shortStockNote, 'Only 45 in inventory · not on the bill');
+      expect(line(60, 45).shortStockNote, 'Only 45 in inventory · still billed');
       expect(line(10, 45).shortStockNote, isNull);
-      expect(line(1, 0).shortStockNote, 'None in inventory · not on the bill');
+      expect(line(1, 0).shortStockNote, 'None in inventory · still billed');
     });
   });
 
@@ -86,7 +86,7 @@ void main() {
       await openPicker(tester);
       await tester.enterText(find.widgetWithText(TextField, 'Qty'), '60');
       await tester.pump();
-      expect(find.text('Only 45 in inventory. This note will not appear on the bill.'), findsOneWidget);
+      expect(find.text('Only 45 in inventory. The item is still billed; only this note stays off the bill.'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pumpAndSettle();
       expect(find.text('View cart · 1 item'), findsOneWidget);
@@ -114,7 +114,7 @@ void main() {
       final adds = find.widgetWithText(FilledButton, 'Add');
       expect(tester.widget<FilledButton>(adds.at(0)).onPressed, isNotNull, reason: 'none left: sellable with a note');
       expect(tester.widget<FilledButton>(adds.at(1)).onPressed, isNull, reason: 'expired: blocked');
-      expect(find.text('None in inventory. This note will not appear on the bill.'), findsOneWidget);
+      expect(find.text('None in inventory. The item is still billed; only this note stays off the bill.'), findsOneWidget);
     }, () => _server([_batch(id: 7, onHand: 0), _batch(id: 8, expired: true)]));
   });
 
@@ -125,7 +125,7 @@ void main() {
         CartEntry(productBatchId: 7, productName: 'Cetirizine', batchNo: 'B7', qty: 60, rate: 20, gstPct: 12, available: 45),
       ]),
     ));
-    expect(find.text('Only 45 in inventory · not on the bill'), findsOneWidget);
+    expect(find.text('Only 45 in inventory · still billed'), findsOneWidget);
   });
 
   testWidgets('an older server still refuses, and its answer is shown as before', (tester) async {

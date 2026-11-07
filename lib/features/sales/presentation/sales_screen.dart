@@ -15,6 +15,7 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/inline_message.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../../inventory/models/product.dart';
+import '../../inventory/widgets/new_product_form.dart';
 import '../../inventory/widgets/product_name.dart';
 import '../../voice/data/voice_api.dart';
 import '../../voice/models/voice.dart';
@@ -160,6 +161,17 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
     _prefetchTimer?.cancel();
     _searchController.clear();
     setState(() => _query = '');
+  }
+
+  /// The item is not in the shop's list at all (DAS-172): create it with
+  /// its name, MRP and GST at 0 stock, then open its batch picker so it is
+  /// billed at once; the sale goes through as an oversell (DAS-111) and the
+  /// stock stays at 0. Our team fills in the rest after checking it.
+  Future<void> _addNewProduct() async {
+    final created = await showNewProductSheet(context, initialName: _query.trim(), source: 'sale');
+    if (created == null || !mounted) return;
+    _clearSearch();
+    _openPicker(created.product);
   }
 
   void _openPicker(ProductSummary p) {
@@ -337,15 +349,31 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
           child: Center(child: Text('No products found')),
         ),
     ];
+    // After the matches: an item the shop does not have yet (DAS-172).
+    final footer = <Widget>[
+      if (_query.trim().isNotEmpty && index != null)
+        Padding(
+          padding: const EdgeInsets.only(top: Spacing.s),
+          child: Center(
+            child: TextButton.icon(
+              key: const ValueKey('sale-add-new-product'),
+              onPressed: _addNewProduct,
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              label: const Text("Can't find it? Add as new product"),
+            ),
+          ),
+        ),
+    ];
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: refresh,
         // Built as they scroll into view — see InventoryScreen.
         child: ListView.builder(
           padding: const EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, 90),
-          itemCount: header.length + products.length,
+          itemCount: header.length + products.length + footer.length,
           itemBuilder: (context, i) {
             if (i < header.length) return header[i];
+            if (i >= header.length + products.length) return footer[i - header.length - products.length];
             final p = products[i - header.length];
             return Card(
               child: ListTile(

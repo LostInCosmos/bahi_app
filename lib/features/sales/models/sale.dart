@@ -10,7 +10,7 @@ import 'sale_totals.dart';
 /// stock is not known. A line sold [loose] counts tablets ("Only 4 tablets").
 String? stockNote(double qty, double? available, {bool loose = false, String? unitKind}) {
   if (available == null || qty <= available) return null;
-  return '${_haveText(available, loose, unitKind)} in inventory. This note will not appear on the bill.';
+  return '${_haveText(available, loose, unitKind)} in inventory. The item is still billed; only this note stays off the bill.';
 }
 
 /// "None" or "Only 45" / "Only 45 tablets": what there is, for [stockNote].
@@ -106,7 +106,7 @@ class CartEntry {
   String? get shortStockNote {
     final a = available;
     if (a == null || qty <= a) return null;
-    return '${_haveText(a, loose, unitKind)} in inventory · not on the bill';
+    return '${_haveText(a, loose, unitKind)} in inventory · still billed';
   }
 
   SaleLineInput get input => SaleLineInput(qty: qty, rate: rate, gstPct: gstPct, discount: discount);
