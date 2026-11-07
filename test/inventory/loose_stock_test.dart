@@ -89,7 +89,7 @@ void main() {
     expect(d.withBatch(b).loose.loose, isTrue);
   });
 
-  test('a sale line sold loose says how many tablets; a pack line keeps its bare count', () {
+  test('a sale line sold loose says how many tablets; a pack line says pcs (DAS-170)', () {
     final loose = SaleLineItemDetail.fromJson({
       'product_name': 'Paracetamol 650',
       'qty': 20,
@@ -111,7 +111,7 @@ void main() {
       'sgst_amount': 9.11,
       'line_amount': 170,
     });
-    expect(pack.qtyText, '2');
+    expect(pack.qtyText, '2 pcs');
   });
 
   test('the oversell note counts tablets on a loose line', () {

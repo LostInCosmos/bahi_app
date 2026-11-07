@@ -17,6 +17,29 @@ String? stockNote(double qty, double? available, {bool loose = false, String? un
 String _haveText(double available, bool loose, String? unitKind) =>
     available <= 0 ? 'None' : 'Only ${loose ? unitCount(available, unitKind) : fmt.qty(available)}';
 
+/// What a sale line's quantity counts, in words the customer reads on the
+/// bill (DAS-170): "14 capsules" or "20 tablets" when sold loose, "2 strips"
+/// when the pack is a strip (`1×10`, `1*15`: one row of up to 30), and
+/// "3 pcs" for a bottle, tube, box or anything else sold whole, or loose
+/// units whose kind the server could not tell. Never "unit", which means
+/// nothing to a customer. The same text on the receipt, the review list and
+/// the bill, so a quantity reads the same everywhere.
+String saleQtyText(double qty, {required bool loose, String? unitKind, String? pack}) {
+  if (loose && unitKind != null) return unitCount(qty, unitKind);
+  final n = qty.round();
+  if (!loose && isStripPack(pack)) return fmt.plural(n, 'strip');
+  return fmt.plural(n, 'pc', 'pcs');
+}
+
+/// A pack string that is one strip: `1×10`, `1*15`, `1x30`. A box of strips
+/// (`10×10`), a bottle (`100ML`) or an unknown pack is not.
+bool isStripPack(String? pack) {
+  final m = RegExp(r'^\s*1\s*[x×*]\s*(\d+)\s*$', caseSensitive: false).firstMatch(pack ?? '');
+  if (m == null) return false;
+  final per = int.parse(m.group(1)!);
+  return per > 1 && per <= 30;
+}
+
 /// One line the shopkeeper has added to the sale in progress, before it's
 /// submitted — mirrors the web app's in-memory `cart` array.
 class CartEntry {
@@ -42,6 +65,9 @@ class CartEntry {
   final bool loose;
   final String? unitKind;
 
+  /// The product's pack (`1×10`, `100ML`) for [qtyText]'s word.
+  final String? pack;
+
   CartEntry({
     required this.productBatchId,
     required this.productName,
@@ -53,6 +79,7 @@ class CartEntry {
     this.available,
     this.loose = false,
     this.unitKind,
+    this.pack,
   });
 
   /// The same line with what the shopkeeper changed on the review screen.
@@ -67,10 +94,11 @@ class CartEntry {
         available: available,
         loose: loose,
         unitKind: unitKind,
+        pack: pack,
       );
 
-  /// "20 tablets", or the bare pack count ("2") as before.
-  String get qtyText => loose ? unitCount(qty, unitKind) : fmt.qty(qty);
+  /// "20 tablets", "2 strips", "1 pc": [saleQtyText].
+  String get qtyText => saleQtyText(qty, loose: loose, unitKind: unitKind, pack: pack);
 
   double get lineAmount => qty * rate;
 
@@ -132,8 +160,8 @@ class SaleLineItemDetail {
     this.unitKind,
   });
 
-  /// "20 tablets", or the bare pack count ("2") as before.
-  String get qtyText => loose ? unitCount(qty, unitKind) : fmt.qty(qty);
+  /// "20 tablets", "2 strips", "1 pc": [saleQtyText].
+  String get qtyText => saleQtyText(qty, loose: loose, unitKind: unitKind, pack: pack);
 
   double get discountTotal => discountAmount + saleDiscountShare;
 

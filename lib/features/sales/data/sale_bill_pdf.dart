@@ -98,14 +98,6 @@ String _expiry(String? iso) {
 String _money(double v) => v.toStringAsFixed(2);
 
 
-/// A line's quantity in the Qty column: "20 tab" when sold by the tablet
-/// (DAS-160), so its rate reads as a tablet's; a pack line as before.
-String _lineQty(SaleLineItemDetail li) {
-  if (!li.loose) return numText(li.qty);
-  final short = switch (li.unitKind) { 'tablet' => 'tab', 'capsule' => 'cap', _ => 'unit' };
-  return '${numText(li.qty)} $short';
-}
-
 /// "98390 12345" from the 10 digits the server stores.
 String _phone(String p) => p.length == 10 ? '${p.substring(0, 5)} ${p.substring(5)}' : p;
 
@@ -185,16 +177,25 @@ pw.Widget _cell(String text, {pw.TextAlign align = pw.TextAlign.left, bool bold 
     );
 
 // HSN and Batch hold an 8-digit code and a batch of up to 10 characters on
-// one line at 8 pt (they wrapped at 0.85 and 1.1); the item name gives way.
+// one line at 8 pt (they wrapped at 0.85 and 1.1); Qty holds "14 capsules"
+// (DAS-170: at 0.6 the word wrapped under the number); the item name gives
+// way. No Pack column (user, 2026-11-05): the quantity says what it counts.
 const _widths = {
-  '#': 0.45, 'Item': 4.3, 'HSN': 1.2, 'Pack': 0.85, 'Batch': 1.65, 'Exp': 0.8,
-  'MRP': 1.0, 'Qty': 0.6, 'Rate': 1.0, 'Disc': 0.85, 'GST%': 0.75, 'Amount': 1.25,
+  '#': 0.45, 'Item': 4.1, 'HSN': 1.2, 'Batch': 1.65, 'Exp': 0.8,
+  'MRP': 1.0, 'Qty': 1.55, 'Rate': 1.0, 'Disc': 0.85, 'GST%': 0.75, 'Amount': 1.25,
 };
 
+/// The item table's columns, in order; a bill of supply has no GST% column.
+List<String> billColumns(bool taxInvoice) =>
+    ['#', 'Item', 'HSN', 'Batch', 'Exp', 'MRP', 'Qty', 'Rate', 'Disc', if (taxInvoice) 'GST%', 'Amount'];
+
+/// A column's share of the table width.
+double billColumnWidth(String heading) => _widths[heading] ?? 1;
+
 pw.Widget _items(SaleDetail sale, bool taxInvoice) {
-  final headings = ['#', 'Item', 'HSN', 'Pack', 'Batch', 'Exp', 'MRP', 'Qty', 'Rate', 'Disc', if (taxInvoice) 'GST%', 'Amount'];
+  final headings = billColumns(taxInvoice);
   final right = {'MRP', 'Qty', 'Rate', 'Disc', 'Amount'};
-  final center = {'#', 'HSN', 'Pack', 'Batch', 'Exp', 'GST%'};
+  final center = {'#', 'HSN', 'Batch', 'Exp', 'GST%'};
   pw.TextAlign alignOf(String h) =>
       right.contains(h) ? pw.TextAlign.right : (center.contains(h) ? pw.TextAlign.center : pw.TextAlign.left);
   return pw.Table(
@@ -208,7 +209,7 @@ pw.Widget _items(SaleDetail sale, bool taxInvoice) {
     // The item name takes what the numbers leave, so a name rarely wraps and
     // a 60-line sale stays at two pages.
     columnWidths: {
-      for (var c = 0; c < headings.length; c++) c: pw.FlexColumnWidth(_widths[headings[c]] ?? 1),
+      for (var c = 0; c < headings.length; c++) c: pw.FlexColumnWidth(billColumnWidth(headings[c])),
     },
     children: [
       // Repeated at the top of every page the table runs onto.
@@ -225,11 +226,10 @@ pw.Widget _items(SaleDetail sale, bool taxInvoice) {
             '${i + 1}',
             li.productName,
             li.hsn ?? '',
-            li.pack ?? '',
             li.batchNo ?? '',
             _expiry(li.expiryDate),
             li.mrp == null ? '' : _money(li.mrp!),
-            _lineQty(li),
+            li.qtyText,
             _money(li.rate),
             li.discountTotal > 0 ? _money(li.discountTotal) : '',
             if (taxInvoice) numText(li.gstPct),

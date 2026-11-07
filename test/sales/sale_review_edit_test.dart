@@ -57,7 +57,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Cetirizine × 5'), findsOneWidget);
+    expect(find.text('Cetirizine × 5 pcs'), findsOneWidget);
     expect(cart[1].qty, 5);
     expect(cart[1].discount!.value, 10, reason: 'the discount it had is kept');
     expect(find.text('₹130.00'), findsOneWidget, reason: 'total: 40 + 90');
@@ -65,7 +65,7 @@ void main() {
 
   testWidgets('tapping the line itself opens the editor too', (tester) async {
     await open(tester);
-    await tester.tap(find.text('Dolo × 2'));
+    await tester.tap(find.text('Dolo × 2 pcs'));
     await tester.pumpAndSettle();
     expect(find.text('Batch B12 · 100 in stock'), findsOneWidget);
   });

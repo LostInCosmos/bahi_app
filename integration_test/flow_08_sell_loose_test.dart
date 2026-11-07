@@ -39,7 +39,7 @@ void main() {
     await $(find.textContaining('View cart')).tap();
     await $('Review sale').waitUntilVisible();
     await $('$_strip × 20 tablets').waitUntilVisible();
-    await $('$_bottle × 1').waitUntilVisible();
+    await $('$_bottle × 1 pc').waitUntilVisible();
     await steps.shot('review');
     await $('Complete sale').tap();
     await $('Sale complete').waitUntilVisible(timeout: const Duration(seconds: 30));
