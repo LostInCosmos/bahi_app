@@ -226,7 +226,7 @@ pw.Widget _items(SaleDetail sale, bool taxInvoice) {
             '${i + 1}',
             li.productName,
             li.hsn ?? '',
-            li.batchNo ?? '',
+            li.billBatchNo ?? '',
             _expiry(li.expiryDate),
             li.mrp == null ? '' : _money(li.mrp!),
             li.qtyText,

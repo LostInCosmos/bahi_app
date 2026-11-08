@@ -163,6 +163,17 @@ class SaleLineItemDetail {
   /// "20 tablets", "2 strips", "1 pc": [saleQtyText].
   String get qtyText => saleQtyText(qty, loose: loose, unitKind: unitKind, pack: pack);
 
+  /// The batch the printed bill shows: a manufacturer's batch as the shop
+  /// typed it, nothing for a placeholder. The server names a batch `MANUAL-…`
+  /// when the shop adds an item without stock from the Sell tab and `STOCK-…`
+  /// when it sets a stock count (DAS-172); neither is a batch the customer can
+  /// use, and either wraps the Batch column. `VOICE-…` still prints (the
+  /// user's call, 2026-11-08).
+  String? get billBatchNo => isPlaceholderBatch(batchNo) ? null : batchNo;
+
+  static bool isPlaceholderBatch(String? batch) =>
+      batch != null && (batch.startsWith('MANUAL-') || batch.startsWith('STOCK-'));
+
   double get discountTotal => discountAmount + saleDiscountShare;
 
   /// What the line came to after every discount — GST included.
