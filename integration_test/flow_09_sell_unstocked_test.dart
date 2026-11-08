@@ -41,6 +41,9 @@ void main() {
     await $('Complete sale').tap();
     await $('Sale complete').waitUntilVisible(timeout: const Duration(seconds: 30));
     await $(find.textContaining('$_item × 1')).waitUntilVisible();
+    // The receipt's buttons appear with its last paint; without this the
+    // screenshot once caught the loading spinner.
+    await $('Share bill (PDF)').waitUntilVisible();
     await steps.shot('receipt');
     await $('New sale').tap();
 
