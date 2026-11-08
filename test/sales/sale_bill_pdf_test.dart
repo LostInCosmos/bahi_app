@@ -202,6 +202,34 @@ void main() {
     expect(_pages(await buildSaleBillPdf(mixed, _shop(), _fonts(), compress: false)), 1);
   });
 
+  test('a placeholder batch (MANUAL-, STOCK-) stays off the bill; a real one and VOICE- print (DAS-172)', () async {
+    SaleLineItemDetail li(String? batch) => SaleLineItemDetail(
+          productName: 'ZINCOVIT DROPS', qty: 1, rate: 90, gstPct: 12, cgstAmount: 4.82, sgstAmount: 4.82,
+          lineAmount: 90, batchNo: batch, mrp: 90, unitKind: 'bottle',
+        );
+    expect(li('MANUAL-b4671871').billBatchNo, isNull);
+    expect(li('STOCK-7f3a9c21').billBatchNo, isNull);
+    expect(li('VOICE-1a2b3c4d').billBatchNo, 'VOICE-1a2b3c4d');
+    expect(li('ZCG-029A').billBatchNo, 'ZCG-029A');
+    expect(li('MANUALLY').billBatchNo, 'MANUALLY');
+    expect(li(null).billBatchNo, isNull);
+    expect(SaleLineItemDetail.isPlaceholderBatch(null), isFalse);
+
+    // Samples for a look by eye: the same sale with each kind of batch.
+    SaleDetail sale(String no, String? batch) => SaleDetail(
+          id: 1, saleNo: no, saleDate: '2026-11-08', paymentMode: PaymentMode.cash,
+          subtotal: 80.36, totalCgst: 4.82, totalSgst: 4.82, grandTotal: 90, lineItems: [li(batch)],
+        );
+    Directory('build/bill_samples').createSync(recursive: true);
+    for (final (name, s) in [
+      ('manual', sale('2026-27/0001', 'MANUAL-b4671871')),
+      ('stock', sale('2026-27/0002', 'STOCK-7f3a9c21')),
+      ('real', sale('2026-27/0003', 'ZCG-029A')),
+    ]) {
+      File('build/bill_samples/das172_batch_$name.pdf').writeAsBytesSync(await buildSaleBillPdf(s, _shop(), _fonts()));
+    }
+  });
+
   test('a sale line reads the bill fields, and an older server leaves them null', () {
     final li = SaleLineItemDetail.fromJson({
       'product_name': 'X',
