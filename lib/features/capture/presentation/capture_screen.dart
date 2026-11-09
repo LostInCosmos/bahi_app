@@ -1240,6 +1240,15 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
                 ? BatchItemStatus.needsReview
                 : BatchItemStatus.pendingConfirm)
         ..recheckedThisReview = false;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) {
+        // Removed by our team since the list was fetched (DAS-180).
+        _say('Our team removed this bill.');
+        unawaited(_uploadHistory.currentState?.refresh());
+      } else {
+        _say("Couldn't open that bill: $e");
+      }
+      return;
     } catch (e) {
       _say("Couldn't open that bill: $e");
       return;
