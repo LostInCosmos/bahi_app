@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import '../../../core/utils/format.dart';
 import '../../invoice/models/invoice.dart';
 
-enum ConfirmBillAction { save, edit }
+enum ConfirmBillAction { save, discard }
 
-/// The manual-save summary for a bill that isn't saved. A clean bill saves
-/// itself automatically now (DAS-79); this only shows for the bill whose own
-/// save attempt failed (a duplicate invoice number, a FEFO surprise), or
-/// one the shopkeeper deliberately moved back from Saved — not a routine
-/// step any more. Returns null for "Not now" or a dismissed dialog. A flagged
-/// bill has its own dialog, with no Save (`processing_bill_dialog.dart`).
+/// The summary for a clean bill that isn't saved: one the shop moved back
+/// from Saved, or whose own save failed. A clean bill otherwise saves itself
+/// (DAS-79). Save or Discard and nothing else (DAS-180, the user's "save
+/// button or discard as cross"); the ✕ in the corner closes it, returning
+/// null. A flagged bill has its own dialog, with no Save
+/// (`processing_bill_dialog.dart`).
 Future<ConfirmBillAction?> showConfirmBillDialog(
   BuildContext context,
   String label,
@@ -19,7 +19,17 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
   return showDialog<ConfirmBillAction>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(label),
+      titlePadding: const EdgeInsets.fromLTRB(24, 12, 8, 0),
+      title: Row(
+        children: [
+          Expanded(child: Text(label)),
+          IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,8 +47,14 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not now')),
-        OutlinedButton(onPressed: () => Navigator.pop(context, ConfirmBillAction.edit), child: const Text('Edit')),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+            side: BorderSide(color: Theme.of(context).colorScheme.error),
+          ),
+          onPressed: () => Navigator.pop(context, ConfirmBillAction.discard),
+          child: const Text('Discard'),
+        ),
         FilledButton(
           onPressed: () => Navigator.pop(context, ConfirmBillAction.save),
           child: const Text('Save'),

@@ -50,6 +50,11 @@ class _Server {
   /// Answer the next PUT with a 409: another phone wrote revision 5.
   bool conflict = false;
 
+  /// The next PUT checks clean and the bill saves itself (DAS-180), unless
+  /// [stayUnsaved]: the shop unsaved it, so it waits for the shop's Save.
+  bool clean = false;
+  bool stayUnsaved = false;
+
   MockClient get client => MockClient((req) async {
         final path = req.url.path;
         if (req.method == 'PUT' && path == '/invoices/extract/7/draft') {
@@ -60,6 +65,11 @@ class _Server {
             return _json({'detail': 'newer draft', 'field': 'draft_rev', 'current_rev': 5}, status: 409);
           }
           rev++;
+          if (clean) {
+            final saves = !stayUnsaved;
+            return _json({'invoice': body['invoice'], 'issues': [], 'draft_rev': rev, 'stale': false,
+                'saved': saves, 'invoice_id': saves ? 71 : null});
+          }
           return _json({'invoice': body['invoice'], 'issues': [_flag], 'draft_rev': rev, 'stale': false});
         }
         if (req.method == 'DELETE' && path == '/invoices/extract/7/draft') {
@@ -92,13 +102,19 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<void> _open(WidgetTester tester, {BillDraft? draft, void Function(int)? onSent}) async {
+/// What the form returned when it closed: the saved bill's id, or null.
+int? _popped;
+
+Future<void> _open(WidgetTester tester,
+    {BillDraft? draft, void Function(int)? onSent, bool unsavedByShop = false}) async {
+  _popped = null;
   await tester.binding.setSurfaceSize(const Size(800, 4000));
   await tester.pumpWidget(MaterialApp(
     home: Builder(
       builder: (context) => TextButton(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => ReviewScreen(result: _read(), jobId: 7, draft: draft, onDraftSent: onSent))),
+        onPressed: () async => _popped = await Navigator.of(context).push<int>(MaterialPageRoute(
+            builder: (_) => ReviewScreen(
+                result: _read(), jobId: 7, draft: draft, onDraftSent: onSent, unsavedByShop: unsavedByShop))),
         child: const Text('open'),
       ),
     ),
@@ -229,10 +245,11 @@ void main() {
     }, () => server.client);
   });
 
-  testWidgets('the save sends the corrections and names the read it corrects', (tester) async {
+  testWidgets('a bill the shop unsaved: its Save sends the corrections and names the read it corrects', (tester) async {
     final server = _Server();
     await http.runWithClient(() async {
       await _open(tester,
+          unsavedByShop: true,
           draft: BillDraft(invoice: InvoiceData.fromJson(_invoice('T-EDITED', grandTotal: 210)), issues: const [], rev: 3));
       await tester.tap(find.text('Save invoice'));
       await _settle(tester);
@@ -241,6 +258,63 @@ void main() {
       expect((server.saved!['extraction_meta'] as Map)['job_id'], 7);
       expect((server.saved!['invoice'] as Map)['invoice_no'], 'T-EDITED');
       expect(server.puts, isEmpty, reason: 'saved: nothing left to send on the way out');
+    }, () => server.client);
+  });
+
+  // DAS-180: a bill from a photo saves itself once it checks clean. The form
+  // has no Save and no "save anyway"; Revalidate is what saves it.
+  testWidgets('a flagged bill offers Revalidate only: no Save, no "save anyway"', (tester) async {
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      expect(find.text('Revalidate'), findsOneWidget);
+      expect(find.text('Save invoice'), findsNothing);
+      expect(find.textContaining('save anyway'), findsNothing);
+      expect(find.byType(CheckboxListTile), findsNothing);
+    }, () => server.client);
+  });
+
+  testWidgets('Revalidate that checks clean saves the bill, and the form closes with its id', (tester) async {
+    final server = _Server()..clean = true;
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.text('Revalidate'));
+      await _settle(tester);
+      await tester.pump(const Duration(seconds: 1)); // the saved tick
+      await _settle(tester);
+      expect(find.text('Revalidate'), findsNothing, reason: 'the form closed');
+      expect(_popped, 71);
+      expect(server.saved, isNull, reason: 'no separate save request');
+    }, () => server.client);
+  });
+
+  testWidgets('Revalidate that is still flagged keeps the form open, with no Save', (tester) async {
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.text('Revalidate'));
+      await _settle(tester);
+      expect(find.textContaining('our team will check it'), findsOneWidget);
+      expect(find.text('Save invoice'), findsNothing);
+      expect(_popped, isNull);
+    }, () => server.client);
+  });
+
+  testWidgets('a bill the shop unsaved does not save itself on a clean Revalidate; its Save does', (tester) async {
+    final server = _Server()
+      ..clean = true
+      ..stayUnsaved = true;
+    await http.runWithClient(() async {
+      await _open(tester, unsavedByShop: true);
+      await tester.tap(find.text('Revalidate'));
+      await _settle(tester);
+      expect(find.text('Revalidate'), findsOneWidget, reason: 'still open: it waits for the Save');
+      await tester.tap(find.text('Save invoice'));
+      await _settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      await _settle(tester);
+      expect(server.saved, isNotNull);
+      expect(_popped, 70);
     }, () => server.client);
   });
 

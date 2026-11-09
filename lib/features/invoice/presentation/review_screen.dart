@@ -51,6 +51,12 @@ class ReviewScreen extends StatefulWidget {
   /// The shop took our team's version over its stale corrections.
   final VoidCallback? onDraftDropped;
 
+  /// A bill the shop moved back to Not saved (DAS-180): it waits for the
+  /// shop's own Save, so the form keeps one, usable while the bill is clean.
+  /// Every other bill from a photo has none: a Revalidate that checks clean
+  /// saves it, and a flagged one waits for our team.
+  final bool unsavedByShop;
+
   const ReviewScreen({
     super.key,
     required this.result,
@@ -62,6 +68,7 @@ class ReviewScreen extends StatefulWidget {
     this.onDraftUnsent,
     this.onDraftLost,
     this.onDraftDropped,
+    this.unsavedByShop = false,
   });
 
   @override
@@ -512,6 +519,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _stale = reply.stale;
         _rebase = false;
         widget.onDraftSent?.call(reply.rev);
+        final savedId = reply.invoiceId;
+        if (reply.saved && savedId != null && mounted) {
+          // DAS-180: it checked clean, so it saved itself. Nothing to tap.
+          _sent = _snapshot();
+          unawaited(HapticFeedback.mediumImpact());
+          await showSavedTick(context);
+          if (mounted) Navigator.of(context).pop(savedId);
+          return;
+        }
       }
       if (!mounted) return;
       final hasErrors = result.issues.any((i) => i.isError);
@@ -521,7 +537,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _applyInvoiceToControllers(result.invoice);
         _sent = _snapshot();
         _error = hasErrors
-            ? "Still has flagged fields below — fix and revalidate again, or tick the box to save anyway."
+            ? (widget.jobId != null
+                ? 'Still has flagged fields below. Fix them and revalidate, or leave it: our team will check it.'
+                : "Still has flagged fields below — fix and revalidate again, or tick the box to save anyway.")
             : (_issues.isNotEmpty
                 ? "No errors — just warnings below."
                 : "Looks good — no issues found.");
@@ -834,7 +852,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       ],
                     ),
                     const SizedBox(height: Spacing.l),
-                    if (_issues.any((i) => i.isError))
+                    if (widget.jobId != null && !widget.unsavedByShop && _issues.any((i) => i.isError))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: Spacing.m),
+                        child: Text(
+                          'Correct the flagged fields and tap Revalidate. Once it checks clean, it saves itself.',
+                          style: TextStyle(color: colors.onSurfaceVariant),
+                        ),
+                      ),
+                    if (widget.jobId == null && _issues.any((i) => i.isError))
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         controlAffinity: ListTileControlAffinity.leading,
@@ -861,14 +887,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       icon: Icons.fact_check_outlined,
                       label: 'Revalidate',
                     ),
-                    const SizedBox(height: Spacing.s),
-                    BusyFilledButton(
-                      busy: _saving,
-                      onPressed: _save,
-                      icon: Icons.check_circle_outline,
-                      label: 'Save invoice',
-                      busyLabel: 'Saving…',
-                    ),
+                    // DAS-180: no Save for a bill from a photo; it saves
+                    // itself once clean. Only one the shop unsaved keeps one.
+                    if (widget.jobId == null || widget.unsavedByShop) ...[
+                      const SizedBox(height: Spacing.s),
+                      BusyFilledButton(
+                        busy: _saving,
+                        onPressed: _issues.any((i) => i.isError) && widget.jobId != null ? null : _save,
+                        icon: Icons.check_circle_outline,
+                        label: 'Save invoice',
+                        busyLabel: 'Saving…',
+                      ),
+                    ],
                     const SizedBox(height: Spacing.xl),
                   ];
                   return ListView.builder(

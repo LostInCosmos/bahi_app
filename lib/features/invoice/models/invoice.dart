@@ -431,10 +431,19 @@ class DraftReply {
   final int rev;
   final bool stale;
 
-  const DraftReply(this.result, {required this.rev, this.stale = false});
+  /// The draft checked clean and the bill saved itself in the same request
+  /// (DAS-180), as [invoiceId]. False for a flagged draft, which waits for
+  /// our team, and for a bill the shop unsaved, which waits for its Save.
+  final bool saved;
+  final int? invoiceId;
 
-  factory DraftReply.fromJson(Map<String, dynamic> json) =>
-      DraftReply(RevalidateResult.fromJson(json), rev: json.intReq('draft_rev'), stale: json.boolOr('stale'));
+  const DraftReply(this.result, {required this.rev, this.stale = false, this.saved = false, this.invoiceId});
+
+  factory DraftReply.fromJson(Map<String, dynamic> json) => DraftReply(RevalidateResult.fromJson(json),
+      rev: json.intReq('draft_rev'),
+      stale: json.boolOr('stale'),
+      saved: json.boolOr('saved'),
+      invoiceId: json.integer('invoice_id'));
 }
 
 /// GET /invoices/extract/{jobId} — extraction runs in a background worker,

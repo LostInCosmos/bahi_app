@@ -56,11 +56,19 @@ void main() {
     current = ProcessingBillView(invoice: _invoice());
     changes.value++;
     await tester.pumpAndSettle();
-    expect(find.text('Bill is already processed'), findsOneWidget);
+    expect(find.textContaining('Our team is checking this bill.'), findsOneWidget);
     expect(find.text('ACME'), findsOneWidget);
     await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
     expect(answer, ProcessingBillAction.edit);
+  });
+
+  testWidgets('a read that failed (the blank form) says so and offers Edit to type it in', (tester) async {
+    current = ProcessingBillView(invoice: InvoiceData());
+    await open(tester);
+    expect(find.textContaining("We couldn't read this bill."), findsOneWidget);
+    expect(find.textContaining('Grand total'), findsNothing, reason: 'nothing read to show');
+    expect(find.text('Edit'), findsOneWidget);
   });
 
   testWidgets('closes by itself when the bill leaves Processing', (tester) async {

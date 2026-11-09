@@ -196,7 +196,10 @@ void main() {
       await _open(tester);
       await tester.tap(find.byKey(const ValueKey('j:9')));
       await _settle(tester);
-      expect(find.text('Edit'), findsOneWidget, reason: 'a clean bill keeps the review form');
+      // DAS-180: Save or Discard, nothing else ("save button or discard as cross").
+      expect(find.widgetWithText(OutlinedButton, 'Discard'), findsOneWidget);
+      expect(find.text('Edit'), findsNothing);
+      expect(find.text('Not now'), findsNothing);
       await tester.tap(find.text('Save'));
       await _settle(tester);
       await tester.pump(const Duration(seconds: 1)); // the saved tick
@@ -211,6 +214,26 @@ void main() {
     }, () => server.client);
   });
 
+  testWidgets('a Not saved bill can be discarded from its dialog', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:9')));
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Discard'));
+      await _settle(tester);
+      expect(find.text('Discard this bill?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+      await _settle(tester);
+
+      expect(server.discardBodies.single, {'job_ids': [9]});
+      expect(server.requests, isNot(contains('POST /invoices/extract/9/save')));
+      expect(find.text('Bill discarded.'), findsOneWidget);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
   testWidgets('a flagged bill offers Discard and Edit, never Save; Edit opens the review form', (tester) async {
     _ignoreOverflow();
     final server = _Server();
@@ -219,7 +242,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('j:8')));
       await _settle(tester);
 
-      expect(find.text('Bill is already processed'), findsOneWidget);
+      expect(find.textContaining('Our team is checking this bill.'), findsOneWidget);
       expect(find.text('Discard'), findsOneWidget);
       expect(find.text('Save'), findsNothing, reason: 'a flagged bill is saved from the review form');
       await tester.tap(find.widgetWithText(FilledButton, 'Edit'));
@@ -260,7 +283,7 @@ void main() {
       await _settle(tester);
 
       expect(find.text('This bill is still being read.'), findsOneWidget);
-      expect(find.text('Bill is already processed'), findsNothing);
+      expect(find.textContaining('Our team is checking'), findsNothing);
       expect(find.text('Edit'), findsNothing);
       expect(find.text('Save'), findsNothing);
       await tester.tap(find.widgetWithText(OutlinedButton, 'Discard'));
