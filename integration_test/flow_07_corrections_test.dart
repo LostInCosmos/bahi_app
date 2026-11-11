@@ -1,5 +1,5 @@
 // Flow 7: a shopkeeper's corrections to a flagged bill are kept until it is
-// saved (DAS-153).
+// saved (DAS-153), and it saves itself once they make it clean (DAS-180).
 //
 // The server reads this run's photos with a misread grand total
 // (tool/e2e/run.sh: flow_outcome), so the bill needs review. The corrections
@@ -85,11 +85,11 @@ void main() {
     expect(_fieldText($, 'Invoice number'), _edited, reason: 'the corrections must survive the hand-over');
     await steps.shot('reopened');
 
-    // Finish correcting and save: what is saved is the corrections.
+    // Finish correcting: once it checks clean it saves itself (DAS-180), so
+    // there is no Save to tap and what is saved is the corrections.
+    expect($('Save invoice').exists, isFalse, reason: 'a bill from a photo has no Save');
     await field($, 'Grand total').scrollTo().enterText('420'); // 400 + 10 + 10
     await $('Revalidate').scrollTo().tap();
-    await $(find.textContaining('no issues found')).waitUntilVisible(timeout: const Duration(seconds: 20));
-    await $('Save invoice').scrollTo().tap();
     // The saved tick, then the form closes.
     for (var i = 0; i < 40 && $('Review & save').exists; i++) {
       await $.pump(const Duration(milliseconds: 500));

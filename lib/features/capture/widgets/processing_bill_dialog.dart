@@ -20,9 +20,9 @@ class ProcessingBillView {
 }
 
 /// The dialog for a bill in Processing (DAS-115). While it is being read it
-/// offers Discard only; once read and flagged, Discard and Edit. Never Save:
-/// a flagged bill is saved from the review form, after Edit, and a clean one
-/// saves itself.
+/// offers Discard only; once read and flagged, Discard and Edit. Never Save
+/// (DAS-180): a bill saves itself once it is clean, whether the shop, our
+/// team or the agent made it so.
 ///
 /// It follows the bill while open: [view] is asked again whenever [changes]
 /// fires, so a read that finishes flagged brings Edit in, and one that saves
@@ -97,10 +97,16 @@ class _ProcessingBillDialogState extends State<_ProcessingBillDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            inv == null ? 'This bill is still being read.' : 'Bill is already processed',
+            inv == null
+                ? 'This bill is still being read.'
+                : inv.sellerName.isEmpty && inv.invoiceNo.isEmpty
+                    // DAS-180: the read failed (the blank form).
+                    ? "We couldn't read this bill. Tap Edit to type it in, or leave it for our team."
+                    : 'Our team is checking this bill. It will save itself once it is correct. '
+                        'You can correct it yourself with Edit.',
             style: TextStyle(color: colors.onSurfaceVariant),
           ),
-          if (inv != null) ...[
+          if (inv != null && (inv.sellerName.isNotEmpty || inv.invoiceNo.isNotEmpty)) ...[
             const SizedBox(height: 12),
             Text(inv.sellerName, style: const TextStyle(fontWeight: FontWeight.bold)),
             Text('Invoice ${inv.invoiceNo} • ${inv.invoiceDate}'),

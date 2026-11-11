@@ -13,6 +13,8 @@ mixin _Watching on State<CaptureScreen> {
   Future<void> _persistBatchIfChanged();
   void _noteMove(BatchItem item, String? before);
   void _scheduleListRefresh();
+  void _dropLocal(BatchItem item);
+  void _say(String message);
 
   /// Bills this phone handed over to the shop's list unsaved (DAS-62): no
   /// card any more, but still watched by job until saved, so a save by our
@@ -320,6 +322,16 @@ mixin _Watching on State<CaptureScreen> {
           if (categoryOfItem(item) != before) finished = true;
         }
       }
+      // A bill our team removed (discarded, deleted, or merged into another)
+      // is left out of the answer, which always lists every job that still
+      // exists (DAS-180). Its card goes; a row watched by job just stops.
+      final answered = {for (final brief in batch.jobs) brief.jobId};
+      final removed = [for (final id in due) if (!answered.contains(id)) id];
+      if (removed.isNotEmpty) {
+        _dropRemoved([for (final id in removed) if (watching[id] != null) watching[id]!]);
+        _watchedRows.removeAll(removed);
+        finished = true;
+      }
       // A bill finishing changes what the boxes should say, and the list's
       // tally is the SERVER's — which only moves when it is asked again. Ten
       // bills retried together left "Working 10" over an empty list after the
@@ -343,6 +355,18 @@ mixin _Watching on State<CaptureScreen> {
         await Future<void>.delayed(const Duration(seconds: 2));
       }
     }
+  }
+
+  /// Cards for bills the server no longer has: our team removed them
+  /// (DAS-180). Only this device's copy goes; there is nothing to tell the
+  /// server.
+  void _dropRemoved(List<BatchItem> items) {
+    final mine = items.where(_items.contains).toList();
+    if (mine.isEmpty) return;
+    for (final item in mine) {
+      _dropLocal(item);
+    }
+    _say(mine.length == 1 ? 'Our team removed a bill.' : 'Our team removed ${plural(mine.length, 'bill')}.');
   }
 
   /// Folds one bill's reported state into its card.
@@ -420,6 +444,9 @@ mixin _Watching on State<CaptureScreen> {
         // _watching keeps asking in case our team saves it from here without
         // another tap on this phone.
       });
+    } on ApiException catch (e) {
+      // Removed by our team between the status answer and this fetch.
+      if (e.statusCode == 404 && mounted) _dropRemoved([item]);
     } catch (_) {
       // Fetching the result failed, but the bill itself is finished. Leave it
       // in flight so the next round picks it up rather than calling a read

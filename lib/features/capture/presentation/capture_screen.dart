@@ -633,8 +633,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         if (!mounted) return;
         if (action == ConfirmBillAction.save) {
           await _saveBill(item);
-        } else if (action == ConfirmBillAction.edit) {
-          await _openReview(item, result);
+        } else if (action == ConfirmBillAction.discard) {
+          await _discardAsked(item);
         }
         return;
       case BatchItemStatus.preparing:
@@ -647,8 +647,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
   }
 
   /// A bill in Processing (DAS-115): still being read, or read and flagged.
-  /// Discard at every stage; Edit once it is read. No Save from here: a
-  /// flagged bill is saved from the review form, and a clean one saves itself.
+  /// Discard at every stage; Edit once it is read. No Save anywhere (DAS-180):
+  /// it saves itself once it checks clean.
   Future<void> _openProcessing(BatchItem item) async {
     ProcessingBillView view() => switch (item.status) {
           BatchItemStatus.preparing ||
@@ -667,16 +667,22 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         final result = item.result;
         if (result != null) await _openReview(item, result);
       case ProcessingBillAction.discard:
-        final ok = await showConfirmDialog(
-          context,
-          title: 'Discard this bill?',
-          message: 'It will disappear from this shop on every device.',
-          confirmLabel: 'Discard',
-          destructive: true,
-        );
-        if (!ok || !mounted) return;
-        if (await _removeItem(item) && mounted) _say('Bill discarded.');
+        await _discardAsked(item);
     }
+  }
+
+  /// Discard, once the shop has said yes: from a bill in Processing or a
+  /// Not saved one.
+  Future<void> _discardAsked(BatchItem item) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Discard this bill?',
+      message: 'It will disappear from this shop on every device.',
+      confirmLabel: 'Discard',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    if (await _removeItem(item) && mounted) _say('Bill discarded.');
   }
 
   Future<bool> _askRetry(String title, String? message) => showConfirmDialog(
@@ -751,6 +757,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       MaterialPageRoute(
         builder: (_) => ReviewScreen(
           result: read,
+          unsavedByShop: item.status == BatchItemStatus.pendingConfirm,
           folderId: item.folderId,
           jobId: jobId,
           draft: draft,
@@ -1240,6 +1247,15 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
                 ? BatchItemStatus.needsReview
                 : BatchItemStatus.pendingConfirm)
         ..recheckedThisReview = false;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) {
+        // Removed by our team since the list was fetched (DAS-180).
+        _say('Our team removed this bill.');
+        unawaited(_uploadHistory.currentState?.refresh());
+      } else {
+        _say("Couldn't open that bill: $e");
+      }
+      return;
     } catch (e) {
       _say("Couldn't open that bill: $e");
       return;
