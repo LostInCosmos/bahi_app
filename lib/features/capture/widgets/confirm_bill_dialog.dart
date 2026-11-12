@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../core/utils/format.dart';
 import '../../invoice/models/invoice.dart';
 
-enum ConfirmBillAction { save, discard }
+enum ConfirmBillAction { save, edit, discard }
 
 /// The summary for a clean bill that isn't saved: one the shop moved back
 /// from Saved, or whose own save failed. A clean bill otherwise saves itself
-/// (DAS-79). Save or Discard and nothing else (DAS-180, the user's "save
-/// button or discard as cross"); the ✕ in the corner closes it, returning
-/// null. A flagged bill has its own dialog, with no Save
+/// (DAS-79). Discard, Edit or Save (DAS-180; Edit came back on 2026-11-13,
+/// a shopkeeper asking to open a Not saved bill); the ✕ in the corner closes
+/// it, returning null. A flagged bill has its own dialog, with no Save
 /// (`processing_bill_dialog.dart`).
 Future<ConfirmBillAction?> showConfirmBillDialog(
   BuildContext context,
@@ -54,6 +54,10 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
           ),
           onPressed: () => Navigator.pop(context, ConfirmBillAction.discard),
           child: const Text('Discard'),
+        ),
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context, ConfirmBillAction.edit),
+          child: const Text('Edit'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, ConfirmBillAction.save),
