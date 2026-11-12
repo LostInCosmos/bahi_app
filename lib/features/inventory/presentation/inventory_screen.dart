@@ -5,6 +5,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/navigation/tab_screen.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/widgets/inline_message.dart';
+import '../../../core/widgets/floating_header_list.dart';
 import '../data/product_catalog.dart';
 import '../models/product.dart';
 import '../models/product_search.dart';
@@ -83,7 +84,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
     final products = _expiringOnly ? expiring : matching;
     final loading = index == null && _catalog.isLoading;
     final failure = _catalog.lastError;
-    final header = <Widget>[
+    // The search and the expiring filter float (FloatingHeaderList).
+    final floating = <Widget>[
       TextField(
         key: const ValueKey('inventory-search'),
         controller: _searchController,
@@ -123,6 +125,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
           ),
         ),
       ],
+    ];
+    final header = <Widget>[
       if (products.isNotEmpty) ...[
         const SizedBox(height: Spacing.l),
         Row(
@@ -164,7 +168,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
       onRefresh: refresh,
       // Built as they scroll into view: a short search shows hundreds of
       // products, and only the visible rows are worth building.
-      child: ListView.builder(
+      child: FloatingHeaderList(
+        floating: floating,
         padding: const EdgeInsets.all(Spacing.l),
         itemCount: header.length + products.length,
         itemBuilder: (context, i) {
