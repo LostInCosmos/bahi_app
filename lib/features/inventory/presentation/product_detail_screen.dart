@@ -28,6 +28,9 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   ProductDetail? _detail;
+
+  /// A schedule change is being sent (DAS-183).
+  bool _settingSchedule = false;
   bool _loading = true;
   String? _error;
 
@@ -84,6 +87,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     context.say('MRP saved: ${rupees(saved)}');
   }
 
+  /// Tags the medicine H, H1 or X, or clears it (DAS-183): the shop's own
+  /// choice, for the Inventory filter. Saved at once; the list behind the
+  /// filter is asked again so the chips count it.
+  Future<void> _setSchedule(String? to) async {
+    final before = _detail!.schedule;
+    if (to == before || _settingSchedule) return;
+    setState(() {
+      _settingSchedule = true;
+      _detail = _detail!.withSchedule(to); // shown at once; put back if refused
+    });
+    try {
+      final saved = await ApiClient.instance.setProductSchedule(_detail!.id, to);
+      if (!mounted) return;
+      setState(() => _detail = _detail!.withSchedule(saved));
+      unawaited(ProductCatalog.instance.refresh());
+      context.say(saved == null ? 'Schedule cleared.' : 'Marked Schedule $saved.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _detail = _detail!.withSchedule(before));
+      context.say("Couldn't change the schedule: $e");
+    } finally {
+      if (mounted) setState(() => _settingSchedule = false);
+    }
+  }
+
   /// Opens the stock-count editor (DAS-172) and, once the server has saved
   /// the count, reads the product again (the batches changed under it) and
   /// refreshes the list the Sell and Inventory tabs show.
@@ -136,6 +164,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                             ),
                         ],
+                      ),
+                      const SizedBox(height: Spacing.s),
+                      _ScheduleChoice(
+                        value: detail.schedule,
+                        busy: _settingSchedule,
+                        onChanged: _setSchedule,
                       ),
                       const SizedBox(height: Spacing.m),
                       if (detail.batches.isEmpty) const Text('No batches in stock.'),
@@ -511,6 +545,43 @@ class _StockSheetState extends State<_StockSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// The medicine's drug schedule: None, H, H1 or X (DAS-183). The shop's own
+/// choice; one tap saves it.
+class _ScheduleChoice extends StatelessWidget {
+  final String? value;
+  final bool busy;
+  final ValueChanged<String?> onChanged;
+
+  const _ScheduleChoice({required this.value, required this.busy, required this.onChanged});
+
+  static const _none = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text('Schedule', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(width: Spacing.m),
+        Expanded(
+          child: SegmentedButton<String>(
+            key: const ValueKey('product-schedule'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: _none, label: Text('None')),
+              ButtonSegment(value: 'H', label: Text('H')),
+              ButtonSegment(value: 'H1', label: Text('H1')),
+              ButtonSegment(value: 'X', label: Text('X')),
+            ],
+            selected: {value ?? _none},
+            onSelectionChanged: busy ? null : (picked) => onChanged(picked.first == _none ? null : picked.first),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -21,6 +21,9 @@ class ProductSummary {
   /// Sold by the tablet, and its stock in tablets (DAS-160).
   final LooseStock loose;
 
+  /// The drug schedule, `H`, `H1` or `X`; null when not tagged (DAS-183).
+  final String? schedule;
+
   ProductSummary({
     required this.id,
     required this.name,
@@ -31,6 +34,7 @@ class ProductSummary {
     this.mrp,
     this.expiryDate,
     this.loose = LooseStock.none,
+    this.schedule,
   });
 
   factory ProductSummary.fromJson(Map<String, dynamic> json) => ProductSummary(
@@ -43,6 +47,7 @@ class ProductSummary {
         mrp: json.dbl('mrp'),
         expiryDate: json.dateOnly('expiry_date'),
         loose: LooseStock.fromJson(json),
+        schedule: json.str('schedule'),
       );
 }
 
@@ -185,6 +190,9 @@ class ProductDetail {
   /// server that cannot take one: the Edit stock button is hidden then.
   final List<StockEdit>? stockEdits;
 
+  /// The drug schedule, `H`, `H1` or `X`; null when not tagged (DAS-183).
+  final String? schedule;
+
   ProductDetail({
     required this.id,
     required this.name,
@@ -194,20 +202,27 @@ class ProductDetail {
     required this.batches,
     this.loose = LooseStock.none,
     this.stockEdits,
+    this.schedule,
   });
 
   bool get canEditStock => stockEdits != null;
 
   /// The same product with one batch swapped for [batch].
-  ProductDetail withBatch(ProductBatchInfo batch) => ProductDetail(
+  ProductDetail withBatch(ProductBatchInfo batch) => _copy(batches: [for (final b in batches) b.id == batch.id ? batch : b]);
+
+  /// The same product under another schedule (null: none).
+  ProductDetail withSchedule(String? to) => _copy(schedule: to, clearSchedule: to == null);
+
+  ProductDetail _copy({List<ProductBatchInfo>? batches, String? schedule, bool clearSchedule = false}) => ProductDetail(
         id: id,
         name: name,
         hsnCode: hsnCode,
         pack: pack,
         totalQuantity: totalQuantity,
-        batches: [for (final b in batches) b.id == batch.id ? batch : b],
+        batches: batches ?? this.batches,
         loose: loose,
         stockEdits: stockEdits,
+        schedule: clearSchedule ? null : schedule ?? this.schedule,
       );
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) => ProductDetail(
@@ -217,6 +232,7 @@ class ProductDetail {
         pack: json.str('pack'),
         totalQuantity: json.dblReq('total_quantity'),
         batches: json.listOf('batches', ProductBatchInfo.fromJson),
+        schedule: json.str('schedule'),
         loose: LooseStock.fromJson(json),
         stockEdits: json.containsKey('stock_edits') ? json.listOf('stock_edits', StockEdit.fromJson) : null,
       );
