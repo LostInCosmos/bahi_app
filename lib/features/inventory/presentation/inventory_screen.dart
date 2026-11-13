@@ -5,6 +5,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../core/navigation/tab_screen.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/widgets/inline_message.dart';
+import '../../../core/widgets/floating_header_list.dart';
 import '../data/product_catalog.dart';
 import '../models/product.dart';
 import '../models/product_search.dart';
@@ -28,6 +29,7 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
 
   /// Only stock expiring within a month, soonest first. Works with the search.
   bool _expiringOnly = false;
+  String? _schedule;
 
   // Deliberately no fetch here — see the same note in purchases_screen.dart:
   // HomeScreen's tab switcher calls refresh() the first (and every) time
@@ -80,10 +82,16 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
     final matching = index?.match(_query) ?? const <ProductSummary>[];
     final today = DateTime.now();
     final expiring = expiringWithinAMonth(matching, today);
-    final products = _expiringOnly ? expiring : matching;
+    // DAS-183: one schedule at a time, on top of the search and
+    // the expiring filter; a chip only for a schedule the shop has.
+    const schedules = ['H1', 'H', 'X'];
+    final bySchedule = {for (final s in schedules) s: matching.where((p) => p.schedule == s).length};
+    final base = _expiringOnly ? expiring : matching;
+    final products = _schedule == null ? base : base.where((p) => p.schedule == _schedule).toList();
     final loading = index == null && _catalog.isLoading;
     final failure = _catalog.lastError;
-    final header = <Widget>[
+    // The search and the expiring filter float (FloatingHeaderList).
+    final floating = <Widget>[
       TextField(
         key: const ValueKey('inventory-search'),
         controller: _searchController,
@@ -112,17 +120,30 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
       ),
       if (index != null) ...[
         const SizedBox(height: Spacing.s),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilterChip(
+        Wrap(
+          spacing: Spacing.s,
+          runSpacing: Spacing.xs,
+          children: [
+            FilterChip(
             key: const ValueKey('inventory-expiring'),
             avatar: _expiringOnly ? null : const Icon(Icons.event_busy_outlined, size: 18),
             label: Text('Expiring within a month (${expiring.length})'),
             selected: _expiringOnly,
             onSelected: (on) => setState(() => _expiringOnly = on),
           ),
+            for (final s in schedules)
+              if (bySchedule[s]! > 0 || _schedule == s)
+                FilterChip(
+                  key: ValueKey('inventory-schedule-$s'),
+                  label: Text('Schedule $s (${bySchedule[s]})'),
+                  selected: _schedule == s,
+                  onSelected: (on) => setState(() => _schedule = on ? s : null),
+                ),
+          ],
         ),
       ],
+    ];
+    final header = <Widget>[
       if (products.isNotEmpty) ...[
         const SizedBox(height: Spacing.l),
         Row(
@@ -134,7 +155,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
               decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
             ),
             Text(
-              _expiringOnly ? 'EXPIRING SOONEST FIRST' : 'CURRENT STOCK',
+              [if (_schedule != null) 'SCHEDULE $_schedule', _expiringOnly ? 'EXPIRING SOONEST FIRST' : 'CURRENT STOCK']
+                  .join(' · '),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: colors.onSurfaceVariant,
                     letterSpacing: 0.6,
@@ -164,7 +186,8 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
       onRefresh: refresh,
       // Built as they scroll into view: a short search shows hundreds of
       // products, and only the visible rows are worth building.
-      child: ListView.builder(
+      child: FloatingHeaderList(
+        floating: floating,
         padding: const EdgeInsets.all(Spacing.l),
         itemCount: header.length + products.length,
         itemBuilder: (context, i) {
@@ -223,8 +246,23 @@ class _ProductRow extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
-                    if (p.pack != null && p.pack!.isNotEmpty)
-                      Text(p.pack!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+                    if (p.pack != null && p.pack!.isNotEmpty || p.schedule != null)
+                      Row(children: [
+                        if (p.schedule != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: colors.error),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(p.schedule!,
+                                style: TextStyle(color: colors.error, fontSize: 11, fontWeight: FontWeight.w700)),
+                          ),
+                          const SizedBox(width: Spacing.xs),
+                        ],
+                        if (p.pack != null && p.pack!.isNotEmpty)
+                          Text(p.pack!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+                      ]),
                     if (details != null) ...[
                       const SizedBox(height: 2),
                       Text(

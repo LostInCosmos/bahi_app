@@ -196,9 +196,9 @@ void main() {
       await _open(tester);
       await tester.tap(find.byKey(const ValueKey('j:9')));
       await _settle(tester);
-      // DAS-180: Save or Discard, nothing else ("save button or discard as cross").
+      // Discard, Edit or Save (DAS-180; Edit back on 2026-11-13).
       expect(find.widgetWithText(OutlinedButton, 'Discard'), findsOneWidget);
-      expect(find.text('Edit'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Edit'), findsOneWidget);
       expect(find.text('Not now'), findsNothing);
       await tester.tap(find.text('Save'));
       await _settle(tester);
@@ -210,6 +210,22 @@ void main() {
       expect(server.requests, isNot(contains('POST /invoices/vendor-lookup')));
       expect(server.saveBodies.single, isEmpty, reason: 'no folder was chosen, and no body');
       expect(find.textContaining('GSTIN'), findsNothing);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  testWidgets('a Not saved bill can be opened with Edit', (tester) async {
+    _ignoreOverflow();
+    final server = _Server();
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:9')));
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Edit'));
+      await _settle(tester);
+
+      expect(find.text('Review & save'), findsOneWidget);
+      expect(server.requests, isNot(contains('POST /invoices/extract/9/save')));
       await _finish(tester);
     }, () => server.client);
   });

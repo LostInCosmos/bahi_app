@@ -13,6 +13,7 @@ import '../../../core/utils/snack.dart';
 import '../../../core/widgets/busy_button.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/inline_message.dart';
+import '../../../core/widgets/floating_header_list.dart';
 import '../../inventory/data/product_catalog.dart';
 import '../../inventory/models/product.dart';
 import '../../inventory/widgets/new_product_form.dart';
@@ -313,7 +314,8 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
     final index = _catalog.index;
     final products = index?.match(_query) ?? const <ProductSummary>[];
     final failure = _catalog.lastError;
-    final header = <Widget>[
+    // The search floats (FloatingHeaderList).
+    final floating = <Widget>[
       TextField(
         key: const ValueKey('sale-search'),
         controller: _searchController,
@@ -332,6 +334,8 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
         textInputAction: TextInputAction.search,
       ),
       const SizedBox(height: Spacing.m),
+    ];
+    final header = <Widget>[
       if (_voiceJobs.isNotEmpty) ...[
         _buildVoiceJobsStrip(context),
         const SizedBox(height: Spacing.m),
@@ -368,7 +372,8 @@ class SalesScreenState extends State<SalesScreen> with TabScreen {
       body: RefreshIndicator(
         onRefresh: refresh,
         // Built as they scroll into view — see InventoryScreen.
-        child: ListView.builder(
+        child: FloatingHeaderList(
+          floating: floating,
           padding: const EdgeInsets.fromLTRB(Spacing.l, Spacing.l, Spacing.l, 90),
           itemCount: header.length + products.length + footer.length,
           itemBuilder: (context, i) {

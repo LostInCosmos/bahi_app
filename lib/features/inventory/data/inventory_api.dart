@@ -32,6 +32,13 @@ extension InventoryApi on ApiClient {
   /// shows. It changes only this batch, and the purchase bill keeps what it
   /// printed. Throws ApiException: 422 `bad_mrp`, 404 for a batch that is gone
   /// (merged by our team, DAS-93) or another shop's.
+  /// Sets a product's drug schedule, `H`, `H1` or `X`, or clears it with
+  /// null (DAS-183). Returns what the server now holds.
+  Future<String?> setProductSchedule(int productId, String? schedule) async {
+    final res = await patchJson('/inventory/products/$productId', {'schedule': schedule ?? ''});
+    return ApiClient.jsonObject(res).str('schedule');
+  }
+
   Future<double> setBatchMrp(int batchId, double mrp) async {
     final res = await patchJson('/inventory/batches/$batchId/mrp', {'mrp': mrp});
     final body = ApiClient.jsonObject(res);

@@ -633,6 +633,8 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         if (!mounted) return;
         if (action == ConfirmBillAction.save) {
           await _saveBill(item);
+        } else if (action == ConfirmBillAction.edit) {
+          await _openReview(item, result);
         } else if (action == ConfirmBillAction.discard) {
           await _discardAsked(item);
         }
