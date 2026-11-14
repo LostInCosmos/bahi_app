@@ -41,7 +41,7 @@ Future<ConfirmBillAction?> showConfirmBillDialog(
           Text(plural(inv.lineItems.length, 'item')),
           const SizedBox(height: 8),
           Text(
-            'Grand total: ${rupees(inv.totals.grandTotal)}',
+            inv.totals.grandTotal == null ? 'Grand total: not read' : 'Grand total: ${rupees(inv.totals.grandTotal!)}',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ],

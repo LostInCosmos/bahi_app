@@ -12,11 +12,11 @@ class LineItem {
   String? batchNo;
   String? expiry;
   String? hsnCode;
-  double qty;
+  double? qty;
   double? freeQty;
   String? freeScheme;
   double? mrp;
-  double rate;
+  double? rate;
   // The single printed Disc/Discount value. The server decides whether it is a
   // % or a rupee amount and returns its answer in discountPct/discountAmount.
   // Kept and echoed back so revalidate still has the printed figure after the
@@ -24,7 +24,7 @@ class LineItem {
   double? discount;
   double? discountPct;
   double? discountAmount;
-  double gstPct;
+  double? gstPct;
   // cgst_pct/sgst_pct/igst_pct are always server-derived — never edited,
   // captured only so a re-save/revalidate round trip doesn't silently drop
   // what the server already worked out.
@@ -39,7 +39,7 @@ class LineItem {
   // (after-discount-and-tax total) field was tried and removed — extraction
   // couldn't reliably tell it apart from a per-unit "Net Rate" column, so
   // gross_amount is the only per-line amount now.
-  double grossAmount;
+  double? grossAmount;
   // The rate after the line's discount, per unit. Worked out by the server
   // (and sometimes printed); never shown here, carried back so a save or
   // revalidate sends what the server sent (DAS-136).
@@ -51,22 +51,22 @@ class LineItem {
     this.batchNo,
     this.expiry,
     this.hsnCode,
-    this.qty = 0,
+    this.qty,
     this.freeQty,
     this.freeScheme,
     this.mrp,
-    this.rate = 0,
+    this.rate,
     this.discount,
     this.discountPct,
     this.discountAmount,
-    this.gstPct = 0,
+    this.gstPct,
     this.cgstPct,
     this.sgstPct,
     this.igstPct,
     this.cgstAmount,
     this.sgstAmount,
     this.igstAmount,
-    this.grossAmount = 0,
+    this.grossAmount,
     this.netRate,
   });
 
@@ -76,22 +76,22 @@ class LineItem {
         batchNo: json.str('batch_no'),
         expiry: json.str('expiry'),
         hsnCode: json.str('hsn_code'),
-        qty: json.dblOr('qty'),
+        qty: json.dbl('qty'),
         freeQty: json.dbl('free_qty'),
         freeScheme: json.str('free_scheme'),
         mrp: json.dbl('mrp'),
-        rate: json.dblOr('rate'),
+        rate: json.dbl('rate'),
         discount: json.dbl('discount'),
         discountPct: json.dbl('discount_pct'),
         discountAmount: json.dbl('discount_amount'),
-        gstPct: json.dblOr('gst_pct'),
+        gstPct: json.dbl('gst_pct'),
         cgstPct: json.dbl('cgst_pct'),
         sgstPct: json.dbl('sgst_pct'),
         igstPct: json.dbl('igst_pct'),
         cgstAmount: json.dbl('cgst_amount'),
         sgstAmount: json.dbl('sgst_amount'),
         igstAmount: json.dbl('igst_amount'),
-        grossAmount: json.dblOr('gross_amount'),
+        grossAmount: json.dbl('gross_amount'),
         netRate: json.dbl('net_rate'),
       );
 
@@ -122,13 +122,13 @@ class LineItem {
 }
 
 class Totals {
-  double subtotal;
+  double? subtotal;
   double? totalDiscount;
-  double totalCgst;
-  double totalSgst;
+  double? totalCgst;
+  double? totalSgst;
   double? totalIgst;
   double? roundOff;
-  double grandTotal;
+  double? grandTotal;
   // A second printed discount line, and the printed total GST. Not shown on
   // the review form; carried back so a save or revalidate keeps them
   // (DAS-136). The server's totals check adds total_discount_2 to
@@ -137,25 +137,25 @@ class Totals {
   double? totalGst;
 
   Totals({
-    this.subtotal = 0,
+    this.subtotal,
     this.totalDiscount,
-    this.totalCgst = 0,
-    this.totalSgst = 0,
+    this.totalCgst,
+    this.totalSgst,
     this.totalIgst,
     this.roundOff,
-    this.grandTotal = 0,
+    this.grandTotal,
     this.totalDiscount2,
     this.totalGst,
   });
 
   factory Totals.fromJson(Map<String, dynamic> json) => Totals(
-        subtotal: json.dblOr('subtotal'),
+        subtotal: json.dbl('subtotal'),
         totalDiscount: json.dbl('total_discount'),
-        totalCgst: json.dblOr('total_cgst'),
-        totalSgst: json.dblOr('total_sgst'),
+        totalCgst: json.dbl('total_cgst'),
+        totalSgst: json.dbl('total_sgst'),
         totalIgst: json.dbl('total_igst'),
         roundOff: json.dbl('round_off'),
-        grandTotal: json.dblOr('grand_total'),
+        grandTotal: json.dbl('grand_total'),
         totalDiscount2: json.dbl('total_discount_2'),
         totalGst: json.dbl('total_gst'),
       );
@@ -230,7 +230,8 @@ class InvoiceData {
         'buyer_name': buyerName,
         'buyer_dl_no': buyerDlNo,
         'invoice_no': invoiceNo,
-        'invoice_date': invoiceDate,
+        // A blank date goes as null: the server refuses "" (DAS-185).
+        'invoice_date': invoiceDate.isEmpty ? null : invoiceDate,
         'invoice_type': invoiceType,
         'place_of_supply': placeOfSupply,
         'line_items': lineItems.map((e) => e.toJson()).toList(),
