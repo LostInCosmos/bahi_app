@@ -164,7 +164,11 @@ class ApiClient {
   }
 
   int _appBuild = 0;
+  String _appVersion = '';
   String _appPlatform = 'other';
+
+  /// "1.0.1 (2008)": this build, as the update screens show it (DAS-189).
+  String get appVersionLabel => _appVersion.isEmpty ? '$_appBuild' : '$_appVersion ($_appBuild)';
 
   /// This installed build's own number and platform, read once at startup
   /// and sent with every request from here on (DAS-74) so the server can
@@ -174,6 +178,7 @@ class ApiClient {
     try {
       final info = await PackageInfo.fromPlatform();
       _appBuild = int.tryParse(info.buildNumber) ?? 0;
+      _appVersion = info.version;
     } catch (_) {
       // A build number of 0 never trips a minimum — fails open, same as the
       // server's own cache does on its side.
@@ -520,10 +525,9 @@ class ApiClient {
       };
 
   /// The message to show for the current [versionGate] level (DAS-74),
-  /// fetched only when there is one to show — never on the happy path. No
-  /// store listing exists: distribution is USB-connect install only, so
-  /// this is plain text ("ask the shop owner to reconnect and update"),
-  /// never a tappable link.
+  /// fetched only when there is one to show — never on the happy path. The
+  /// admin writes why to update; the screens add the build and an Update
+  /// button to the Play Store (DAS-189).
   Future<String?> versionInfo() async {
     final res = await get('/app/version-info', query: {'platform': _appPlatform});
     return jsonObject(res)['message'] as String?;

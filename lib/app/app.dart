@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api/api_client.dart';
+import '../core/config/legal_documents.dart' show kSupportEmail;
 import '../core/utils/app_foreground.dart';
+import '../core/utils/play_store.dart';
+import '../core/utils/snack.dart';
 import '../core/utils/share_file.dart';
 import '../features/auth/data/auth_api.dart';
 import '../features/auth/models/account.dart';
@@ -69,6 +72,8 @@ class _GstBillAppState extends State<GstBillApp> {
         _showUpdateNudge();
         break;
       case VersionGateLevel.hardBlock:
+        // The block says it all: a nudge shown earlier must not sit on top.
+        _messenger.currentState?.hideCurrentMaterialBanner();
         _navigator.currentState?.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const _UpdateRequiredScreen()),
           (_) => false,
@@ -82,12 +87,33 @@ class _GstBillAppState extends State<GstBillApp> {
     _messenger.currentState
       ?..hideCurrentMaterialBanner()
       ..showMaterialBanner(MaterialBanner(
-        content: Text(message ?? 'A new version of this app is available.'),
+        // The admin's reason first, then this build, then Update (DAS-189).
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message ?? 'A new version of Dastavez is ready.'),
+            const SizedBox(height: 4),
+            Text('Your version: ${ApiClient.instance.appVersionLabel}', style: const TextStyle(fontSize: 12)),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => _messenger.currentState?.hideCurrentMaterialBanner(),
-            child: const Text('Dismiss'),
+            child: const Text('Later'),
           ),
+          if (canOpenPlayStore)
+            FilledButton(
+              key: const ValueKey('update-nudge'),
+              onPressed: () async {
+                if (!await openPlayStore()) {
+                  _messenger.currentState
+                    ?..hideCurrentSnackBar()
+                    ..showSnackBar(const SnackBar(content: Text('Could not open the Play Store.')));
+                }
+              },
+              child: const Text('Update'),
+            ),
         ],
       ));
   }
@@ -175,9 +201,8 @@ class _StartupGateState extends State<_StartupGate> {
 
 /// A true breaking change (DAS-74) — set explicitly and separately from the
 /// dismissible nudge, never the default just from being behind. Takes over
-/// the whole screen; the only way out is logging out, since there is no
-/// store listing to send anyone to (distribution is USB-connect install
-/// only) — someone has to reconnect the device and reinstall.
+/// the whole screen: the admin's reason, this build, and Update on Play
+/// Store (DAS-189); the only other way out is logging out.
 class _UpdateRequiredScreen extends StatefulWidget {
   const _UpdateRequiredScreen();
 
@@ -209,9 +234,35 @@ class _UpdateRequiredScreenState extends State<_UpdateRequiredScreen> {
                 const Icon(Icons.system_update_rounded, size: 48),
                 const SizedBox(height: 16),
                 Text(
-                  _message ?? 'This app needs to be updated before it can be used. Please contact support.',
+                  _message ?? 'This version of Dastavez has stopped working. Please update to keep using it.',
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your version: ${ApiClient.instance.appVersionLabel}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+                if (canOpenPlayStore) ...[
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    key: const ValueKey('update-required'),
+                    onPressed: () async {
+                      if (!await openPlayStore() && context.mounted) context.say('Could not open the Play Store.');
+                    },
+                    icon: const Icon(Icons.shop_outlined),
+                    label: const Text('Update on Play Store'),
+                  ),
+                  const SizedBox(height: 12),
+                  // The listing is closed testing for now (2026-11-14).
+                  Text(
+                    "If the Play Store says Dastavez isn't found, email $kSupportEmail and we'll give you access.",
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 TextButton(onPressed: () => signOut(context), child: const Text('Log out')),
               ],
