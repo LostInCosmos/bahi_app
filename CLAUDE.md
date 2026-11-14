@@ -30,6 +30,9 @@ python3 ../backend/ops/check_docs.py      # verifies code_paths + links
 ## Engineering knowledge
 **Engineering knowledge.** Session start: read `../Dastavez-memory/Engineering/Mobile-Engineer/INDEX.md` and `Learning-Roadmap.md`; the rules are in `../Dastavez-memory/Engineering/Shared/Protocol.md`. Task end: record durable lessons there; the report names the notes read and written, or says why none.
 
+## The web app and this app stay in sync
+**User rule, 2026-11-14:** "make sure whatever changes are made to webapp, those are copied to app, and vice versa evertytume. all features must be in sync". Every shop-facing change here has a matching change in the web app (`../bahi_dashboard`, app.dastavez.co.in), and the other way round. The exceptions are things only one platform can have (camera, mic and permissions, the Play Store update button). Each report and ticket names the web side: who carries it, or why it isn't needed. Port shared logic line for line, with its tests, so both show the same figures (as `dashboard/models/dashboard_stats.dart` ports the web's `dashboardStats.js`). The parity list is the vault's `05 - Frontend/Web–App Parity.md`.
+
 ## Find before you write
 **Reuse before building** (user rule, 2026-10-31): look for an existing feature, control, route or function first; if tweaking it works, do only that, with no new screen, route, job or preview the ask did not name. Say what you looked for when proposing anything new. See Shared/Protocol.md §12.
 
