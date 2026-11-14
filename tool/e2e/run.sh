@@ -94,11 +94,13 @@ done
 
 # --- 1. the server: fresh seed every run -------------------------------------
 if [ "${E2E_NO_SERVER:-}" != 1 ]; then
-  say "server: ops/e2e_server.sh up (port $PORT)"
-  # `reset` refuses when the server is not up (its `status` exits 0 either way), so: reset, else up.
-  if ! (cd "$BACKEND_DIR" && E2E_PORT="$PORT" ops/e2e_server.sh reset); then
-    (cd "$BACKEND_DIR" && E2E_PORT="$PORT" ops/e2e_server.sh up) || die "server did not start"
-  fi
+  say "server: ops/e2e_server.sh up (port $PORT), reading every photo as '${E2E_FAKE_OUTCOME-clean}'"
+  # Always a fresh start, never a `reset` of a server already up: a reset keeps
+  # the outcome that server was started with, and a server another session left
+  # on `totals` made the photo flows fail (2026-11-14).
+  (cd "$BACKEND_DIR" && E2E_PORT="$PORT" ops/e2e_server.sh down >/dev/null 2>&1)
+  (cd "$BACKEND_DIR" && E2E_PORT="$PORT" E2E_FAKE_OUTCOME="${E2E_FAKE_OUTCOME-clean}" ops/e2e_server.sh up) \
+    || die "server did not start"
 fi
 SEED="$BACKEND_DIR/.e2e/seed.json"
 [ -f "$SEED" ] || die "no seed at $SEED"

@@ -17,7 +17,6 @@ import '../../invoice/data/invoice_api.dart';
 import '../../invoice/models/invoice.dart';
 import '../../sales/data/sale_api.dart';
 import '../../sales/models/sale.dart';
-import '../../sales/presentation/sale_receipt_screen.dart';
 import '../../sales/presentation/sales_history_screen.dart';
 import '../models/dashboard_stats.dart';
 
@@ -28,7 +27,8 @@ import '../models/dashboard_stats.dart';
 /// 14-day chart), the product list shared with Inventory and Sell (usually a
 /// 304) and this month's purchase bills, in parallel. Only the figures are
 /// kept, never the raw lists. Nothing is written; every row opens the screen
-/// the other tabs use.
+/// the other tabs use. No recent-bills list: View sales is the way to the
+/// sales history (the user, as on the web, 2026-11-14).
 class DashboardScreen extends StatefulWidget {
   final HomeTabHost host;
   const DashboardScreen({super.key, required this.host});
@@ -43,11 +43,9 @@ class _Figures {
   final List<TrendDay> trend;
   final StockWatch watch;
   final PurchasesSummary purchases;
-  final List<SaleSummary> recent;
-  const _Figures(this.today, this.summary, this.trend, this.watch, this.purchases, this.recent);
+  const _Figures(this.today, this.summary, this.trend, this.watch, this.purchases);
 }
 
-const _recentBills = 5;
 const _attentionRows = 6;
 
 // The shop's name, fetched once per sign-in.
@@ -102,7 +100,6 @@ class DashboardScreenState extends State<DashboardScreen> with TabScreen {
             salesTrend(sales, today),
             stockWatch(products, today),
             purchasesSummary(lists[1] as List<InvoiceSummary>, today),
-            sales.take(_recentBills).toList(),
           ));
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not load the dashboard: $e');
@@ -163,8 +160,6 @@ class DashboardScreenState extends State<DashboardScreen> with TabScreen {
         _Tiles(watch: data.watch, purchases: data.purchases, onInventory: _openInventory, host: widget.host),
         const SizedBox(height: Spacing.m),
         _Attention(watch: data.watch, today: data.today, onInventory: _openInventory),
-        const SizedBox(height: Spacing.m),
-        _Recent(sales: data.recent, monthCount: data.summary.monthCount, onAll: _openSales),
       ],
     ];
     return RefreshIndicator(
@@ -411,8 +406,7 @@ class _Panel extends StatelessWidget {
   final String subtitle;
   final VoidCallback onAll;
   final List<Widget> children;
-  final Key? allKey;
-  const _Panel({required this.title, required this.subtitle, required this.onAll, required this.children, this.allKey});
+  const _Panel({required this.title, required this.subtitle, required this.onAll, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +423,7 @@ class _Panel extends StatelessWidget {
                 Text(subtitle, style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
               ]),
             ),
-            TextButton(key: allKey, onPressed: onAll, child: const Text('All')),
+            TextButton(onPressed: onAll, child: const Text('All')),
           ]),
           ...children,
         ]),
@@ -499,43 +493,6 @@ class _Attention extends StatelessWidget {
             child: Text('Out of stock · ${watch.outOfStock}'),
           ),
         ]),
-      ],
-    );
-  }
-}
-
-class _Recent extends StatelessWidget {
-  final List<SaleSummary> sales;
-  final int monthCount;
-  final VoidCallback onAll;
-  const _Recent({required this.sales, required this.monthCount, required this.onAll});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return _Panel(
-      title: 'Recent bills',
-      subtitle: '${plural(monthCount, 'sale')} this month',
-      onAll: onAll,
-      allKey: const ValueKey('home-recent-all'),
-      children: [
-        if (sales.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: Spacing.m),
-            child: Text('No sales yet. Start billing to see them here.', style: TextStyle(color: colors.onSurfaceVariant)),
-          ),
-        for (final s in sales)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            leading: Icon(Icons.receipt_outlined, color: colors.primary),
-            title: Text(s.buyerName?.isNotEmpty == true ? s.buyerName! : 'Walk-in customer'),
-            subtitle: Text('${s.saleNo} · ${shortDate(DateTime.parse(s.saleDate))}'),
-            trailing: Text(rupees(s.grandTotal), style: amountTextStyle(context)),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => SaleReceiptScreen(saleId: s.id, primaryActionLabel: 'Close')),
-            ),
-          ),
       ],
     );
   }

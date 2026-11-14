@@ -80,8 +80,7 @@ void main() {
       expect(find.byKey(const ValueKey('home-today-total')), findsOneWidget);
       expect(find.text('₹400'), findsWidgets, reason: "today's 100 + 300");
       expect(find.text('₹200'), findsOneWidget, reason: 'average bill');
-      expect(find.text('Ramesh'), findsOneWidget);
-      expect(find.text('Walk-in customer'), findsOneWidget);
+      expect(find.text('Recent bills'), findsNothing, reason: 'View sales is the way to them (as on the web)');
       expect(find.text('Only 2 packs left'), findsOneWidget);
       expect(find.text('Out of stock'), findsWidgets);
       expect(find.text('expires in 5 days · 10 packs'), findsOneWidget);
@@ -117,7 +116,6 @@ void main() {
     await http.runWithClient(() async {
       await _open(tester);
       expect(find.text('₹0'), findsWidgets);
-      expect(find.text('No sales yet. Start billing to see them here.'), findsOneWidget);
       expect(find.text('Nothing expired or expiring in 90 days, and nothing running low.'), findsOneWidget);
       expect(find.text('Add a purchase bill to see it'), findsOneWidget);
     }, () => _server(empty: true));
