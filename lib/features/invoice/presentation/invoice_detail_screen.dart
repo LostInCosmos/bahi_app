@@ -151,9 +151,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                 Text(item.productName, style: const TextStyle(fontWeight: FontWeight.bold)),
                                 const SizedBox(height: Spacing.xs),
                                 Text(
-                                  'Qty ${wholeOrFixed2(item.qty)} × ₹${wholeOrFixed2(item.rate)}'
+                                  'Qty ${wholeOrFixed2(item.qty ?? 0)} × ₹${wholeOrFixed2(item.rate ?? 0)}'
                                   '${item.hsnCode != null ? ' • HSN ${item.hsnCode}' : ''}'
-                                  ' • GST ${percent(item.gstPct)}',
+                                  ' • GST ${percent(item.gstPct ?? 0)}',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ],

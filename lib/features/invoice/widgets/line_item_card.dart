@@ -28,9 +28,11 @@ InputDecoration issueDecoration(String label, ValidationIssue? issue) {
 /// field blank (or hiding it) in those cases, derive it: CGST and SGST are
 /// always equal for an intrastate sale, so whichever side is missing
 /// mirrors the one that's present, and a rate not given at all is worked
-/// back out of its amount (amount / (rate*qty) * 100).
-double computeGstPct(LineItem item) {
-  if (item.gstPct > 0) return item.gstPct;
+/// back out of its amount (amount / (rate*qty) * 100). Null when nothing
+/// gives it, so a blank stays blank (DAS-185).
+double? computeGstPct(LineItem item) {
+  final gst = item.gstPct;
+  if (gst != null && gst > 0) return gst;
   final cgstPct = item.cgstPct ?? 0;
   final sgstPct = item.sgstPct ?? 0;
   if (cgstPct > 0 || sgstPct > 0) {
@@ -38,7 +40,7 @@ double computeGstPct(LineItem item) {
     final s = sgstPct > 0 ? sgstPct : cgstPct;
     return c + s;
   }
-  final rateQty = item.rate * item.qty;
+  final rateQty = (item.rate ?? 0) * (item.qty ?? 0);
   if (rateQty > 0) {
     final amount = item.cgstAmount ?? item.sgstAmount;
     if (amount != null && amount > 0) {
@@ -148,22 +150,22 @@ class LineItemForm {
         batchNo: batchNo.text.isEmpty ? null : batchNo.text,
         expiry: expiry.text.isEmpty ? null : expiry.text,
         hsnCode: hsnCode.text.isEmpty ? null : hsnCode.text,
-        qty: double.tryParse(qty.text) ?? 0,
+        qty: double.tryParse(qty.text),
         freeQty: double.tryParse(freeQty.text),
         freeScheme: freeScheme.text.isEmpty ? null : freeScheme.text,
         mrp: double.tryParse(mrp.text),
-        rate: double.tryParse(rate.text) ?? 0,
+        rate: double.tryParse(rate.text),
         discount: discountEdited ? null : printedDiscount,
         discountPct: double.tryParse(discountPct.text),
         discountAmount: double.tryParse(discountAmount.text),
-        gstPct: double.tryParse(gstPct.text) ?? 0,
+        gstPct: double.tryParse(gstPct.text),
         cgstPct: cgstPct,
         sgstPct: sgstPct,
         igstPct: igstPct,
         cgstAmount: double.tryParse(cgstAmount.text),
         sgstAmount: double.tryParse(sgstAmount.text),
         igstAmount: double.tryParse(igstAmount.text),
-        grossAmount: double.tryParse(grossAmount.text) ?? 0,
+        grossAmount: double.tryParse(grossAmount.text),
         netRate: netRate,
       );
 

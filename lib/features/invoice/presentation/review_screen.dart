@@ -402,8 +402,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
         // figure is the only copy there is, and dropping it made the server
         // see no discount/tax at all and flag every total (DAS-9).
         if (li.discount != null) li.discountAmount = null;
-        if (li.cgstPct != null || li.gstPct != 0) li.cgstAmount = null;
-        if (li.sgstPct != null || li.gstPct != 0) li.sgstAmount = null;
+        if (li.cgstPct != null || (li.gstPct ?? 0) != 0) li.cgstAmount = null;
+        if (li.sgstPct != null || (li.gstPct ?? 0) != 0) li.sgstAmount = null;
         if (li.igstPct != null) li.igstAmount = null;
       }
       return li;
@@ -423,13 +423,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
       placeOfSupply: placeOfSupply.text.isEmpty ? null : placeOfSupply.text,
       lineItems: lineItems,
       totals: Totals(
-        subtotal: double.tryParse(subtotal.text) ?? 0,
+        subtotal: double.tryParse(subtotal.text),
         totalDiscount: double.tryParse(totalDiscount.text),
-        totalCgst: double.tryParse(totalCgst.text) ?? 0,
-        totalSgst: double.tryParse(totalSgst.text) ?? 0,
+        totalCgst: double.tryParse(totalCgst.text),
+        totalSgst: double.tryParse(totalSgst.text),
         totalIgst: double.tryParse(totalIgst.text),
         roundOff: double.tryParse(roundOff.text),
-        grandTotal: double.tryParse(grandTotal.text) ?? 0,
+        grandTotal: double.tryParse(grandTotal.text),
         totalDiscount2: totalDiscount2,
         totalGst: totalGst,
       ),
