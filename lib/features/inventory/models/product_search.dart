@@ -136,3 +136,31 @@ String? expiryWarning(ProductSummary p, DateTime today) {
   final when = switch (days) { 0 => 'Expires today', 1 => 'Expires tomorrow', _ => 'Expires in $days days' };
   return '$when · ${shortDate(expiry)}';
 }
+
+/// A pack count at or under this is "running low": the Inventory chip and
+/// the Home tab's tile count with the same rule (DAS-186; Web's LOW_STOCK_AT).
+const kLowStockAt = 5;
+
+int _byName(ProductSummary a, ProductSummary b) => a.name.toLowerCase().compareTo(b.name.toLowerCase());
+
+/// In stock but at most [kLowStockAt] packs, fewest first.
+List<ProductSummary> runningLow(List<ProductSummary> products) => [
+      for (final p in products)
+        if (p.quantityOnHand > 0 && p.quantityOnHand <= kLowStockAt) p,
+    ]..sort((a, b) => a.quantityOnHand != b.quantityOnHand ? a.quantityOnHand.compareTo(b.quantityOnHand) : _byName(a, b));
+
+/// Nothing on the shelf, by name.
+List<ProductSummary> outOfStock(List<ProductSummary> products) => [
+      for (final p in products)
+        if (p.quantityOnHand <= 0) p,
+    ]..sort(_byName);
+
+/// Which stock chip is on in Inventory: one at a time (DAS-186).
+enum StockFilter { low, out }
+
+/// What another tab asks Inventory to show: the Home tab's tiles and links.
+class InventoryFilter {
+  final bool expiring;
+  final StockFilter? stock;
+  const InventoryFilter({this.expiring = false, this.stock});
+}

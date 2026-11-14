@@ -10,6 +10,25 @@ library;
 /// always, so a column of amounts lines up.
 String rupees(num amount) => '₹${amount.toStringAsFixed(2)}';
 
+/// `₹2,26,800`: whole rupees with Indian grouping (lakh, crore), for a
+/// headline figure (DAS-186, as the web's `rupeesWhole`).
+String rupeesWhole(num amount) {
+  final n = amount.round();
+  final digits = n.abs().toString();
+  String grouped;
+  if (digits.length <= 3) {
+    grouped = digits;
+  } else {
+    final head = digits.substring(0, digits.length - 3);
+    final pairs = <String>[];
+    for (var end = head.length; end > 0; end -= 2) {
+      pairs.insert(0, head.substring(end - 2 < 0 ? 0 : end - 2, end));
+    }
+    grouped = '${pairs.join(',')},${digits.substring(digits.length - 3)}';
+  }
+  return '${n < 0 ? '-' : ''}₹$grouped';
+}
+
 /// A number for a text field or a label: a whole number plain (`12`), a
 /// fraction as Dart prints it (`12.5`). Null is empty. This is the shape
 /// numbers arrive in from the server, so writing one back never nudges the

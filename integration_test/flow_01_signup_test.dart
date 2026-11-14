@@ -22,7 +22,7 @@ void main() {
     // "Create account" is enabled only once the terms are ticked. Below the
     // fold on a phone since the shop fields were added.
     await createAccountButton($).scrollTo().tap();
-    await $('New bills').waitUntilVisible(timeout: const Duration(seconds: 30));
+    await $(const ValueKey('home-start-billing')).waitUntilVisible(timeout: const Duration(seconds: 30));
     await steps.shot('home');
   });
 }

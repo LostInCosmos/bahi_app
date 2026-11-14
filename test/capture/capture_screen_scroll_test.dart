@@ -136,6 +136,9 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
       await _settle(tester);
+      // Home is the first tab since DAS-186.
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Capture')));
+      await _settle(tester);
 
       final position = tester.state<ScrollableState>(_scroller).position;
       expect(position.maxScrollExtent, greaterThan(1500));
@@ -164,6 +167,9 @@ void main() {
     await http.runWithClient(() async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+      await _settle(tester);
+      // Home is the first tab since DAS-186.
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Capture')));
       await _settle(tester);
 
       // Scroll to the bottom repeatedly: each arrival triggers the next page.

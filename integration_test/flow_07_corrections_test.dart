@@ -46,6 +46,7 @@ void main() {
   e2eFlow('flow_07_corrections', 'correct a flagged bill, leave it, and find the corrections kept', ($, steps) async {
     await startApp($);
     await signIn($);
+    await openTab($, 'Capture'); // Home lands first (DAS-186)
 
     if ($('Take photo').exists) {
       await $('Take photo').tap();

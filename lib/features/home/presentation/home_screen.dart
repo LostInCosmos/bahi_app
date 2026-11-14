@@ -30,6 +30,14 @@ class _HomeScreenState extends State<HomeScreen> implements HomeTabHost {
     for (var i = 0; i < kHomeTabs.length; i++) kHomeTabs[i].build(_keys[i], this),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // The tab shown at start is not "selected", so nothing else asks it to
+    // load: Home (DAS-186) has nothing of its own until it is refreshed.
+    WidgetsBinding.instance.addPostFrameCallback((_) => (_keys[_tab].currentState as TabScreen?)?.refresh());
+  }
+
   void _push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
   /// Log out waits on the server (up to its timeout) before the login screen
@@ -47,12 +55,14 @@ class _HomeScreenState extends State<HomeScreen> implements HomeTabHost {
   }
 
   @override
-  void select(String id) => _selectTab(kHomeTabs.indexWhere((t) => t.id == id));
+  void select(String id, {Object? payload}) => _selectTab(kHomeTabs.indexWhere((t) => t.id == id), payload: payload);
 
-  void _selectTab(int i) {
+  void _selectTab(int i, {Object? payload}) {
     if (i < 0) return;
     setState(() => _tab = i);
-    (_keys[i].currentState as TabScreen?)?.refresh();
+    final state = _keys[i].currentState;
+    if (payload != null && state is TabHandoff) state.handoff(payload);
+    (state as TabScreen?)?.refresh();
   }
 
   @override

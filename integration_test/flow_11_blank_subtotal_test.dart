@@ -29,6 +29,7 @@ void main() {
       ($, steps) async {
     await startApp($);
     await signIn($);
+    await openTab($, 'Capture'); // Home lands first (DAS-186)
 
     if ($('Take photo').exists) {
       await $('Take photo').tap();

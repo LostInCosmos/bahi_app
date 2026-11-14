@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../capture/presentation/capture_screen.dart';
+import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../inventory/presentation/inventory_screen.dart';
 import '../../invoice/presentation/purchases_screen.dart';
-import '../../sales/presentation/sales_history_screen.dart';
 import '../../sales/presentation/sales_screen.dart';
 
 /// What a tab can ask of the screen hosting it.
 abstract interface class HomeTabHost {
-  /// Bring the tab with this [HomeTab.id] to the front, refreshing it.
-  void select(String id);
+  /// Bring the tab with this [HomeTab.id] to the front, refreshing it, and
+  /// hand it [payload] (a filter to show) when it takes one (DAS-186).
+  void select(String id, {Object? payload});
 }
 
 /// One tab of the home screen: its titles, its icons and how to build it.
@@ -44,15 +45,25 @@ class HomeTab {
   });
 }
 
+Widget _home(Key key, HomeTabHost host) => DashboardScreen(key: key, host: host);
 Widget _capture(Key key, HomeTabHost host) =>
     CaptureScreen(key: key, onBatchFinished: () => host.select('purchases'));
 Widget _purchases(Key key, HomeTabHost host) => PurchasesScreen(key: key);
 Widget _inventory(Key key, HomeTabHost host) => InventoryScreen(key: key);
 Widget _sell(Key key, HomeTabHost host) => SalesScreen(key: key);
-Widget _sales(Key key, HomeTabHost host) => SalesHistoryScreen(key: key);
 
-/// In bottom-bar order.
+/// In bottom-bar order. Home is first and the landing screen after login;
+/// it took the Sales tab's place, and the sales history opens from it
+/// (DAS-186, the user's choice to keep five tabs).
 const kHomeTabs = [
+  HomeTab(
+    id: 'home',
+    title: 'Home',
+    label: 'Home',
+    icon: Icons.space_dashboard_outlined,
+    selectedIcon: Icons.space_dashboard,
+    build: _home,
+  ),
   HomeTab(
     id: 'capture',
     title: 'New bills',
@@ -84,13 +95,5 @@ const kHomeTabs = [
     icon: Icons.shopping_cart_outlined,
     selectedIcon: Icons.shopping_cart,
     build: _sell,
-  ),
-  HomeTab(
-    id: 'sales',
-    title: 'Sales',
-    label: 'Sales',
-    icon: Icons.receipt_outlined,
-    selectedIcon: Icons.receipt,
-    build: _sales,
   ),
 ];

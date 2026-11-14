@@ -19,7 +19,7 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => InventoryScreenState();
 }
 
-class InventoryScreenState extends State<InventoryScreen> with TabScreen {
+class InventoryScreenState extends State<InventoryScreen> with TabScreen, TabHandoff {
   final _searchController = TextEditingController();
   final _catalog = ProductCatalog.instance;
 
@@ -30,6 +30,23 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
   /// Only stock expiring within a month, soonest first. Works with the search.
   bool _expiringOnly = false;
   String? _schedule;
+
+  /// Running low or out of stock, one at a time, on top of the search and
+  /// the expiring filter (DAS-186).
+  StockFilter? _stock;
+
+  /// The Home tab's tile or link: its filter replaces whatever was set here.
+  @override
+  void handoff(Object payload) {
+    if (payload is! InventoryFilter) return;
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _expiringOnly = payload.expiring;
+      _stock = payload.stock;
+      _schedule = null;
+    });
+  }
 
   // Deliberately no fetch here — see the same note in purchases_screen.dart:
   // HomeScreen's tab switcher calls refresh() the first (and every) time
@@ -86,7 +103,13 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
     // the expiring filter; a chip only for a schedule the shop has.
     const schedules = ['H1', 'H', 'X'];
     final bySchedule = {for (final s in schedules) s: matching.where((p) => p.schedule == s).length};
-    final base = _expiringOnly ? expiring : matching;
+    final low = runningLow(matching);
+    final out = outOfStock(matching);
+    final stockList = switch (_stock) { StockFilter.low => low, StockFilter.out => out, null => null };
+    final stockIds = stockList != null && _expiringOnly ? {for (final p in stockList) p.id} : null;
+    final base = _expiringOnly
+        ? (stockIds != null ? expiring.where((p) => stockIds.contains(p.id)).toList() : expiring)
+        : (stockList ?? matching);
     final products = _schedule == null ? base : base.where((p) => p.schedule == _schedule).toList();
     final loading = index == null && _catalog.isLoading;
     final failure = _catalog.lastError;
@@ -131,6 +154,18 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
             selected: _expiringOnly,
             onSelected: (on) => setState(() => _expiringOnly = on),
           ),
+            FilterChip(
+              key: const ValueKey('inventory-low'),
+              label: Text('Running low (${low.length})'),
+              selected: _stock == StockFilter.low,
+              onSelected: (on) => setState(() => _stock = on ? StockFilter.low : null),
+            ),
+            FilterChip(
+              key: const ValueKey('inventory-out'),
+              label: Text('Out of stock (${out.length})'),
+              selected: _stock == StockFilter.out,
+              onSelected: (on) => setState(() => _stock = on ? StockFilter.out : null),
+            ),
             for (final s in schedules)
               if (bySchedule[s]! > 0 || _schedule == s)
                 FilterChip(
@@ -155,8 +190,15 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
               decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
             ),
             Text(
-              [if (_schedule != null) 'SCHEDULE $_schedule', _expiringOnly ? 'EXPIRING SOONEST FIRST' : 'CURRENT STOCK']
-                  .join(' · '),
+              () {
+                final parts = [
+                  if (_schedule != null) 'SCHEDULE $_schedule',
+                  if (_stock == StockFilter.low) 'RUNNING LOW',
+                  if (_stock == StockFilter.out) 'OUT OF STOCK',
+                  if (_expiringOnly) 'EXPIRING SOONEST FIRST',
+                ];
+                return parts.isEmpty ? 'CURRENT STOCK' : parts.join(' · ');
+              }(),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: colors.onSurfaceVariant,
                     letterSpacing: 0.6,
@@ -179,7 +221,11 @@ class InventoryScreenState extends State<InventoryScreen> with TabScreen {
           icon: Icons.medication_outlined,
           text: _expiringOnly
               ? (_query.trim().isEmpty ? 'Nothing in stock expires within a month' : 'Nothing that matches expires within a month')
-              : (_query.trim().isEmpty ? 'No products yet' : 'No medicine matches that'),
+              : _stock == StockFilter.low
+                  ? 'Nothing is running low'
+                  : _stock == StockFilter.out
+                      ? 'Nothing is out of stock'
+                      : (_query.trim().isEmpty ? 'No products yet' : 'No medicine matches that'),
         ),
     ];
     return RefreshIndicator(
