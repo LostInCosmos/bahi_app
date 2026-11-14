@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gst_bill_app/core/api/api_client.dart';
+import 'package:gst_bill_app/core/utils/play_store.dart';
 import 'package:gst_bill_app/features/home/presentation/home_screen.dart';
 import 'package:gst_bill_app/main.dart';
 
@@ -25,7 +26,21 @@ void main() {
       buildSignature: '',
     );
   });
-  tearDown(() => ApiClient.instance.onVersionGate = null);
+  var storeOpened = 0;
+  setUp(() {
+    // DAS-189: as on an Android phone, with the Play Store page "opened".
+    debugCanOpenPlayStore = true;
+    storeOpened = 0;
+    debugOpenPlayStore = () async {
+      storeOpened++;
+      return true;
+    };
+  });
+  tearDown(() {
+    ApiClient.instance.onVersionGate = null;
+    debugCanOpenPlayStore = null;
+    debugOpenPlayStore = null;
+  });
 
   testWidgets('a soft minimum shows a dismissible banner, not a hard block', (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -46,11 +61,17 @@ void main() {
     }, () => client);
 
     expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.text('A new version of this app is available.'), findsOneWidget);
+    expect(find.text('A new version of Dastavez is ready.'), findsOneWidget);
+    expect(find.text('Your version: 1.0.0 (2002)'), findsOneWidget);
     // Not blocked: the home screen is still there underneath the banner.
     expect(find.byType(HomeScreen), findsOneWidget);
 
-    await tester.tap(find.text('Dismiss'));
+    // DAS-189: Update opens the Play Store page.
+    await tester.tap(find.byKey(const ValueKey('update-nudge')));
+    await tester.pump();
+    expect(storeOpened, 1);
+
+    await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();
     expect(find.byType(MaterialBanner), findsNothing);
   });
@@ -78,8 +99,34 @@ void main() {
     }, () => client);
 
     expect(find.byType(HomeScreen), findsNothing);
-    expect(find.text('This app needs to be updated before it can be used. Please contact support.'),
-        findsOneWidget);
+    expect(find.text('This version of Dastavez has stopped working. Please update to keep using it.'), findsOneWidget);
+    expect(find.text('Your version: 1.0.0 (2002)'), findsOneWidget);
+    expect(find.textContaining("isn't found, email"), findsOneWidget, reason: 'the listing is closed testing');
     expect(find.text('Log out'), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsNothing, reason: 'no nudge left on top of the block');
+
+    await tester.tap(find.byKey(const ValueKey('update-required')));
+    await tester.pump();
+    expect(storeOpened, 1);
+  });
+
+  testWidgets('with no Play Store (not Android), the banner has no Update button', (tester) async {
+    debugCanOpenPlayStore = false;
+    SharedPreferences.setMockInitialValues({});
+    final payload = base64Url.encode(utf8.encode(jsonEncode({'tenant_id': 8}))).replaceAll('=', '');
+    FlutterSecureStorage.setMockInitialValues({'token': 'h.$payload.s'});
+    final client = MockClient((req) async => http.Response('{}', 200,
+        headers: {'content-type': 'application/json', 'x-min-app-build': '9999'}));
+    await http.runWithClient(() async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      await tester.pumpWidget(const GstBillApp());
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }, () => client);
+    // The previous test left the gate at hard, so this soft level is a change and shows.
+    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update-nudge')), findsNothing);
+    expect(find.text('Later'), findsOneWidget);
   });
 }
