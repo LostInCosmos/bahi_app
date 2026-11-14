@@ -13,7 +13,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1500));
     await tapLogOut($);
     await loginButton($).waitUntilVisible();
-    expect($('New bills').exists, isFalse, reason: 'home must be gone after logging out');
+    expect($(NavigationBar).exists, isFalse, reason: 'home must be gone after logging out');
     await steps.shot('logged-out');
 
     await signIn($);

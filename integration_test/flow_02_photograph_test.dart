@@ -16,6 +16,7 @@ void main() {
   e2eFlow('flow_02_photograph', 'photograph a bill and see the saved purchase', ($, steps) async {
     await startApp($);
     await signIn($);
+    await openTab($, 'Capture'); // Home lands first (DAS-186)
     await steps.shot('home');
 
     // A fresh shop shows the empty state's "Take photo"; a shop with bills

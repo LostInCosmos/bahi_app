@@ -10,3 +10,10 @@ import 'package:flutter/widgets.dart';
 mixin TabScreen<T extends StatefulWidget> on State<T> {
   Future<void> refresh();
 }
+
+/// A tab that can be brought to the front with something to show — a filter
+/// the Home tab's tile asks for (DAS-186). It replaces whatever the tab had
+/// set; a tab without this mixin ignores the hand-off.
+mixin TabHandoff<T extends StatefulWidget> on State<T> {
+  void handoff(Object payload);
+}

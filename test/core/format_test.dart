@@ -44,4 +44,13 @@ void main() {
     expect(shortDate(DateTime(2026, 10, 4)), '04 Oct 2026');
     expect(formatElapsed(const Duration(seconds: 65)), '01:05');
   });
+
+  test('rupeesWhole: whole rupees with Indian grouping (DAS-186)', () {
+    expect(rupeesWhole(0), '₹0');
+    expect(rupeesWhole(999.4), '₹999');
+    expect(rupeesWhole(2268), '₹2,268');
+    expect(rupeesWhole(226800), '₹2,26,800');
+    expect(rupeesWhole(12345678.5), '₹1,23,45,679');
+    expect(rupeesWhole(-1500), '-₹1,500');
+  });
 }

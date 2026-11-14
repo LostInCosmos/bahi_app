@@ -37,7 +37,7 @@ void main() {
   testWidgets('selecting a tab changes the title', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
     await tester.pump();
-    expect(find.text(kHomeTabs.first.title), findsOneWidget);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text(kHomeTabs.first.title)), findsOneWidget);
     await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Inventory')));
     await tester.pump();
     expect(find.descendant(of: find.byType(AppBar), matching: find.text('Inventory')), findsOneWidget);

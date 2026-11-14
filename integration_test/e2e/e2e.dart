@@ -103,10 +103,11 @@ Future<void> signIn(PatrolIntegrationTester $, {String email = E2E.email, String
   await field($, 'Email').enterText(email);
   await field($, 'Password').enterText(password);
   await loginButton($).tap();
-  await $('New bills').waitUntilVisible(timeout: const Duration(seconds: 30));
+  // Home is the landing screen since DAS-186.
+  await $(const ValueKey('home-start-billing')).waitUntilVisible(timeout: const Duration(seconds: 30));
 }
 
-/// Opens a home tab by its bar label (Capture, Purchases, Inventory, Sell, Sales).
+/// Opens a home tab by its bar label (Home, Capture, Purchases, Inventory, Sell).
 Future<void> openTab(PatrolIntegrationTester $, String label) async {
   await $(NavigationBar).$(label).tap();
 }

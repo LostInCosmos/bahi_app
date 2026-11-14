@@ -14,7 +14,11 @@ import '../models/sale.dart';
 import 'sale_receipt_screen.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
-  const SalesHistoryScreen({super.key});
+  /// Opened as a page (from Home, DAS-186) rather than as a tab: nothing
+  /// calls [SalesHistoryScreenState.refresh] then, so it loads itself.
+  final bool loadOnOpen;
+
+  const SalesHistoryScreen({super.key, this.loadOnOpen = false});
 
   @override
   State<SalesHistoryScreen> createState() => SalesHistoryScreenState();
@@ -29,9 +33,14 @@ class SalesHistoryScreenState extends State<SalesHistoryScreen> with TabScreen {
   bool _exporting = false;
   String? _error;
 
-  // Deliberately no fetch here — see the same note in purchases_screen.dart:
+  // As a tab, no fetch here — see the same note in purchases_screen.dart:
   // HomeScreen's tab switcher calls refresh() the first (and every) time
   // this tab is actually selected, so every tab doesn't fetch on app open.
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loadOnOpen) WidgetsBinding.instance.addPostFrameCallback((_) => refresh());
+  }
 
   /// Called by HomeScreen when this tab is selected — IndexedStack keeps this
   /// widget's state alive across tab switches.
@@ -157,4 +166,16 @@ class _SaleRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The sales history as a page of its own: Home's "View sales" and its
+/// Recent bills' "All" open it (DAS-186; it was the Sales tab).
+class SalesHistoryPage extends StatelessWidget {
+  const SalesHistoryPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Sales')),
+        body: const SalesHistoryScreen(loadOnOpen: true),
+      );
 }

@@ -32,6 +32,7 @@ void main() {
   e2eFlow('flow_06_folder_upload', 'photograph a bill inside a folder and find it only there', ($, steps) async {
     await startApp($);
     await signIn($);
+    await openTab($, 'Capture'); // Home lands first (DAS-186)
 
     // Bills an earlier flow saved at Home stay there; this one must not join
     // them. Counted once Home's list has had time to answer.
