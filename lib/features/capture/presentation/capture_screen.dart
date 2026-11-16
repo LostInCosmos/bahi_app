@@ -30,6 +30,7 @@ import '../models/bulk.dart';
 import '../models/hand_over.dart';
 import '../models/list_entry.dart';
 import '../models/upload_summary.dart';
+import '../widgets/already_saved_dialog.dart';
 import '../widgets/batch_item_card.dart';
 import '../widgets/capture_bottom_bar.dart';
 import '../widgets/status_filter_bar.dart';
@@ -802,6 +803,12 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
               ..serverDraft = null;
             _persistBatch();
           },
+          onRemoved: () {
+            if (mounted) _removedByTeam(item);
+          },
+          onDuplicate: (message, existingId) {
+            if (mounted) unawaited(_onDuplicate(item, message, existingId));
+          },
         ),
       ),
     );
@@ -842,7 +849,9 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         });
       } on ApiException catch (e) {
         if (!mounted) return;
-        if (e.statusCode == 409 || e.statusCode == 404) {
+        if (e.errorCode == 'bill_removed') {
+          _removedByTeam(item); // DAS-193
+        } else if (e.statusCode == 409 || e.statusCode == 404) {
           // Another phone wrote newer corrections, or the bill was saved or
           // is gone: nothing here is left to keep.
           setState(() => item.correctionUnsent = false);
@@ -890,6 +899,10 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
         break;
       } on ApiException catch (e) {
         if (!mounted) return;
+        if (e.errorCode == 'bill_removed') {
+          _removedByTeam(item); // DAS-193: nothing left to save
+          break;
+        }
         // Its folder was deleted since the bill was filed. Not worth failing
         // the save over: file it at home and say so.
         if (e.statusCode == 404 &&
@@ -898,6 +911,10 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
           setState(() => item.folderId = null);
           _say('That folder no longer exists — saving to Home.');
           continue;
+        }
+        if (e.errorCode == 'duplicate_bill') {
+          await _onDuplicate(item, e.message, e.existingInvoiceId);
+          break;
         }
         if (e.statusCode == 409) {
           // Saved already (from another phone, or a tap that went through).
@@ -919,6 +936,35 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
       }
     }
     await _persistBatch();
+  }
+
+  /// This bill was removed (discarded, deleted or merged, by the shop on
+  /// another device or by our team) while this
+  /// phone still had it: the server refuses it with `bill_removed` (DAS-193).
+  /// Its card goes, if it is this phone's own; the list is asked again.
+  void _removedByTeam(BatchItem item) {
+    if (_items.contains(item)) _dropLocal(item);
+    _say('This bill was removed.');
+    unawaited(_uploadHistory.currentState?.refresh());
+  }
+
+  /// A second copy of a saved bill (DAS-193; the user's choice, 2026-11-16):
+  /// the Already saved dialog. View opens the saved bill; Discard removes this
+  /// copy; Close leaves it Not saved.
+  Future<void> _onDuplicate(BatchItem item, String message, int? existingId) async {
+    final action = await showAlreadySavedDialog(context, message, canView: existingId != null);
+    if (!mounted) return;
+    switch (action) {
+      case AlreadySavedAction.view:
+        if (existingId != null) {
+          await Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoiceId: existingId)));
+        }
+      case AlreadySavedAction.discard:
+        if (await _removeItem(item) && mounted) _say('Bill discarded.');
+      case null:
+        break;
+    }
   }
 
   // ==================== folders ====================
@@ -1252,7 +1298,7 @@ class CaptureScreenState extends State<CaptureScreen> with TabScreen, _Selection
     } on ApiException catch (e) {
       if (e.statusCode == 404) {
         // Removed by our team since the list was fetched (DAS-180).
-        _say('Our team removed this bill.');
+        _say('This bill was removed.');
         unawaited(_uploadHistory.currentState?.refresh());
       } else {
         _say("Couldn't open that bill: $e");

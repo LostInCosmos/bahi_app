@@ -552,9 +552,15 @@ class ApiClient {
     String message = generic;
     dynamic detail;
     String? field;
+    String? code;
+    int? existing;
     try {
       final decoded = jsonDecode(res.body);
       if (decoded is Map && decoded['field'] is String) field = decoded['field'] as String;
+      if (decoded is Map && decoded['error'] is String) code = decoded['error'] as String;
+      if (decoded is Map && decoded['existing_invoice_id'] is num) {
+        existing = (decoded['existing_invoice_id'] as num).toInt();
+      }
       if (decoded is Map && decoded['detail'] != null) {
         detail = decoded['detail'];
         // A structured detail (`{"error": "validation_failed", "issues": …}`)
@@ -575,6 +581,6 @@ class ApiClient {
     } catch (_) {
       // Not JSON (an HTML error page from a proxy, plain text): the generic line.
     }
-    throw ApiException(res.statusCode, message, detail, field);
+    throw ApiException(res.statusCode, message, detail, field, code, existing);
   }
 }

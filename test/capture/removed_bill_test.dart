@@ -106,7 +106,7 @@ void main() {
         await start(tester);
 
         expect(find.byType(BatchItemCard), findsOneWidget, reason: 'only bill 6 is left');
-        expect(find.text('Our team removed a bill.'), findsOneWidget);
+        expect(find.text('A bill was removed.'), findsOneWidget);
         expect(await tester.runAsync(storedJobs), ['6'], reason: 'nor is it restored next time');
         expect(server.requests.where((r) => r.startsWith('POST /invoices/bulk-discard')), isEmpty,
             reason: 'nothing is sent: the server removed it already');

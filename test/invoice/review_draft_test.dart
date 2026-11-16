@@ -55,8 +55,24 @@ class _Server {
   bool clean = false;
   bool stayUnsaved = false;
 
+  /// The bill was removed: every route answers bill_removed (DAS-193).
+  bool removed = false;
+
+  /// The Save is a duplicate of a saved bill (DAS-193).
+  bool duplicate = false;
+
   MockClient get client => MockClient((req) async {
         final path = req.url.path;
+        if (removed && path.startsWith('/invoices')) {
+          return _json({'detail': 'This bill was removed.', 'error': 'bill_removed'}, status: 404);
+        }
+        if (duplicate && req.method == 'POST' && path == '/invoices') {
+          return _json({
+            'detail': 'Bill T-EDITED of 01 Oct 2026 is already saved.',
+            'error': 'duplicate_bill',
+            'existing_invoice_id': 696,
+          }, status: 409);
+        }
         if (req.method == 'PUT' && path == '/invoices/extract/7/draft') {
           final body = jsonDecode(req.body) as Map<String, dynamic>;
           puts.add(body);
@@ -105,16 +121,29 @@ Future<void> _settle(WidgetTester tester) async {
 /// What the form returned when it closed: the saved bill's id, or null.
 int? _popped;
 
+/// How often the form said our team removed the bill.
+var _removedCalls = 0;
+
 Future<void> _open(WidgetTester tester,
-    {BillDraft? draft, void Function(int)? onSent, bool unsavedByShop = false}) async {
+    {BillDraft? draft,
+    void Function(int)? onSent,
+    bool unsavedByShop = false,
+    void Function(String, int?)? onDuplicate}) async {
   _popped = null;
+  _removedCalls = 0;
   await tester.binding.setSurfaceSize(const Size(800, 4000));
   await tester.pumpWidget(MaterialApp(
     home: Builder(
       builder: (context) => TextButton(
         onPressed: () async => _popped = await Navigator.of(context).push<int>(MaterialPageRoute(
             builder: (_) => ReviewScreen(
-                result: _read(), jobId: 7, draft: draft, onDraftSent: onSent, unsavedByShop: unsavedByShop))),
+                result: _read(),
+                jobId: 7,
+                draft: draft,
+                onDraftSent: onSent,
+                unsavedByShop: unsavedByShop,
+                onRemoved: () => _removedCalls++,
+                onDuplicate: onDuplicate))),
         child: const Text('open'),
       ),
     ),
@@ -315,6 +344,64 @@ void main() {
       await _settle(tester);
       expect(server.saved, isNotNull);
       expect(_popped, 70);
+    }, () => server.client);
+  });
+
+  // DAS-193: a bill our team removed, or a duplicate, while the form was open.
+  testWidgets('Revalidate on a bill our team removed closes the form and says so to the caller', (tester) async {
+    final server = _Server()..removed = true;
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.text('Revalidate'));
+      await _settle(tester);
+      expect(find.text('Revalidate'), findsNothing, reason: 'the form closed');
+      expect(_removedCalls, 1);
+      expect(find.textContaining('Could not revalidate'), findsNothing);
+    }, () => server.client);
+  });
+
+  testWidgets("Save on a bill our team removed closes the form too", (tester) async {
+    final server = _Server()..removed = true;
+    await http.runWithClient(() async {
+      await _open(tester,
+          unsavedByShop: true,
+          draft: BillDraft(invoice: InvoiceData.fromJson(_invoice('T-EDITED', grandTotal: 210)), issues: const [], rev: 3));
+      await tester.tap(find.text('Save invoice'));
+      await _settle(tester);
+      expect(find.text('Save invoice'), findsNothing);
+      expect(_removedCalls, 1);
+    }, () => server.client);
+  });
+
+  testWidgets("a duplicate Save shows the server's sentence, not \"Save failed\"", (tester) async {
+    final server = _Server()..duplicate = true;
+    await http.runWithClient(() async {
+      await _open(tester,
+          unsavedByShop: true,
+          draft: BillDraft(invoice: InvoiceData.fromJson(_invoice('T-EDITED', grandTotal: 210)), issues: const [], rev: 3));
+      await tester.tap(find.text('Save invoice'));
+      await _settle(tester);
+      expect(find.text('Bill T-EDITED of 01 Oct 2026 is already saved.'), findsOneWidget);
+      expect(find.textContaining('Save failed'), findsNothing);
+      expect(_popped, isNull, reason: 'the form stays');
+    }, () => server.client);
+  });
+
+  testWidgets('with a caller for duplicates, the form closes and hands over the sentence and the saved bill', (tester) async {
+    final server = _Server()..duplicate = true;
+    final got = <Object?>[];
+    await http.runWithClient(() async {
+      await _open(tester,
+          unsavedByShop: true,
+          onDuplicate: (message, id) => got.addAll([message, id]),
+          draft: BillDraft(invoice: InvoiceData.fromJson(_invoice('T-EDITED', grandTotal: 210)), issues: const [], rev: 3));
+      await tester.enterText(_field('Invoice number'), 'T-TYPED');
+      await tester.tap(find.text('Save invoice'));
+      await _settle(tester);
+      expect(find.text('Save invoice'), findsNothing, reason: 'the form closed');
+      expect(got, ['Bill T-EDITED of 01 Oct 2026 is already saved.', 696]);
+      expect(server.puts, isNotEmpty, reason: 'the corrections typed go into the draft on the way out');
+      expect((server.puts.last['invoice'] as Map)['invoice_no'], 'T-TYPED');
     }, () => server.client);
   });
 

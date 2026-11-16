@@ -357,7 +357,8 @@ mixin _Watching on State<CaptureScreen> {
     }
   }
 
-  /// Cards for bills the server no longer has: our team removed them
+  /// Cards for bills the server no longer has: removed (by the shop on another
+  /// device or by our team)
   /// (DAS-180). Only this device's copy goes; there is nothing to tell the
   /// server.
   void _dropRemoved(List<BatchItem> items) {
@@ -366,7 +367,7 @@ mixin _Watching on State<CaptureScreen> {
     for (final item in mine) {
       _dropLocal(item);
     }
-    _say(mine.length == 1 ? 'Our team removed a bill.' : 'Our team removed ${plural(mine.length, 'bill')}.');
+    _say(mine.length == 1 ? 'A bill was removed.' : '${plural(mine.length, 'bill')} were removed.');
   }
 
   /// Folds one bill's reported state into its card.

@@ -17,7 +17,16 @@ class ApiException implements Exception {
   /// "buyer_phone"}` (DAS-150). Null otherwise.
   final String? field;
 
-  ApiException(this.statusCode, this.message, [this.detail, this.field]);
+  /// The server's kind when it sits beside a plain-sentence detail:
+  /// `{"detail": "This bill was removed.", "error": "bill_removed"}`
+  /// (DAS-193). Read through [errorCode].
+  final String? code;
+
+  /// The saved bill a duplicate repeats, from a `duplicate_bill` refusal's
+  /// `existing_invoice_id` (DAS-193). Null otherwise.
+  final int? existingInvoiceId;
+
+  ApiException(this.statusCode, this.message, [this.detail, this.field, this.code, this.existingInvoiceId]);
 
   /// The server's machine-readable kind, when the body carried one —
   /// `{"detail": {"error": "account_deleted", …}}` or a top-level
@@ -25,7 +34,7 @@ class ApiException implements Exception {
   /// plain-text detail.
   String? get errorCode {
     final d = detail;
-    return d is Map ? d['error'] as String? : null;
+    return code ?? (d is Map ? d['error'] as String? : null);
   }
 
   @override
