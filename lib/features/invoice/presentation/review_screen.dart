@@ -57,6 +57,16 @@ class ReviewScreen extends StatefulWidget {
   /// saves it, and a flagged one waits for our team.
   final bool unsavedByShop;
 
+  /// This bill was removed while the form was open (discarded, deleted
+  /// or merged; the server answers `bill_removed`, DAS-193). The form has
+  /// closed; the caller drops its card and says so.
+  final VoidCallback? onRemoved;
+
+  /// The Save was refused as a duplicate of a saved bill (DAS-193): the form
+  /// has closed, and the caller shows the Already saved dialog with the
+  /// server's [message] and the saved bill's id.
+  final void Function(String message, int? existingInvoiceId)? onDuplicate;
+
   const ReviewScreen({
     super.key,
     required this.result,
@@ -69,6 +79,8 @@ class ReviewScreen extends StatefulWidget {
     this.onDraftLost,
     this.onDraftDropped,
     this.unsavedByShop = false,
+    this.onRemoved,
+    this.onDuplicate,
   });
 
   @override
@@ -213,6 +225,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   String _snapshot() => jsonEncode(_buildInvoiceData().toJson());
 
+  /// The server says our team removed this bill (DAS-193): nothing here can
+  /// be saved any more. Close the form; the caller drops the card and says so.
+  bool _closeIfRemoved(Object e) {
+    if (e is! ApiException || e.errorCode != 'bill_removed') return false;
+    _sent = _snapshot(); // nothing to send on the way out
+    widget.onRemoved?.call();
+    if (mounted) Navigator.of(context).pop();
+    return true;
+  }
+
   /// Writes the draft if the form holds changes the server has not got.
   /// Runs on leaving the form, so it must not need the form afterwards: the
   /// callbacks are taken first.
@@ -242,6 +264,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     } on ApiException catch (e) {
       if (e.statusCode == 409 && e.field == 'draft_rev') {
         onLost?.call();
+      } else if (e.errorCode == 'bill_removed') {
+        widget.onRemoved?.call(); // the form is already leaving
       } else if (e.statusCode >= 500) {
         _sent = '';
         onUnsent?.call(corrected, baseRev);
@@ -554,6 +578,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       unawaited(HapticFeedback.mediumImpact());
     } catch (e) {
       unawaited(HapticFeedback.heavyImpact());
+      if (_closeIfRemoved(e)) return;
       if (mounted) setState(() => _error = 'Could not revalidate: $e');
     } finally {
       if (mounted) setState(() => _revalidating = false);
@@ -607,7 +632,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
     } on ApiException catch (e) {
       unawaited(HapticFeedback.heavyImpact());
       if (!mounted) return;
-      if (e.detail is Map && e.detail['error'] == 'validation_failed') {
+      if (_closeIfRemoved(e)) return;
+      if (e.errorCode == 'duplicate_bill') {
+        // "Bill A029022 of 22 Oct 2026 is already saved." (DAS-193): the
+        // caller's Already saved dialog, else the sentence under the form.
+        final onDuplicate = widget.onDuplicate;
+        if (onDuplicate == null) {
+          setState(() => _error = e.message);
+        } else {
+          // Leaving keeps what was typed, as any leave does (DAS-153): the
+          // draft is written on the way out, so _saving must be off first.
+          _saving = false;
+          Navigator.of(context).pop();
+          onDuplicate(e.message, e.existingInvoiceId);
+        }
+      } else if (e.detail is Map && e.detail['error'] == 'validation_failed') {
         final rawIssues = (e.detail['issues'] as List<dynamic>? ?? []);
         setState(() {
           _issues = rawIssues

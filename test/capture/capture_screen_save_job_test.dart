@@ -31,7 +31,13 @@ Map<String, dynamic> _invoice() => {
     };
 
 class _Server {
-  _Server({this.saveStatus = 200, this.saveDetail});
+  _Server({this.saveStatus = 200, this.saveDetail, this.saveError, this.withExistingId = true});
+
+  /// Whether a duplicate refusal names the saved bill.
+  final bool withExistingId;
+
+  /// The kind the refusal names beside its sentence (DAS-193).
+  final String? saveError;
 
   /// What the save route answers.
   final int saveStatus;
@@ -122,7 +128,13 @@ class _Server {
         final save = RegExp(r'^/invoices/extract/(\d+)/save$').firstMatch(path);
         if (req.method == 'POST' && save != null) {
           saveBodies.add(jsonDecode(req.body) as Map<String, dynamic>);
-          if (saveStatus != 200) return _json({'detail': saveDetail ?? 'no'}, saveStatus);
+          if (saveStatus != 200) {
+            return _json({
+              'detail': saveDetail ?? 'no',
+              if (saveError != null) 'error': saveError,
+              if (saveError == 'duplicate_bill' && withExistingId) 'existing_invoice_id': 696,
+            }, saveStatus);
+          }
           return _json({'invoice_id': 99, 'review_state': 'pending'});
         }
         if (req.method == 'GET' && path == '/invoices/70') {
@@ -342,6 +354,76 @@ void main() {
 
       expect(find.text('This bill is already saved.'), findsOneWidget);
       expect(find.text('Failed'), findsNothing);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  // DAS-193: the server refuses a bill our team removed, and a duplicate.
+  testWidgets('a bill our team removed: Save says so, and nothing is marked failed', (tester) async {
+    _ignoreOverflow();
+    final server = _Server(saveStatus: 404, saveDetail: 'This bill was removed.', saveError: 'bill_removed');
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:9')));
+      await _settle(tester);
+      await tester.tap(find.text('Save'));
+      await _settle(tester);
+
+      expect(find.text('This bill was removed.'), findsOneWidget);
+      expect(find.text('Failed'), findsNothing, reason: 'not a failure the shop can retry');
+      expect(find.textContaining('saving to Home'), findsNothing);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  testWidgets('a duplicate: the Already saved dialog; Close leaves the copy, Discard removes it', (tester) async {
+    _ignoreOverflow();
+    final server = _Server(
+        saveStatus: 409, saveDetail: 'Bill A029022 of 22 Oct 2026 is already saved.', saveError: 'duplicate_bill');
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:9')));
+      await _settle(tester);
+      await tester.tap(find.text('Save'));
+      await _settle(tester);
+
+      expect(find.text('Already saved'), findsOneWidget);
+      expect(find.text('Bill A029022 of 22 Oct 2026 is already saved.'), findsOneWidget);
+      expect(find.text('View saved bill'), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await _settle(tester);
+      expect(find.text('Already saved'), findsNothing);
+      expect(server.discardBodies, isEmpty, reason: 'Close changes nothing');
+      expect(find.text('Failed'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('j:9')));
+      await _settle(tester);
+      await tester.tap(find.text('Save'));
+      await _settle(tester);
+      await tester.tap(find.text('Discard this copy'));
+      await _settle(tester);
+      expect(server.discardBodies.single, {'job_ids': [9]});
+      expect(find.text('Bill discarded.'), findsOneWidget);
+      await _finish(tester);
+    }, () => server.client);
+  });
+
+  testWidgets('a duplicate with no saved bill named: the dialog has no View saved bill', (tester) async {
+    _ignoreOverflow();
+    final server = _Server(
+        saveStatus: 409,
+        saveDetail: 'Bill A029022 of 22 Oct 2026 is already saved.',
+        saveError: 'duplicate_bill',
+        withExistingId: false);
+    await http.runWithClient(() async {
+      await _open(tester);
+      await tester.tap(find.byKey(const ValueKey('j:9')));
+      await _settle(tester);
+      await tester.tap(find.text('Save'));
+      await _settle(tester);
+      expect(find.text('Already saved'), findsOneWidget);
+      expect(find.text('View saved bill'), findsNothing);
+      await tester.tap(find.text('Close'));
       await _finish(tester);
     }, () => server.client);
   });
