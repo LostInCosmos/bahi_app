@@ -194,11 +194,11 @@ class _BatchCard extends StatelessWidget {
   final VoidCallback? onEditMrp;
   const _BatchCard(this.batch, {this.onEditMrp});
 
-  /// The rate/discount/free-goods scheme this batch was bought on, as one
-  /// line — null when the server hasn't sent any of it (DAS-82, widened).
+  /// The discount/free-goods scheme this batch was bought on, as one line —
+  /// null when the server hasn't sent any of it (DAS-82, widened). The price
+  /// itself is the Net rate line (DAS-201): the printed rate is not shown.
   static String? _dealLine(ProductBatchInfo b) {
     final parts = [
-      if (b.rate != null) 'Rate ${rupees(b.rate!)}',
       if (b.discountPct != null) '${percent(b.discountPct!)} off',
       if (b.discountAmount != null && b.discountPct == null) '${rupees(b.discountAmount!)} off',
       if (b.freeQty != null && b.freeQty! > 0)
@@ -269,8 +269,11 @@ class _BatchCard extends StatelessWidget {
                       ),
                   ],
                 ),
+              // DAS-201: the one price line, right under MRP. A batch with no
+              // purchase rate shows a dash, not a missing line.
+              Text('Net rate: ${b.netRate != null ? rupees(b.netRate!) : '—'}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
               Text('GST: ${percent(b.gstPct)}'),
-              if (b.netRate != null) Text('Net rate: ${rupees(b.netRate!)}'),
               if (deal != null) Text(deal),
               if (b.vendorName != null || b.invoiceNo != null) ...[
                 const SizedBox(height: Spacing.xs),
