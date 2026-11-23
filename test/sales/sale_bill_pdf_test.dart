@@ -250,4 +250,27 @@ void main() {
         {'product_name': 'X', 'qty': 1, 'rate': 10, 'gst_pct': 12, 'cgst_amount': 0, 'sgst_amount': 0, 'line_amount': 10});
     expect((old.hsn, old.batchNo, old.expiryDate, old.mrp, old.pack), (null, null, null, null, null));
   });
+
+  test('the Amount column is qty x rate before discount, so it adds up to Items (Bill-2026-27-0118)', () async {
+    SaleLineItemDetail li(String name, double qty, double rate, double amount, double disc) => SaleLineItemDetail(
+          productName: name, qty: qty, rate: rate, gstPct: 5, cgstAmount: amount * 0.05 / 2.1, sgstAmount: amount * 0.05 / 2.1,
+          lineAmount: amount, discountAmount: disc, hsn: '3004', batchNo: 'B1', mrp: rate, unitKind: 'tablet',
+        );
+    final lines = [
+      li('TAB A', 7, 4.92, 34.44, 4.13),
+      li('TAB B', 14, 25.28, 353.92, 42.47),
+      li('TAB C', 10, 15.61, 156.10, 18.74),
+    ];
+    final sale = SaleDetail(
+      id: 1, saleNo: '2026-27/0118', saleDate: '2026-11-20', paymentMode: PaymentMode.cash,
+      subtotal: 0, totalCgst: 0, totalSgst: 0, grandTotal: lines.fold(0.0, (t, l) => t + l.netAmount), lineItems: lines,
+    );
+    // What the Amount cell prints is lineAmount; the Items line is their sum.
+    expect(sale.itemsTotal, closeTo(544.46, 1e-9));
+    expect(lines.map((l) => l.lineAmount.toStringAsFixed(2)), ['34.44', '353.92', '156.10']);
+    // The discounted figure is a different number: printing it was the bug.
+    expect(lines.first.netAmount, isNot(closeTo(lines.first.lineAmount, 0.01)));
+    Directory('build/bill_samples').createSync(recursive: true);
+    File('build/bill_samples/pdf_amount_before_discount.pdf').writeAsBytesSync(await buildSaleBillPdf(sale, _shop(), _fonts()));
+  });
 }
