@@ -233,7 +233,7 @@ pw.Widget _items(SaleDetail sale, bool taxInvoice) {
             _money(li.rate),
             li.discountTotal > 0 ? _money(li.discountTotal) : '',
             if (taxInvoice) numText(li.gstPct),
-            _money(li.netAmount),
+            _money(li.lineAmount),
           ];
           return pw.TableRow(children: [
             for (var c = 0; c < values.length; c++) _cell(values[c], align: alignOf(headings[c])),
